@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 class BrandPageCrawler:
     """브랜드 페이지 크롤러"""
 
-    def __init__(self):
+    def __init__(self, urls: List[str] = None):
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        self.base_url = "https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18"
+        self.urls = urls or ["https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18"]
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         self.driver = None
@@ -57,39 +57,35 @@ class BrandPageCrawler:
             return None
 
     def get_product_links(self) -> List[str]:
-        """XPath를 사용하여 상품 링크 추출 (폴백 패턴 포함)"""
+        """XPath를 사용하여 상품 링크 추출 (div[4~6] 패턴 모두 시도)"""
         product_links = []
         try:
-            logger.info("기본 패턴(div[4])으로 상품 링크 추출 시도...")
-            # 기본 패턴: div[4]
-            for i in range(1, 6):#self.max_products + 1):
-                xpath = f'//*[@id="__next"]/section/section[1]/section/div[4]/div[2]/div[{i}]/a'
-                try:
-                    element = self.driver.find_element(By.XPATH, xpath)
-                    href = element.get_attribute('href')
-                    if href:
-                        full_url = urljoin('https://www.amoremall.com', href)
-                        product_links.append(full_url)
-                        logger.info(f"상품 {i} 링크 추출: {full_url}")
-                except Exception as e:
-                    logger.debug(f"상품 {i} 링크 추출 실패: {e}")
-                    continue
+            # div[3]부터 div[8]까지 모두 시도
+            for div_idx in range(3, 9):
+                logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
+                div_product_count = 0
 
-            # 기본 패턴에서 결과가 없으면 대체 패턴 시도
-            if not product_links:
-                logger.info("기본 패턴에서 상품을 찾지 못함. 대체 패턴(div[6])으로 재시도...")
-                for i in range(1, self.max_products + 1):
-                    xpath = f'//*[@id="__next"]/section/section[1]/section/div[6]/div[2]/div[{i}]/a'
+                for i in range(1, 6): #self.max_products + 1):
+                    xpath = f'//*[@id="__next"]/section/section[1]/section/div[{div_idx}]/div[2]/div[{i}]/a'
                     try:
                         element = self.driver.find_element(By.XPATH, xpath)
                         href = element.get_attribute('href')
                         if href:
                             full_url = urljoin('https://www.amoremall.com', href)
                             product_links.append(full_url)
-                            logger.info(f"(대체패턴) 상품 {i} 링크 추출: {full_url}")
+                            div_product_count += 1
+                            logger.info(f"(div[{div_idx}]) 상품 {i} 링크 추출: {full_url}")
                     except Exception as e:
-                        logger.debug(f"(대체패턴) 상품 {i} 링크 추출 실패: {e}")
+                        logger.debug(f"(div[{div_idx}]) 상품 {i} 링크 추출 실패: {e}")
+                        if div_product_count > 0:
+                            # 이미 상품을 찾았으면 다음 div로 이동
+                            break
                         continue
+
+                if div_product_count > 0:
+                    logger.info(f"div[{div_idx}]에서 {div_product_count}개 상품 추출 완료. 다른 div는 생략.")
+                    # 성공했으므로 나머지 div는 시도하지 않음
+                    break
 
             logger.info(f"총 찾은 상품 수: {len(product_links)}")
         except Exception as e:
@@ -360,30 +356,45 @@ class BrandPageCrawler:
         return products
 
     def crawl(self) -> List[Dict]:
-        """메인 크롤링 함수"""
-        logger.info("크롤링 시작...")
+        """메인 크롤링 함수 - 여러 URL 크롤링"""
+        logger.info(f"크롤링 시작... (총 {len(self.urls)}개 URL)")
 
         if not self.init_driver():
             return []
 
+        all_products = []
+
         try:
-            self.driver.get(self.base_url)
-            time.sleep(3)
+            for idx, url in enumerate(self.urls, 1):
+                logger.info(f"URL {idx}/{len(self.urls)} 처리 중: {url}")
+                try:
+                    self.driver.get(url)
+                    time.sleep(3)
 
-            products = self.parse_content()
+                    products = self.parse_content()
+                    all_products.extend(products)
 
-            logger.info("크롤링 완료")
-            return products
+                    logger.info(f"URL {idx} 크롤링 완료 ({len(products)}개 상품)")
+                except Exception as e:
+                    logger.error(f"URL {idx} 크롤링 중 오류: {e}")
+                    continue
+
+                time.sleep(2)  # URL 간 대기
+
+            logger.info("전체 크롤링 완료")
+            return all_products
 
         finally:
             if self.driver:
                 self.driver.quit()
 
-    def save_data(self, data: List[Dict], filename: str = "crawled_data.json"):
-        """데이터 저장"""
+    def save_data(self, data: List[Dict], filename: str = "crawled_data.jsonl"):
+        """데이터를 JSONL 형식으로 저장"""
         try:
             with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                for item in data:
+                    json.dump(item, f, ensure_ascii=False)
+                    f.write('\n')
             logger.info(f"데이터가 {filename}에 저장되었습니다 (상품 수: {len(data)})")
         except Exception as e:
             logger.error(f"데이터 저장 중 오류: {e}")
@@ -391,11 +402,38 @@ class BrandPageCrawler:
 
 def main():
     """메인 실행 함수"""
-    crawler = BrandPageCrawler()
+    # 크롤링할 URL 리스트
+    urls = [
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18',
+    ]
+
+    print("=== 브랜드 페이지 크롤러 ===")
+    print(f"총 {len(urls)}개의 URL을 크롤링합니다.")
+    print()
+
+    crawler = BrandPageCrawler(urls)
     products = crawler.crawl()
 
     if products:
-        print(f"크롤링 완료: {len(products)}개 상품 정보 수집")
+        print(f"\n크롤링 완료: {len(products)}개 상품 정보 수집")
         print("\n첫 번째 상품:")
         print(json.dumps(products[0], ensure_ascii=False, indent=2))
         crawler.save_data(products)
