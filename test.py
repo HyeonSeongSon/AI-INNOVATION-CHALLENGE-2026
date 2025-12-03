@@ -26,7 +26,7 @@ class BrandPageCrawler:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        self.base_url = "https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236"
+        self.base_url = "https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18"
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         self.driver = None
@@ -57,10 +57,11 @@ class BrandPageCrawler:
             return None
 
     def get_product_links(self) -> List[str]:
-        """XPath를 사용하여 상품 링크 추출"""
+        """XPath를 사용하여 상품 링크 추출 (폴백 패턴 포함)"""
         product_links = []
         try:
-            # XPath를 사용하여 div[1]부터 div[20]까지의 a 태그에서 href 추출
+            logger.info("기본 패턴(div[4])으로 상품 링크 추출 시도...")
+            # 기본 패턴: div[4]
             for i in range(1, 6):#self.max_products + 1):
                 xpath = f'//*[@id="__next"]/section/section[1]/section/div[4]/div[2]/div[{i}]/a'
                 try:
@@ -73,6 +74,22 @@ class BrandPageCrawler:
                 except Exception as e:
                     logger.debug(f"상품 {i} 링크 추출 실패: {e}")
                     continue
+
+            # 기본 패턴에서 결과가 없으면 대체 패턴 시도
+            if not product_links:
+                logger.info("기본 패턴에서 상품을 찾지 못함. 대체 패턴(div[6])으로 재시도...")
+                for i in range(1, self.max_products + 1):
+                    xpath = f'//*[@id="__next"]/section/section[1]/section/div[6]/div[2]/div[{i}]/a'
+                    try:
+                        element = self.driver.find_element(By.XPATH, xpath)
+                        href = element.get_attribute('href')
+                        if href:
+                            full_url = urljoin('https://www.amoremall.com', href)
+                            product_links.append(full_url)
+                            logger.info(f"(대체패턴) 상품 {i} 링크 추출: {full_url}")
+                    except Exception as e:
+                        logger.debug(f"(대체패턴) 상품 {i} 링크 추출 실패: {e}")
+                        continue
 
             logger.info(f"총 찾은 상품 수: {len(product_links)}")
         except Exception as e:
