@@ -57,7 +57,7 @@ class BrandPageCrawler:
             return None
 
     def get_product_links(self) -> List[str]:
-        """XPath를 사용하여 상품 링크 추출 (div[4~6] 패턴 모두 시도)"""
+        """XPath를 사용하여 상품 링크 추출 (div[3~8] 패턴 모두 시도)"""
         product_links = []
         try:
             # div[3]부터 div[8]까지 모두 시도
@@ -65,7 +65,7 @@ class BrandPageCrawler:
                 logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
                 div_product_count = 0
 
-                for i in range(1, 6): #self.max_products + 1):
+                for i in range(1, self.max_products + 1):
                     xpath = f'//*[@id="__next"]/section/section[1]/section/div[{div_idx}]/div[2]/div[{i}]/a'
                     try:
                         element = self.driver.find_element(By.XPATH, xpath)
