@@ -26,7 +26,7 @@ class BrandPageCrawler:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        self.urls = urls or ["https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18"]
+        self.urls = urls
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         self.driver = None
