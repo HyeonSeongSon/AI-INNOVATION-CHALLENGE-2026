@@ -147,7 +147,14 @@ class BrandPageCrawler:
                 element = self.driver.find_element(By.XPATH, xpath_alt)
                 return element.text.strip() if element else "N/A"
             except Exception as e:
-                logger.debug(f"브랜드 추출 오류: {e}")
+                logger.debug(f"대체1 브랜드 추출 실패, 대체2 XPath 시도: {e}")
+                try:
+                    # 대체 레이아웃: div[2]/div[2]/div[2]//a
+                    xpath_alt2 = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[2]/div[2]//a'
+                    element = self.driver.find_element(By.XPATH, xpath_alt2)
+                    return element.text.strip() if element else "N/A"
+                except Exception as e:
+                    logger.debug(f"브랜드 추출 오류: {e}")
         return "N/A"
 
     def _extract_product_name(self) -> str:
@@ -163,7 +170,14 @@ class BrandPageCrawler:
                 element = self.driver.find_element(By.XPATH, xpath_alt)
                 return element.text.strip() if element else "N/A"
             except Exception as e:
-                logger.debug(f"상품명 추출 오류: {e}")
+                logger.debug(f"대체1 상품명 추출 실패, 대체2 XPath 시도: {e}")
+                try:
+                    # 대체 레이아웃: div[2]/div[2]/div[2]//strong
+                    xpath_alt2 = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[2]/div[2]//strong'
+                    element = self.driver.find_element(By.XPATH, xpath_alt2)
+                    return element.text.strip() if element else "N/A"
+                except Exception as e:
+                    logger.debug(f"상품명 추출 오류: {e}")
         return "N/A"
 
     def _extract_rating(self):
@@ -175,7 +189,16 @@ class BrandPageCrawler:
                 rating_text = element.text.strip()
                 return float(rating_text) if rating_text else None
         except Exception as e:
-            logger.debug(f"별점 추출 오류: {e}")
+            logger.debug(f"기본 별점 추출 실패, 대체 XPath 시도: {e}")
+            try:
+                # 대체 레이아웃: div[3]/button[1]/span[1]/span
+                xpath_alt = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[3]/button[1]/span[1]/span'
+                element = self.driver.find_element(By.XPATH, xpath_alt)
+                if element:
+                    rating_text = element.text.strip()
+                    return float(rating_text) if rating_text else None
+            except Exception as e:
+                logger.debug(f"별점 추출 오류: {e}")
         return None
 
     def _extract_review_count(self) -> int:
@@ -187,11 +210,26 @@ class BrandPageCrawler:
                 review_text = element.text.strip()
                 # '리뷰 ' 텍스트 제거
                 review_text = review_text.replace('리뷰 ', '').replace('리뷰', '')
-                # 숫자만 추출
+                # 쉼표 제거 후 숫자만 추출
+                review_text = review_text.replace(',', '')
                 numbers = re.findall(r'\d+', review_text)
                 return int(numbers[0]) if numbers else 0
         except Exception as e:
-            logger.debug(f"리뷰 갯수 추출 오류: {e}")
+            logger.debug(f"기본 리뷰 갯수 추출 실패, 대체 XPath 시도: {e}")
+            try:
+                # 대체 레이아웃: div[3]/button[1]/span[3]
+                xpath_alt = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[3]/button[1]/span[3]'
+                element = self.driver.find_element(By.XPATH, xpath_alt)
+                if element:
+                    review_text = element.text.strip()
+                    # '리뷰 ' 텍스트 제거
+                    review_text = review_text.replace('리뷰 ', '').replace('리뷰', '')
+                    # 쉼표 제거 후 숫자만 추출
+                    review_text = review_text.replace(',', '')
+                    numbers = re.findall(r'\d+', review_text)
+                    return int(numbers[0]) if numbers else 0
+            except Exception as e:
+                logger.debug(f"리뷰 갯수 추출 오류: {e}")
         return 0
 
     def _extract_original_price(self) -> int:
@@ -205,7 +243,18 @@ class BrandPageCrawler:
                 numbers = re.findall(r'\d+', price_text.replace(',', ''))
                 return int(numbers[0]) if numbers else None
         except Exception as e:
-            logger.debug(f"원가 추출 오류: {e}")
+            logger.debug(f"기본 원가 추출 실패, 대체 XPath 시도: {e}")
+            try:
+                # 대체 레이아웃: div[4]/div[1]/div[1]
+                xpath_alt = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[4]/div[1]/div[1]'
+                element = self.driver.find_element(By.XPATH, xpath_alt)
+                if element:
+                    price_text = element.text.strip()
+                    # 숫자만 추출
+                    numbers = re.findall(r'\d+', price_text.replace(',', ''))
+                    return int(numbers[0]) if numbers else None
+            except Exception as e:
+                logger.debug(f"원가 추출 오류: {e}")
         return None
 
     def _extract_discount_rate(self) -> int:
@@ -219,7 +268,18 @@ class BrandPageCrawler:
                 numbers = re.findall(r'\d+', discount_text)
                 return int(numbers[0]) if numbers else 0
         except Exception as e:
-            logger.debug(f"할인율 추출 오류: {e}")
+            logger.debug(f"기본 할인율 추출 실패, 대체 XPath 시도: {e}")
+            try:
+                # 대체 레이아웃: div[4]/div[2]/em
+                xpath_alt = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[4]/div[2]/em'
+                element = self.driver.find_element(By.XPATH, xpath_alt)
+                if element:
+                    discount_text = element.text.strip()
+                    # 숫자만 추출
+                    numbers = re.findall(r'\d+', discount_text)
+                    return int(numbers[0]) if numbers else 0
+            except Exception as e:
+                logger.debug(f"할인율 추출 오류: {e}")
         return 0
 
     def _extract_sale_price(self) -> int:
@@ -233,7 +293,7 @@ class BrandPageCrawler:
                 numbers = re.findall(r'\d+', price_text.replace(',', ''))
                 return int(numbers[0]) if numbers else None
         except Exception as e:
-            logger.debug(f"기본 판매가 추출 실패, 대체 XPath 시도: {e}")
+            logger.debug(f"기본 판매가 추출 실패, 대체1 XPath 시도: {e}")
             try:
                 xpath_alt = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[2]/div/div[1]/strong'
                 element = self.driver.find_element(By.XPATH, xpath_alt)
@@ -243,7 +303,18 @@ class BrandPageCrawler:
                     numbers = re.findall(r'\d+', price_text.replace(',', ''))
                     return int(numbers[0]) if numbers else None
             except Exception as e:
-                logger.debug(f"판매가 추출 오류: {e}")
+                logger.debug(f"대체1 판매가 추출 실패, 대체2 XPath 시도: {e}")
+                try:
+                    # 대체 레이아웃: div[4]/div[2]/div[1]/strong
+                    xpath_alt2 = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[4]/div[2]/div[1]/strong'
+                    element = self.driver.find_element(By.XPATH, xpath_alt2)
+                    if element:
+                        price_text = element.text.strip()
+                        # 숫자만 추출
+                        numbers = re.findall(r'\d+', price_text.replace(',', ''))
+                        return int(numbers[0]) if numbers else None
+                except Exception as e:
+                    logger.debug(f"판매가 추출 오류: {e}")
         return None
 
     def _extract_product_thumbnail_images(self) -> List[str]:
@@ -513,24 +584,24 @@ def main():
     """메인 실행 함수"""
     # 크롤링할 URL 리스트
     urls = [
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
+        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
         'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18',
     ]
 
