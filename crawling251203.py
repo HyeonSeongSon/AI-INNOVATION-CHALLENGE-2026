@@ -110,7 +110,8 @@ class BrandPageCrawler:
                 '할인율': self._extract_discount_rate(),
                 '판매가': self._extract_sale_price(),
                 '상품이미지': self._extract_product_thumbnail_images(),
-                '상품상세_이미지': self._extract_product_images()
+                '상품상세_이미지': self._extract_product_images(),
+                '구매자_통계': self._extract_buyer_age_stats()
             }
 
             # 원가와 판매가 상호 보완
@@ -341,6 +342,114 @@ class BrandPageCrawler:
 
         return images
 
+    def _extract_buyer_age_stats(self) -> Dict[str, Dict[str, int]]:
+        """구매자 연령대 및 피부타입 통계 추출
+
+        Returns:
+            dict: {
+                '연령대별': {'10대 이하': 0, '20대': 5, ...},
+                '피부타입별': {'복합성': 34, '건성': 30, ...}
+            }
+            또는 탭이 없는 경우:
+            dict: {'연령대별': {'10대 이하': 0, '20대': 5, ...}}
+        """
+        try:
+            # div[2] 영역 전체
+            div2_xpath = '//*[@id="productDesc"]/section/div/div[2]'
+            div2_element = self.driver.find_element(By.XPATH, div2_xpath)
+
+            # listHeader에서 탭 버튼 찾기
+            try:
+                header = div2_element.find_element(By.CLASS_NAME, 'listHeader')
+                tabs = header.find_elements(By.CLASS_NAME, 'btnTab')
+
+                if len(tabs) > 0:
+                    # 탭이 있는 경우: 각 탭 클릭하고 데이터 수집
+                    logger.debug(f"탭이 {len(tabs)}개 발견됨. 탭별 데이터 추출 시작")
+                    all_data = {}
+
+                    for tab in tabs:
+                        tab_text = tab.text.strip()
+                        logger.debug(f"'{tab_text}' 탭 클릭")
+
+                        # 탭 클릭
+                        self.driver.execute_script("arguments[0].click();", tab)
+                        time.sleep(0.5)  # 데이터 로딩 대기
+
+                        # 차트 데이터 추출
+                        chart_wrap = div2_element.find_element(By.CLASS_NAME, 'chartWrap')
+                        chart_text = chart_wrap.text
+                        lines = [line.strip() for line in chart_text.split('\n') if line.strip()]
+
+                        # 방법 1: "카테고리 XX%" 형식 파싱 (피부타입별 등)
+                        pattern1 = {}
+                        for line in lines:
+                            match = re.match(r'(.+?)\s+(\d+%)$', line)
+                            if match:
+                                category = match.group(1).strip()
+                                percentage = int(match.group(2).replace('%', ''))
+                                pattern1[category] = percentage
+
+                        if pattern1:
+                            all_data[tab_text] = pattern1
+                            logger.debug(f"'{tab_text}' 데이터 추출 완료: {pattern1}")
+                        else:
+                            # 방법 2: 퍼센티지와 카테고리 분리 (연령대별 등)
+                            percentages = [line for line in lines if re.match(r'\d+%$', line)]
+                            categories = [line for line in lines if not re.match(r'\d+%$', line) and line != tab_text]
+
+                            if len(percentages) == len(categories):
+                                pattern2 = {}
+                                for i in range(len(categories)):
+                                    pattern2[categories[i]] = int(percentages[i].replace('%', ''))
+                                all_data[tab_text] = pattern2
+                                logger.debug(f"'{tab_text}' 데이터 추출 완료: {pattern2}")
+                            else:
+                                logger.debug(f"'{tab_text}' 데이터 매칭 실패")
+
+                    return all_data if all_data else None
+
+            except Exception as e:
+                logger.debug(f"탭 버튼 없음: {e}")
+
+            # 탭이 없는 경우: 기존 방식으로 단일 차트 추출
+            logger.debug("탭 없음. 기존 방식으로 차트 데이터 추출 시도")
+            try:
+                chart_xpath = '//*[@id="productDesc"]/section/div/div[2]/div[2]'
+                chart_element = self.driver.find_element(By.XPATH, chart_xpath)
+
+                chart_text = chart_element.text
+                lines = [line.strip() for line in chart_text.split('\n') if line.strip()]
+
+                # 퍼센티지와 연령대 분리
+                percentages = []
+                age_groups = []
+
+                for line in lines:
+                    if re.match(r'\d+%$', line):
+                        percentages.append(line)
+                    elif any(keyword in line for keyword in ['대', '미만', '이상', '이하']):
+                        age_groups.append(line)
+
+                # 딕셔너리로 매칭
+                if len(percentages) == len(age_groups):
+                    result = {}
+                    for i in range(len(age_groups)):
+                        result[age_groups[i]] = int(percentages[i].replace('%', ''))
+                    logger.debug(f"연령대 통계 추출 완료: {result}")
+                    return {'연령대별': result}
+                else:
+                    logger.debug(f"연령대 통계 매칭 실패: 퍼센티지 {len(percentages)}개, 연령대 {len(age_groups)}개")
+                    return None
+
+            except Exception as e:
+                logger.debug(f"기존 방식 차트 추출 오류: {e}")
+                return None
+
+        except Exception as e:
+            logger.debug(f"구매자 통계 추출 오류: {e}")
+            return None
+
     def parse_content(self) -> List[Dict]:
         """상품 링크 추출 및 상세정보 크롤링"""
         products = []
@@ -404,24 +513,24 @@ def main():
     """메인 실행 함수"""
     # 크롤링할 URL 리스트
     urls = [
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
         'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18',
     ]
 
