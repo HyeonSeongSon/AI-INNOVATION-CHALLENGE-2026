@@ -65,7 +65,7 @@ class BrandPageCrawler:
                 logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
                 div_product_count = 0
 
-                for i in range(1, self.max_products + 1):
+                for i in range(1, 6):#self.max_products + 1):
                     xpath = f'//*[@id="__next"]/section/section[1]/section/div[{div_idx}]/div[2]/div[{i}]/a'
                     try:
                         element = self.driver.find_element(By.XPATH, xpath)
@@ -398,35 +398,66 @@ class BrandPageCrawler:
             # 2단계: 버튼 클릭 후 나타난 섹션 내부의 이미지만 수집
             logger.info("[2단계] 상세 이미지 섹션 내부 이미지 수집...")
 
-            # 더 넓은 범위에서 시작: productDesc 전체 영역에서 상세 이미지 찾기
-            # 방법 1: div[2]/div[2] 영역에서 모든 img 찾기
-            parent_xpath = '//*[@id="productDesc"]/section/div/div[1]/div[2]/div[2]'
-            try:
-                parent_element = self.driver.find_element(By.XPATH, parent_xpath)
-                logger.info("✓ 상세 이미지 영역 (div[2]/div[2]) 발견")
+            # 여러 경로 패턴을 순차적으로 시도
+            possible_xpaths = [
+                ('//*[@id="productDesc"]/section/div/div[1]/div[2]/div[2]', 'div[2]/div[2]'),  # 기존 경로
+                ('//*[@id="productDesc"]/section/div/div[1]/div/div[2]/div[1]', 'div/div[2]/div[1]'),  # 새 경로
+            ]
 
-                # 스크롤하여 lazy loading 이미지 로드
+            parent_element = None
+            found_path = None
+            img_elements = []
+
+            # 각 경로를 순차적으로 시도
+            for xpath, path_desc in possible_xpaths:
                 try:
-                    self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", parent_element)
-                    time.sleep(2)
-                    # 스크롤을 아래로 천천히 내려서 모든 이미지 로드
-                    self.driver.execute_script("""
-                        var element = arguments[0];
-                        var scrollHeight = element.scrollHeight;
-                        element.scrollBy(0, scrollHeight / 2);
-                    """, parent_element)
-                    time.sleep(2)
-                except:
-                    logger.debug("스크롤 실패, 계속 진행...")
+                    logger.info(f"경로 시도: {path_desc}")
+                    temp_element = self.driver.find_element(By.XPATH, xpath)
 
-                # 하위의 모든 img 태그 찾기 (구조가 달라도 모든 img를 찾음)
-                img_elements = parent_element.find_elements(By.XPATH, './/img')
-                logger.info(f"div[2]/div[2] 영역에서 {len(img_elements)}개의 img 태그 발견")
+                    # 스크롤하여 lazy loading 이미지 로드
+                    try:
+                        self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", temp_element)
+                        time.sleep(2)
+                        # 스크롤을 아래로 천천히 내려서 모든 이미지 로드
+                        self.driver.execute_script("""
+                            var element = arguments[0];
+                            var scrollHeight = element.scrollHeight;
+                            element.scrollBy(0, scrollHeight / 2);
+                        """, temp_element)
+                        time.sleep(2)
+                    except:
+                        logger.debug("스크롤 실패, 계속 진행...")
 
-                # 디버깅: contenteditor-image 클래스도 확인
-                contenteditor_divs = parent_element.find_elements(By.CLASS_NAME, 'contenteditor-image')
-                logger.info(f"  - contenteditor-image 클래스: {len(contenteditor_divs)}개 발견")
+                    # 하위의 모든 img 태그 찾기 (p 태그 안의 img도 포함)
+                    temp_img_elements = temp_element.find_elements(By.XPATH, './/img')
 
+                    if temp_img_elements:
+                        parent_element = temp_element
+                        img_elements = temp_img_elements
+                        found_path = path_desc
+                        logger.info(f"✓ 상세 이미지 영역 ({path_desc}) 발견")
+                        logger.info(f"{path_desc} 영역에서 {len(img_elements)}개의 img 태그 발견")
+
+                        # 디버깅: contenteditor-image 클래스도 확인
+                        try:
+                            contenteditor_divs = parent_element.find_elements(By.CLASS_NAME, 'contenteditor-image')
+                            logger.info(f"  - contenteditor-image 클래스: {len(contenteditor_divs)}개 발견")
+                        except:
+                            pass
+
+                        break  # 이미지를 찾았으므로 더 이상 시도하지 않음
+                    else:
+                        logger.debug(f"{path_desc} 경로에 img 없음, 다음 경로 시도...")
+
+                except Exception as e:
+                    logger.debug(f"{path_desc} 경로 실패: {e}, 다음 경로 시도...")
+                    continue
+
+            # 모든 경로에서 이미지를 찾지 못한 경우
+            if not img_elements:
+                logger.warning("모든 경로에서 img 태그를 찾지 못함")
+            else:
+                # 이미지 처리 시작
                 for idx, img in enumerate(img_elements, 1):
                     try:
                         # 모든 가능한 속성에서 이미지 URL 찾기
@@ -472,60 +503,14 @@ class BrandPageCrawler:
                         logger.warning(f"이미지 {idx} 처리 실패: {e}")
 
                 if images:
-                    logger.info(f"✓ 총 {len(images)}개의 상세 이미지 수집 완료")
+                    logger.info(f"✓ 총 {len(images)}개의 상세 이미지 수집 완료 (경로: {found_path})")
                     return images
                 else:
-                    logger.warning("섹션 내부에 이미지 없음")
+                    logger.warning("이미지 URL 수집 실패")
 
-            except Exception as e:
-                logger.warning(f"div[2]/div[2] 영역에서 이미지 수집 실패: {e}")
-
-                # 방법 2: 더 넓은 범위 시도 - div[1] 전체에서 찾기
-                try:
-                    logger.info("대체 경로 시도: div[1] 전체 영역에서 이미지 찾기...")
-                    broader_xpath = '//*[@id="productDesc"]/section/div/div[1]'
-                    broader_element = self.driver.find_element(By.XPATH, broader_xpath)
-
-                    img_elements = broader_element.find_elements(By.XPATH, './/img')
-                    logger.info(f"div[1] 영역에서 {len(img_elements)}개의 img 태그 발견")
-
-                    for idx, img in enumerate(img_elements, 1):
-                        try:
-                            # 모든 가능한 속성에서 이미지 URL 찾기
-                            possible_attrs = ['src', 'data-src', 'data-original', 'data-lazy-src',
-                                            'data-img-src', 'srcset', 'data-srcset']
-
-                            img_url = None
-                            found_attr = None
-
-                            for attr in possible_attrs:
-                                value = img.get_attribute(attr)
-                                if value:
-                                    # srcset인 경우 첫 번째 URL만 추출
-                                    if 'srcset' in attr and ' ' in value:
-                                        value = value.split(' ')[0].split(',')[0]
-
-                                    img_url = value
-                                    found_attr = attr
-                                    break
-
-                            # URL이 있으면 수집
-                            if img_url and img_url.startswith('http'):
-                                if img_url not in images:
-                                    images.append(img_url)
-                                    logger.info(f"  ✓ [대체경로] 이미지 {idx} 수집: {img_url[:80]}...")
-                                else:
-                                    logger.debug(f"  - 중복 제거: {img_url[:80]}...")
-
-                        except Exception as e:
-                            logger.warning(f"이미지 {idx} 처리 실패: {e}")
-
-                except Exception as e:
-                    logger.warning(f"div[1] 영역에서도 이미지 수집 실패: {e}")
-
-            # 3단계: 실패 시 폴백
+            # 3단계: 모든 경로 실패 시 폴백
             if not images:
-                logger.warning("모든 방법 실패. 기존 폴백 방식으로 시도...")
+                logger.warning("모든 경로에서 이미지 수집 실패. 폴백 방식으로 시도...")
                 return self._extract_product_images_fallback()
 
         except Exception as e:
@@ -765,7 +750,7 @@ def main():
     """메인 실행 함수"""
     # 크롤링할 URL 리스트
     urls = [
-        'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
+        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
         # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
         # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
         # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
