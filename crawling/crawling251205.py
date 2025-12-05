@@ -156,7 +156,14 @@ class BrandPageCrawler:
                     element = self.driver.find_element(By.XPATH, xpath_alt2)
                     return element.text.strip() if element else "N/A"
                 except Exception as e:
-                    logger.debug(f"브랜드 추출 오류: {e}")
+                    logger.debug(f"대체2 브랜드 추출 실패, 대체3 XPath 시도: {e}")
+                    try:
+                        # 대체 레이아웃3: div[2]/div/div[1]/a
+                        xpath_alt3 = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[2]/div/div[1]/a'
+                        element = self.driver.find_element(By.XPATH, xpath_alt3)
+                        return element.text.strip() if element else "N/A"
+                    except Exception as e:
+                        logger.debug(f"브랜드 추출 오류: {e}")
         return "N/A"
 
     def _extract_product_name(self) -> str:
@@ -179,7 +186,14 @@ class BrandPageCrawler:
                     element = self.driver.find_element(By.XPATH, xpath_alt2)
                     return element.text.strip() if element else "N/A"
                 except Exception as e:
-                    logger.debug(f"상품명 추출 오류: {e}")
+                    logger.debug(f"대체2 상품명 추출 실패, 대체3 XPath 시도: {e}")
+                    try:
+                        # 대체 레이아웃3: div[2]/div/div[2]/strong
+                        xpath_alt3 = '//*[@id="__next"]/section/section[1]/section/div/div/div[1]/div[1]/div[2]/div[2]/div/div[2]/strong'
+                        element = self.driver.find_element(By.XPATH, xpath_alt3)
+                        return element.text.strip() if element else "N/A"
+                    except Exception as e:
+                        logger.debug(f"상품명 추출 오류: {e}")
         return "N/A"
 
     def _extract_rating(self):
