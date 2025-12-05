@@ -10,6 +10,8 @@ import logging
 import json
 from urllib.parse import urljoin
 import re
+import os
+from datetime import datetime
 
 # 로깅 설정
 logging.basicConfig(
@@ -65,7 +67,7 @@ class BrandPageCrawler:
                 logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
                 div_product_count = 0
 
-                for i in range(1, 6):#self.max_products + 1):
+                for i in range(1, self.max_products + 1):
                     xpath = f'//*[@id="__next"]/section/section[1]/section/div[{div_idx}]/div[2]/div[{i}]/a'
                     try:
                         element = self.driver.find_element(By.XPATH, xpath)
@@ -734,46 +736,83 @@ class BrandPageCrawler:
             if self.driver:
                 self.driver.quit()
 
-    def save_data(self, data: List[Dict], filename: str = "crawled_data.jsonl"):
-        """데이터를 JSONL 형식으로 저장"""
+    def save_data(self, data: List[Dict], output_dir: str = None, filename: str = None):
+        """데이터를 JSONL 형식으로 저장
+
+        Args:
+            data: 저장할 데이터 리스트
+            output_dir: 출력 디렉토리 경로 (기본값: ../data/crawling_result)
+            filename: 파일명 (기본값: product_crawling_YYMMDDHHMM.jsonl)
+        """
         try:
-            with open(filename, 'w', encoding='utf-8') as f:
+            # 기본 출력 디렉토리 설정
+            if output_dir is None:
+                # 프로젝트 루트 기준으로 경로 설정
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                output_dir = os.path.join(project_root, 'data', 'crawling_result')
+
+            # 디렉토리가 없으면 생성
+            os.makedirs(output_dir, exist_ok=True)
+
+            # 파일명 생성 (YYMMDDHHMM 형식)
+            if filename is None:
+                timestamp = datetime.now().strftime('%y%m%d%H%M')
+                filename = f'product_crawling_{timestamp}.jsonl'
+
+            # 전체 경로 생성
+            filepath = os.path.join(output_dir, filename)
+
+            # 데이터 저장
+            with open(filepath, 'w', encoding='utf-8') as f:
                 for item in data:
                     json.dump(item, f, ensure_ascii=False)
                     f.write('\n')
-            logger.info(f"데이터가 {filename}에 저장되었습니다 (상품 수: {len(data)})")
+
+            logger.info(f"데이터가 저장되었습니다")
+            logger.info(f"  - 파일 경로: {filepath}")
+            logger.info(f"  - 상품 수: {len(data)}개")
+            print(f"\n[SUCCESS] 저장 완료!")
+            print(f"  파일 위치: {filepath}")
+            print(f"  상품 수: {len(data)}개")
+
         except Exception as e:
             logger.error(f"데이터 저장 중 오류: {e}")
+            print(f"\n[ERROR] 저장 실패: {e}")
 
 
 def main():
     """메인 실행 함수"""
-    # 크롤링할 URL 리스트
-    urls = [
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=236',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=174',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=31',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=96',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=131',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=241',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=23',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=197',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=11',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=193',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=35',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=107',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=9',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=21',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=12',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=219',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=185',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=98',
-        # 'https://www.amoremall.com/kr/ko/display/brand/detail?brandSn=18',
-    ]
+    # JSON 파일에서 URL 리스트 로드
+    json_path = os.path.join(os.path.dirname(__file__), 'brand_home_url.json')
 
-    print("=== 브랜드 페이지 크롤러 ===")
-    print(f"총 {len(urls)}개의 URL을 크롤링합니다.")
-    print()
+    try:
+        logger.info(f"JSON 파일 로드 중: {json_path}")
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            urls = data.get('brand_home_urls', [])
+
+        if not urls:
+            print(f"경고: {json_path}에 brand_home_urls가 비어있거나 존재하지 않습니다.")
+            logger.error("URL 리스트가 비어있음")
+            return
+
+        print("=== 브랜드 페이지 크롤러 ===")
+        print(f"JSON 파일에서 {len(urls)}개의 URL을 로드했습니다.")
+        print(f"파일 경로: {json_path}")
+        print()
+
+    except FileNotFoundError:
+        print(f"오류: {json_path} 파일을 찾을 수 없습니다.")
+        logger.error(f"JSON 파일을 찾을 수 없음: {json_path}")
+        return
+    except json.JSONDecodeError as e:
+        print(f"오류: JSON 파일 파싱 실패: {e}")
+        logger.error(f"JSON 파싱 오류: {e}")
+        return
+    except Exception as e:
+        print(f"오류: URL 로드 중 예외 발생: {e}")
+        logger.error(f"URL 로드 중 예외: {e}")
+        return
 
     crawler = BrandPageCrawler(urls)
     products = crawler.crawl()
