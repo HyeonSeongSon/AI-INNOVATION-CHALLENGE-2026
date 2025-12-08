@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { Key, Save, Eye, EyeOff, Sliders, Bell, Globe, ShieldCheck } from 'lucide-react';
+import { Key, Save, Eye, EyeOff, Sliders, Bell, Cpu, ChevronDown } from 'lucide-react';
 
 /* --- 스타일 컴포넌트 --- */
 const Container = styled.div`
-  max-width: 800px; /* 설정창은 너무 넓지 않게 */
+  max-width: 800px;
   margin: 0 auto;
-  padding-bottom: 60px;
+  padding-bottom: 80px;
 `;
 
 const Header = styled.div`
@@ -70,7 +70,7 @@ const ApiKeyWrapper = styled.div`
 const Input = styled.input`
   width: 100%;
   padding: 12px;
-  padding-right: 40px; /* 눈 아이콘 공간 */
+  padding-right: 40px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 14px;
@@ -93,6 +93,34 @@ const IconBtn = styled.button`
   &:hover { color: #555; }
 `;
 
+/* 드롭다운 스타일 (화살표 포함) */
+const SelectWrapper = styled.div`
+  position: relative;
+  
+  svg {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #888;
+    pointer-events: none;
+  }
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 12px;
+  padding-right: 40px; /* 화살표 공간 확보 */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  appearance: none; /* 기본 화살표 제거 */
+  background: white;
+  cursor: pointer;
+  &:focus { border-color: #6B4DFF; }
+`;
+
 /* 슬라이더 및 기타 컨트롤 */
 const RangeWrapper = styled.div`
   display: flex;
@@ -111,16 +139,6 @@ const RangeValue = styled.span`
   color: #6B4DFF;
   width: 40px;
   text-align: right;
-`;
-
-const Select = styled.select`
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  &:focus { border-color: #6B4DFF; }
 `;
 
 /* 토글 스위치 */
@@ -196,6 +214,7 @@ const SaveButton = styled.button`
 
 export default function Settings() {
   // 상태 관리
+  const [model, setModel] = useState('Claude 3.5 Sonnet'); // 모델 선택 상태 추가
   const [keys, setKeys] = useState({
     openai: 'sk-proj-xxxxxxxxxxxxxxxxxxxx',
     claude: '',
@@ -214,7 +233,7 @@ export default function Settings() {
   };
 
   const handleSave = () => {
-    alert('설정이 저장되었습니다!');
+    alert(`설정이 저장되었습니다!\n선택된 모델: ${model}`);
   };
 
   return (
@@ -224,7 +243,31 @@ export default function Settings() {
         <SubDesc>AI 모델 연결 및 에이전트의 기본 동작 방식을 설정합니다.</SubDesc>
       </Header>
 
-      {/* 1. API KEY 설정 (필수) */}
+      {/* 1. AI 모델 선택 (새로 추가됨) */}
+      <SectionCard>
+        <SectionHeader>
+          <Cpu size={20} />
+          <h3>AI 모델 선택</h3>
+        </SectionHeader>
+
+        <FormGroup>
+          <Label>메인 생성 모델</Label>
+          <SelectWrapper>
+            <Select value={model} onChange={(e) => setModel(e.target.value)}>
+              <option>Claude 3.5 Sonnet (추천)</option>
+              <option>GPT-4o</option>
+              <option>Gemini 1.5 Pro</option>
+              <option>Llama 3 70B</option>
+            </Select>
+            <ChevronDown size={16} />
+          </SelectWrapper>
+          <p style={{fontSize:'12px', color:'#888', marginTop:'8px'}}>
+            * 마케팅 문구 생성에 가장 적합한 모델을 선택하세요.
+          </p>
+        </FormGroup>
+      </SectionCard>
+
+      {/* 2. API KEY 설정 (필수) */}
       <SectionCard>
         <SectionHeader>
           <Key size={20} />
@@ -264,7 +307,7 @@ export default function Settings() {
         </FormGroup>
       </SectionCard>
 
-      {/* 2. 에이전트 기본값 설정 (추천) */}
+      {/* 3. 에이전트 기본값 설정 (추천) */}
       <SectionCard>
         <SectionHeader>
           <Sliders size={20} />
@@ -273,12 +316,15 @@ export default function Settings() {
 
         <FormGroup>
           <Label>기본 브랜드 톤앤매너</Label>
-          <Select>
-            <option>선택 안함 (매번 직접 설정)</option>
-            <option>감성적이고 따뜻한 (Emotional)</option>
-            <option>논리적이고 신뢰감 있는 (Professional)</option>
-            <option>재치있고 트렌디한 (Witty)</option>
-          </Select>
+          <SelectWrapper>
+            <Select>
+              <option>선택 안함 (매번 직접 설정)</option>
+              <option>감성적이고 따뜻한 (Emotional)</option>
+              <option>논리적이고 신뢰감 있는 (Professional)</option>
+              <option>재치있고 트렌디한 (Witty)</option>
+            </Select>
+            <ChevronDown size={16} />
+          </SelectWrapper>
         </FormGroup>
 
         <FormGroup>
@@ -302,7 +348,7 @@ export default function Settings() {
         </FormGroup>
       </SectionCard>
 
-      {/* 3. 알림 및 기타 설정 */}
+      {/* 4. 알림 및 기타 설정 */}
       <SectionCard>
         <SectionHeader>
           <Bell size={20} />

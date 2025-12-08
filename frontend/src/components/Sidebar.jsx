@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import { Home, User, MessageSquare, Settings } from 'lucide-react';
+import { Home, User, MessageSquare, Settings, MessageCircle } from 'lucide-react';
 
+/* --- 스타일 컴포넌트 --- */
 const SidebarContainer = styled.div`
   width: 260px;
   height: 100vh;
@@ -70,11 +71,18 @@ export default function Sidebar() {
         <MenuItem to="/" $active={location.pathname === '/'}>
           <Home /> 홈
         </MenuItem>
+        
         <MenuItem to="/persona" $active={location.pathname.startsWith('/persona')}>
           <User /> 페르소나 생성
         </MenuItem>
+        
         <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
           <MessageSquare /> 메시지 생성
+        </MenuItem>
+
+        {/* 새로 추가된 시뮬레이션 메뉴 */}
+        <MenuItem to="/simulation" $active={location.pathname.startsWith('/simulation')}>
+          <MessageCircle /> 가상 고객 시뮬레이션
         </MenuItem>
       </MenuList>
       

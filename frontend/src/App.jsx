@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Persona from './pages/Persona';
 import Message from './pages/Message';
+import Simulation from './pages/Simulation'; // 새로 추가된 페이지
 import Settings from './pages/Settings';
 
 // 글로벌 스타일 (CSS 리셋)
@@ -37,6 +38,8 @@ function App() {
             <Route index element={<Home />} />
             <Route path="persona" element={<Persona />} />
             <Route path="message" element={<Message />} />
+            {/* 시뮬레이션 라우트 추가 */}
+            <Route path="simulation" element={<Simulation />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 
