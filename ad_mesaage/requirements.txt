@@ -1,0 +1,23 @@
+# AI/ML Libraries
+openai>=1.12.0
+chromadb>=0.4.22
+
+# HuggingFace 한국어 임베딩
+sentence-transformers>=2.3.0
+torch>=2.0.0
+transformers>=4.36.0
+
+# Data Processing
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+
+# Web Framework (Optional)
+fastapi>=0.109.0
+uvicorn>=0.27.0
+streamlit>=1.30.0
+
+# Utilities
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+tqdm>=4.66.0
