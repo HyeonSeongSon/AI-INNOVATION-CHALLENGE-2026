@@ -7,9 +7,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from typing import Optional, Generator
 
-# 환경 변수 로드 (.env.example 파일 경로 지정)
+# 환경 변수 로드 (.env 파일 경로 지정)
 current_dir = Path(__file__).resolve().parent
-env_path = current_dir.parent.parent.parent / '.env.example'
+env_path = current_dir.parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # 환경 변수 키 매핑

@@ -1,4 +1,4 @@
-from llm_service import LLMService
+from ..llm_service import LLMService
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from typing import TypedDict, List, Optional
