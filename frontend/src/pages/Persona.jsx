@@ -3,12 +3,11 @@ import styled, { css } from 'styled-components';
 import { 
   Plus, X, User, Trash2, Check, 
   Droplets, Sun, Zap, Frown, Smile, Moon, Utensils, 
-  Dumbbell, Wallet, ShoppingBag, Sparkles, AlertCircle,
-  Thermometer, MapPin, Wind, Monitor, Clock, Heart, 
+  MapPin, Heart, Sparkles, AlertCircle,
   ChevronRight, ChevronLeft
 } from 'lucide-react';
 
-/* --- [1] 데이터 및 옵션 설정 (Persona.jsx의 로직 기반 + 아이콘 매핑) --- */
+/* --- [1] 데이터 및 옵션 설정 --- */
 const OPTIONS = {
   gender: [
     { label: '여성', icon: <User size={20}/> },
@@ -42,7 +41,7 @@ const OPTIONS = {
   }
 };
 
-/* --- [2] 스타일 컴포넌트 (백업 파일 디자인 유지) --- */
+/* --- [2] 스타일 컴포넌트 --- */
 const Container = styled.div`
   max-width: 1200px; margin: 0 auto; font-family: 'Pretendard', sans-serif; color: #333; padding: 40px 20px;
 `;
@@ -68,10 +67,12 @@ const PersonaCard = styled.div`
   position: relative; transition: 0.2s;
   &:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(107, 77, 255, 0.15); border-color: #d0c4ff; }
 `;
+/* 삭제 버튼: 절대 위치 제거 (겹침 방지) */
 const DeleteBtn = styled.button`
-  position: absolute; top: 20px; right: 20px;
-  background: none; border: none; color: #ddd; cursor: pointer;
-  &:hover { color: #ff4d4d; }
+  background: none; border: none; color: #ccc; cursor: pointer;
+  padding: 8px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  &:hover { color: #ff4d4d; background-color: #fff5f5; }
 `;
 const ModalOverlay = styled.div`
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -100,6 +101,8 @@ const IconGrid = styled.div`
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); 
   gap: 10px;
 `;
+
+/* SelectionCard: 선택 시 검은 글씨 & 연한 보라 배경 */
 const SelectionCard = styled.div`
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 12px 8px; gap: 6px;
@@ -107,18 +110,25 @@ const SelectionCard = styled.div`
   cursor: pointer; transition: all 0.2s;
   background: #fafafa; color: #888;
   
-  &:hover { border-color: #d0c4ff; background: #f8f6ff; color: #6B4DFF; }
-  
-  ${props => props.$selected && css`
-    border-color: #6B4DFF; background-color: #6B4DFF; color: white;
-    box-shadow: 0 4px 12px rgba(107, 77, 255, 0.3);
-    &:hover { background-color: #5a3de0; color: white; border-color: #5a3de0; }
-  `}
-  
-  /* 작은 칩 스타일 (텍스트 위주) */
   ${props => props.$chip && css`
     flex-direction: row; padding: 10px 14px; font-size: 13px;
     background: white;
+  `}
+
+  &:hover { border-color: #d0c4ff; background: #f8f6ff; color: #6B4DFF; }
+  
+  ${props => props.$selected && css`
+    border-color: #6B4DFF; 
+    background-color: #F0EBFF;
+    color: #333;
+    font-weight: 700;
+    box-shadow: 0 0 0 1px #6B4DFF inset;
+    
+    &:hover { 
+      background-color: #e0d9ff; 
+      color: #000; 
+      border-color: #6B4DFF; 
+    }
   `}
 
   span { font-size: 13px; font-weight: 600; text-align: center; }
@@ -163,14 +173,15 @@ const ProgressBar = styled.div`
 export default function PersonaManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(1);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const [personas, setPersonas] = useState(() => {
     const saved = localStorage.getItem('personas');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Persona.jsx의 모든 데이터 필드 포함 + name 추가
   const initialData = {
-    name: '', // 백업 파일의 카드 표시용
+    name: '',
     age: '', gender: '', skinType: '', skinTone: '', skinConcerns: [],
     sensitivityLevel: '중', moistureLevel: 50, oilLevel: 50,
     preferredIngredients: [], avoidedIngredients: [],
@@ -188,7 +199,6 @@ export default function PersonaManager() {
     localStorage.setItem('personas', JSON.stringify(personas));
   }, [personas]);
 
-  // 핸들러들
   const handleChange = (field, value) => setData(prev => ({ ...prev, [field]: value }));
   
   const toggleArray = (field, value) => {
@@ -200,11 +210,44 @@ export default function PersonaManager() {
     }));
   };
 
-  const handleSave = () => {
+  // 백엔드 연동 저장 함수
+  const handleSave = async () => {
     if (!data.name) return alert('페르소나 이름을 입력해주세요.');
-    const newPersona = { id: Date.now(), ...data };
-    setPersonas([...personas, newPersona]);
-    closeModal();
+    if (!data.skinType) return alert('피부 타입을 선택해주세요(Step 2).');
+
+    setIsAnalyzing(true); 
+
+    try {
+      // API 요청
+      const response = await fetch("http://127.0.0.1:8000/api/persona/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "분석 서버 오류");
+      }
+
+      const aiResult = await response.json(); 
+
+      const newPersona = { 
+        id: Date.now(), 
+        ...data, 
+        aiAnalysis: aiResult 
+      };
+
+      setPersonas([...personas, newPersona]);
+      alert(`✅ 생성 완료!\n추천 카테고리: [${aiResult.primary_category}]`);
+      closeModal();
+
+    } catch (error) {
+      console.error("백엔드 연동 에러:", error);
+      alert(`❌ 백엔드 연결 실패\n서버(http://127.0.0.1:8000)가 켜져 있는지 확인하세요.\n\n에러 메시지: ${error.message}`);
+    } finally {
+      setIsAnalyzing(false); 
+    }
   };
 
   const closeModal = () => {
@@ -217,7 +260,7 @@ export default function PersonaManager() {
     if(window.confirm('정말 삭제하시겠습니까?')) setPersonas(personas.filter(p => p.id !== id));
   };
 
-  // 단계별 렌더링 컨텐츠
+  // 단계별 렌더링
   const renderStepContent = () => {
     switch(step) {
       case 1: // 기본 정보
@@ -252,8 +295,7 @@ export default function PersonaManager() {
         return (
           <>
             <SectionTitle><Sparkles size={20}/>피부 프로필</SectionTitle>
-            
-            <SubLabel>피부 타입</SubLabel>
+            <SubLabel>피부 타입 (필수)</SubLabel>
             <IconGrid>
               {OPTIONS.skinType.map(opt => (
                 <SelectionCard key={opt.label} $selected={data.skinType === opt.label} onClick={() => handleChange('skinType', opt.label)}>
@@ -261,8 +303,7 @@ export default function PersonaManager() {
                 </SelectionCard>
               ))}
             </IconGrid>
-
-            <SubLabel>주요 피부 고민 (중복 선택)</SubLabel>
+            <SubLabel>주요 피부 고민</SubLabel>
             <IconGrid>
               {OPTIONS.skinConcerns.map(opt => (
                 <SelectionCard key={opt.label} $selected={data.skinConcerns.includes(opt.label)} onClick={() => toggleArray('skinConcerns', opt.label)}>
@@ -270,7 +311,6 @@ export default function PersonaManager() {
                 </SelectionCard>
               ))}
             </IconGrid>
-
             <div style={{display:'flex', gap:20, marginTop:20}}>
               <div style={{flex:1}}>
                 <SubLabel>수분도 {data.moistureLevel}%</SubLabel>
@@ -287,7 +327,6 @@ export default function PersonaManager() {
         return (
           <>
             <SectionTitle><Utensils size={20}/>성분 및 텍스처</SectionTitle>
-            
             <SubLabel>선호 성분</SubLabel>
             <IconGrid>
               {OPTIONS.ingredients.map(item => (
@@ -296,35 +335,31 @@ export default function PersonaManager() {
                 </SelectionCard>
               ))}
             </IconGrid>
-
             <SubLabel>기피 성분</SubLabel>
             <IconGrid>
               {OPTIONS.avoidedIngredients.map(item => (
-                <SelectionCard $chip key={item} $selected={data.avoidedIngredients.includes(item)} onClick={() => toggleArray('avoidedIngredients', item)} style={{color: data.avoidedIngredients.includes(item) ? 'white' : '#ff6b6b', borderColor: data.avoidedIngredients.includes(item) ? '#ff6b6b' : '#ffeaea', backgroundColor: data.avoidedIngredients.includes(item) ? '#ff6b6b' : '#fff'}}>
+                <SelectionCard $chip key={item} $selected={data.avoidedIngredients.includes(item)} onClick={() => toggleArray('avoidedIngredients', item)} 
+                style={ data.avoidedIngredients.includes(item) ? { borderColor: '#ff6b6b', backgroundColor: '#ffeaea', color: '#ff4d4d' } : {} }>
                   <span>{item}</span>
                 </SelectionCard>
               ))}
             </IconGrid>
-
             <SubLabel>선호 향</SubLabel>
             <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
               {OPTIONS.scents.map(s => (
-                <button 
-                  key={s}
-                  onClick={() => toggleArray('preferredScent', s)}
+                <button key={s} onClick={() => toggleArray('preferredScent', s)}
                   style={{
                     padding: '8px 16px', borderRadius: '20px', border: '1px solid',
                     backgroundColor: data.preferredScent.includes(s) ? '#6B4DFF' : 'white',
                     color: data.preferredScent.includes(s) ? 'white' : '#888',
                     borderColor: data.preferredScent.includes(s) ? '#6B4DFF' : '#ddd',
                     cursor: 'pointer'
-                  }}
-                >{s}</button>
+                  }}>{s}</button>
               ))}
             </div>
           </>
         );
-      case 4: // 라이프스타일
+      case 4: // 라이프스타일 (식습관 포함)
         return (
           <>
             <SectionTitle><Moon size={20}/>라이프스타일</SectionTitle>
@@ -335,14 +370,19 @@ export default function PersonaManager() {
                 <SelectionCard key={val} style={{flex:1}} $selected={data.sleepHours === val} onClick={() => handleChange('sleepHours', val)}><span>{val}</span></SelectionCard>
               ))}
             </div>
-
             <SubLabel>스트레스 수준</SubLabel>
             <div style={{display:'flex', gap:10}}>
               {OPTIONS.lifestyle.stress.map(val => (
                 <SelectionCard key={val} style={{flex:1}} $selected={data.stressLevel === val} onClick={() => handleChange('stressLevel', val)}><span>{val}</span></SelectionCard>
               ))}
             </div>
-
+            {/* 누락되었던 식습관 파트 추가됨 */}
+            <SubLabel>식습관</SubLabel>
+            <div style={{display:'flex', gap:10}}>
+              {OPTIONS.lifestyle.diet.map(val => (
+                <SelectionCard key={val} style={{flex:1}} $selected={data.dietQuality === val} onClick={() => handleChange('dietQuality', val)}><span>{val}</span></SelectionCard>
+              ))}
+            </div>
             <SubLabel>운동 빈도</SubLabel>
             <div style={{display:'flex', gap:10}}>
               {OPTIONS.lifestyle.exercise.map(val => (
@@ -365,7 +405,7 @@ export default function PersonaManager() {
                  <Input value={data.screenTime} onChange={e => handleChange('screenTime', e.target.value)} placeholder="예: 8시간 이상" />
               </div>
             </InputRow>
-            <SubLabel>쇼핑 예산 (개당)</SubLabel>
+            <SubLabel>쇼핑 예산</SubLabel>
             <IconGrid>
                 {OPTIONS.priceRange.map(p => (
                    <SelectionCard $chip key={p} $selected={data.priceRange === p} onClick={() => handleChange('priceRange', p)}><span>{p}</span></SelectionCard>
@@ -378,24 +418,11 @@ export default function PersonaManager() {
           <>
             <SectionTitle><Heart size={20}/>가치관 및 특수사항</SectionTitle>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
-              <CheckboxRow>
-                <input type="checkbox" checked={data.naturalOrganic} onChange={e => handleChange('naturalOrganic', e.target.checked)} />
-                <span>🌱 천연/유기농 선호</span>
-              </CheckboxRow>
-              <CheckboxRow>
-                <input type="checkbox" checked={data.veganCrueltyFree} onChange={e => handleChange('veganCrueltyFree', e.target.checked)} />
-                <span>🐰 비건/크루얼티프리</span>
-              </CheckboxRow>
-              <CheckboxRow>
-                <input type="checkbox" checked={data.ecoPackaging} onChange={e => handleChange('ecoPackaging', e.target.checked)} />
-                <span>♻️ 친환경 패키징</span>
-              </CheckboxRow>
-              <CheckboxRow>
-                <input type="checkbox" checked={data.pregnancyLactation} onChange={e => handleChange('pregnancyLactation', e.target.checked)} />
-                <span>🤰 임신/수유 중</span>
-              </CheckboxRow>
+              <CheckboxRow><input type="checkbox" checked={data.naturalOrganic} onChange={e => handleChange('naturalOrganic', e.target.checked)} /><span>🌱 천연/유기농 선호</span></CheckboxRow>
+              <CheckboxRow><input type="checkbox" checked={data.veganCrueltyFree} onChange={e => handleChange('veganCrueltyFree', e.target.checked)} /><span>🐰 비건/크루얼티프리</span></CheckboxRow>
+              <CheckboxRow><input type="checkbox" checked={data.ecoPackaging} onChange={e => handleChange('ecoPackaging', e.target.checked)} /><span>♻️ 친환경 패키징</span></CheckboxRow>
+              <CheckboxRow><input type="checkbox" checked={data.pregnancyLactation} onChange={e => handleChange('pregnancyLactation', e.target.checked)} /><span>🤰 임신/수유 중</span></CheckboxRow>
             </div>
-            
             <div style={{marginTop: 30, padding: 20, background: '#f8f9fa', borderRadius: 12, fontSize: 13, color: '#666'}}>
               <strong>💡 입력 확인:</strong><br/>
               {data.name}님은 {data.skinType} 피부이며, {data.skinConcerns.join(', ')} 고민을 가지고 있습니다.
@@ -419,29 +446,55 @@ export default function PersonaManager() {
       <Grid>
         {personas.map(p => (
           <PersonaCard key={p.id}>
-            <DeleteBtn onClick={() => handleDelete(p.id)}><Trash2 size={16}/></DeleteBtn>
-            <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'20px', borderBottom:'1px solid #f0f0f0', paddingBottom:'20px'}}>
-              <div style={{width:48, height:48, borderRadius:'50%', background:'#F0EBFF', display:'flex', alignItems:'center', justifyContent:'center', color:'#6B4DFF'}}>
-                <User size={24}/>
+            {/* 뱃지와 삭제버튼 나란히 배치 (겹침 방지) */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'15px', borderBottom:'1px solid #f0f0f0', paddingBottom:'15px'}}>
+              <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
+                <div style={{width:48, height:48, borderRadius:'50%', background:'#F0EBFF', display:'flex', alignItems:'center', justifyContent:'center', color:'#6B4DFF'}}>
+                  <User size={24}/>
+                </div>
+                <div>
+                  <div style={{fontWeight:'800', fontSize:'18px', color:'#333'}}>{p.name}</div>
+                  <div style={{fontSize:'13px', color:'#888', marginTop:'4px'}}>{p.age}세 · {p.occupation || '직업 미입력'} ({p.gender})</div>
+                </div>
               </div>
-              <div>
-                <div style={{fontWeight:'800', fontSize:'18px', color:'#333'}}>{p.name}</div>
-                <div style={{fontSize:'13px', color:'#888', marginTop:'4px'}}>{p.age}세 · {p.occupation || '직업 미입력'} ({p.gender})</div>
+              
+              <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                {p.aiAnalysis && (
+                  <div style={{
+                    background:'#6B4DFF', color:'white', padding:'6px 12px', 
+                    borderRadius:'20px', fontSize:'12px', fontWeight:'bold',
+                    boxShadow:'0 4px 10px rgba(107, 77, 255, 0.3)'
+                  }}>
+                    {p.aiAnalysis.primary_category}
+                  </div>
+                )}
+                {/* 겹침 방지된 삭제 버튼 */}
+                <DeleteBtn onClick={() => handleDelete(p.id)}><Trash2 size={16}/></DeleteBtn>
               </div>
             </div>
+
             <div style={{fontSize:'13px', color:'#555', display:'flex', flexDirection:'column', gap:'10px'}}>
-              <div><strong>🧴 피부:</strong> {p.skinType} <span style={{color:'#ddd'}}>|</span> {p.skinConcerns.slice(0,2).join(', ')}{p.skinConcerns.length > 2 && '...'}</div>
+              <div><strong>🧴 피부:</strong> {p.skinType} <span style={{color:'#ddd'}}>|</span> {p.skinConcerns?.slice(0,2).join(', ')}{p.skinConcerns?.length > 2 && '...'}</div>
               <div><strong>🌡 상태:</strong> 수분 {p.moistureLevel}% / 유분 {p.oilLevel}%</div>
               <div><strong>🛍 예산:</strong> {p.priceRange || '미정'}</div>
+              
               <div style={{marginTop:'5px', display:'flex', gap:'5px', flexWrap:'wrap'}}>
                 {p.naturalOrganic && <span style={{background:'#e6fcf5', color:'#0ca678', padding:'2px 6px', borderRadius:'4px', fontSize:'11px'}}>유기농</span>}
                 {p.veganCrueltyFree && <span style={{background:'#fff3bf', color:'#f08c00', padding:'2px 6px', borderRadius:'4px', fontSize:'11px'}}>비건</span>}
               </div>
+
+              {p.aiAnalysis && (
+                <div style={{marginTop:'10px', padding:'12px', background:'#f8f9fa', borderRadius:'8px', fontSize:'12px', color:'#555', lineHeight:'1.5', borderLeft:'3px solid #6B4DFF'}}>
+                  🤖 <strong>AI 분석:</strong><br/>
+                  {p.aiAnalysis.reasoning}
+                </div>
+              )}
             </div>
           </PersonaCard>
         ))}
       </Grid>
 
+      {/* 모달 */}
       {isModalOpen && (
         <ModalOverlay onClick={closeModal}>
           <ModalBox onClick={e => e.stopPropagation()}>
@@ -449,13 +502,10 @@ export default function PersonaManager() {
               <h2 style={{fontSize:'20px', fontWeight:'bold', color:'#333'}}>페르소나 생성 (Step {step}/6)</h2>
               <X style={{cursor:'pointer', color:'#999'}} onClick={closeModal}/>
             </div>
-
             <ProgressBar><div style={{width: `${(step/6)*100}%`}}/></ProgressBar>
-
             <div style={{flex: 1, overflowY:'auto', paddingRight:'5px'}}>
               {renderStepContent()}
             </div>
-
             <ButtonGroup>
               {step > 1 && (
                 <NavButton onClick={() => setStep(step - 1)}>
@@ -467,8 +517,12 @@ export default function PersonaManager() {
                   다음<ChevronRight size={16} style={{marginBottom:-2, marginLeft:5}}/>
                 </NavButton>
               ) : (
-                <NavButton $primary onClick={handleSave}>
-                  <Check size={16} style={{marginBottom:-2, marginLeft:5}}/> 완료 및 저장
+                <NavButton $primary onClick={handleSave} disabled={isAnalyzing}>
+                  {isAnalyzing ? (
+                    <>⏳ AI 분석 중...</>
+                  ) : (
+                    <><Check size={16} style={{marginBottom:-2, marginLeft:5}}/> 완료 및 저장</>
+                  )}
                 </NavButton>
               )}
             </ButtonGroup>
