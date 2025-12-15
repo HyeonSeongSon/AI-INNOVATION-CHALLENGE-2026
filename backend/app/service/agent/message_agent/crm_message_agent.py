@@ -18,7 +18,7 @@ class CRMMessageAgent:
     # 프론트에서 값 전달해줄 예정
     get_model_value =  {
       "model_type": "openai",
-      "model_name": "gpt-4o-mini",  
+      "model_name": "gpt-4o-mini",
       "temperature": 0.7,
       "max_tokens": 4096
     }
@@ -27,7 +27,8 @@ class CRMMessageAgent:
       get_model_value['model_type'],
       get_model_value['model_name'],
       get_model_value['temperature'],
-      get_model_value['max_tokens'])
+      get_model_value['max_tokens']
+    )
   
   def llm(self):
     test = "안녕"
@@ -37,7 +38,18 @@ class CRMMessageAgent:
 #========================================================================================================================
 # 노드
 #========================================================================================================================
-def node1(self):
+
+# 작성해야할 노드 및 툴
+def persona_to_tag(self):
+  pass
+
+def recommend(self):
+  pass
+
+def product_document_search(self):
+  pass
+
+def create_message(self):
   pass
 
 #========================================================================================================================
