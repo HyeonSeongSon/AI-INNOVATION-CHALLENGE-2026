@@ -1,11 +1,16 @@
+import os
 import json
 from typing import List, Tuple
 from models.persona import PersonaInput, CategoryResult
 import openai 
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 class CategoryMatcher:
     def __init__(self):
-        # 팀원과 합의된 공통 카테고리 코드 (DB와 일치)
+        # 팀원과 합의된 공통 카테고리 코드
         self.CATEGORY_MAP = {
             "MOISTURE": ["건성", "속건조", "당김", "각질", "히알루론산", "수분"],
             "TROUBLE": ["지성", "여드름", "트러블", "피지", "티트리", "시카", "진정"],
@@ -13,14 +18,24 @@ class CategoryMatcher:
             "AGING": ["주름", "탄력", "노화", "레티놀", "콜라겐", "리프팅"],
             "BRIGHTENING": ["미백", "기미", "잡티", "칙칙함", "비타민C", "톤업"]
         }
-        # API 키 (실제 환경에서는 .env 파일에서 불러오는 것을 권장)
-        self.client = openai.OpenAI(api_key="sk-...") 
+        
+        # 1. API 키 가져오기
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("❌ .env 파일에 OPENAI_API_KEY가 설정되지 않았습니다!")
+        
+        self.client = openai.OpenAI(api_key=api_key)
+
+        # 2. [수정 완료] 모델 이름 설정 (기본값: gpt-5-mini)
+        # 사용자님 요청에 따라 최신 모델인 'gpt-5-mini'를 기본값으로 설정했습니다.
+        # 만약 API상의 정확한 명칭이 'gpt5-mini'라면 .env 파일에서 수정 가능합니다.
+        self.target_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
     async def analyze(self, persona: PersonaInput) -> CategoryResult:
         """
         하이브리드 분석: 룰 베이스 점수 산정 -> LLM 최종 판단
         """
-        # 1. 룰 베이스: 후보군 압축 (LLM에게 힌트로 제공)
+        # 1. 룰 베이스: 후보군 압축
         candidates = self._calculate_rule_base_scores(persona)
         top_candidate_str = ", ".join([f"{c[0]}({c[1]}점)" for c in candidates[:2]])
 
@@ -31,19 +46,21 @@ class CategoryMatcher:
     def _calculate_rule_base_scores(self, persona: PersonaInput) -> List[Tuple[str, int]]:
         scores = {cat: 0 for cat in self.CATEGORY_MAP.keys()}
         
-        # 분석 대상 텍스트 통합
-        user_keywords = [persona.skinType, persona.sensitivityLevel] + persona.skinConcerns + persona.preferredIngredients
+        # 분석 대상 텍스트 통합 (None 값 제외 처리)
+        user_keywords = [
+            persona.skinType, 
+            persona.sensitivityLevel
+        ] + persona.skinConcerns + persona.preferredIngredients
         
+        # 문자열로 변환하여 매칭 확인
         for cat, keywords in self.CATEGORY_MAP.items():
             for k in keywords:
-                # 키워드 포함 여부 체크
                 count = sum(1 for data in user_keywords if data and k in str(data))
                 scores[cat] += count
 
         return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
     async def _ask_llm_agent(self, persona: PersonaInput, candidates_hint: str) -> CategoryResult:
-        # [업그레이드] Few-Shot Prompting 적용 (예시 제공)
         prompt = f"""
         당신은 스킨케어 전문가 에이전트입니다. 사용자의 정보를 분석해 가장 적합한 '단 하나의 상품 카테고리'를 추천하세요.
 
@@ -71,7 +88,7 @@ class CategoryMatcher:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=self.target_model,  # 👈 gpt-5-mini가 사용됩니다.
                 messages=[
                     {"role": "system", "content": "JSON 형식으로만 답하세요."},
                     {"role": "user", "content": prompt}

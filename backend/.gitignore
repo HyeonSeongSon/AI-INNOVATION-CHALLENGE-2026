@@ -1,0 +1,31 @@
+# --- [1] 보안/환경변수 (절대 커밋 금지) ---
+.env
+.env.*
+! .env.example
+
+# --- [2] Python 컴파일/캐시 파일 ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- [3] 가상환경 (Virtual Environment) ---
+# 사용하는 가상환경 폴더명이 다르다면 여기에 추가하세요
+venv/
+.venv/
+env/
+.env/
+
+# --- [4] 로그 및 히스토리 데이터 ---
+# persona_service.py가 생성하는 로그 폴더
+logs/
+*.log
+
+# --- [5] IDE/에디터 설정 파일 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- [6] OS 시스템 파일 ---
+.DS_Store
+Thumbs.db
