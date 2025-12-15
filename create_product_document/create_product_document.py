@@ -24,7 +24,7 @@ class ProductDocumentGenerator:
 
   def load_data(self):
     # 문서 추출할 jsonl 파일 경로
-    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\crawling_result\test.jsonl', 'r', encoding='utf-8') as f:
+    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\crawling_result\product_crawling_tagged.jsonl', 'r', encoding='utf-8') as f:
       data = [json.loads(line) for line in f]
     return data
   
@@ -125,22 +125,36 @@ class ProductDocumentGenerator:
   
   def main(self):
     result = []
-    for data in self.data:
-      content_list = self.create_content_list(data)
-      content_list = self.append_url(content_list, data['상품상세_이미지'])
-      response = self.create_document(content_list)
+    failed_data = []  # 실패한 데이터 저장
 
-      # 응답에서 필요한 정보 추출
-      result_data = {
-        '브랜드': data.get('브랜드', ''),
-        '상품명': data.get('상품명', ''),
-        '생성된_문서': response.choices[0].message.content,
-        '생성_시간': datetime.now().isoformat()
-      }
-      result.append(result_data)
+    for data in self.data:
+      try:
+        content_list = self.create_content_list(data)
+
+        # GIF 파일 제외
+        image_urls = [url for url in data['상품상세_이미지'] if not url.lower().endswith('.gif')]
+
+        content_list = self.append_url(content_list, image_urls)
+        response = self.create_document(content_list)
+
+        # 응답에서 필요한 정보 추출
+        result_data = {
+          '브랜드': data.get('브랜드', ''),
+          '상품명': data.get('상품명', ''),
+          '생성된_문서': response.choices[0].message.content,
+          '생성_시간': datetime.now().isoformat()
+        }
+        result.append(result_data)
+        print(f"성공: {data.get('상품명')}")
+
+      except Exception as e:
+        # 실패한 원본 데이터 저장
+        failed_data.append(data)
+        print(f"실패: {data.get('상품명')} - {str(e)}")
+
       time.sleep(1)
 
-    # 결과를 jsonl 파일로 저장
+    # 성공한 결과를 jsonl 파일로 저장
     output_path = r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\create_product_document\product_documents.jsonl'
     with open(output_path, 'w', encoding='utf-8') as f:
       for item in result:
@@ -148,6 +162,16 @@ class ProductDocumentGenerator:
 
     print(f"총 {len(result)}개의 상품 문서가 생성되었습니다.")
     print(f"저장 경로: {output_path}")
+
+    # 실패한 데이터를 jsonl 파일로 저장
+    if failed_data:
+      failed_path = r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\create_product_document\failed_products.jsonl'
+      with open(failed_path, 'w', encoding='utf-8') as f:
+        for item in failed_data:
+          f.write(json.dumps(item, ensure_ascii=False) + '\n')
+
+      print(f"\n총 {len(failed_data)}개의 상품이 실패했습니다.")
+      print(f"실패 데이터 저장 경로: {failed_path}")
 
     return result
 
