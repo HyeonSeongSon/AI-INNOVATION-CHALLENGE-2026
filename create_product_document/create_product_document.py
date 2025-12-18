@@ -24,7 +24,7 @@ class ProductDocumentGenerator:
 
   def load_data(self):
     # 문서 추출할 jsonl 파일 경로
-    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\crawling_result\test.jsonl', 'r', encoding='utf-8') as f:
+    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\crawling_result\product_crawling_251217.jsonl', 'r', encoding='utf-8') as f:
       data = [json.loads(line) for line in f]
     return data
   
