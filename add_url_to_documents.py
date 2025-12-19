@@ -8,9 +8,12 @@ def add_urls_to_documents():
 
     # 크롤링 데이터에서 상품명:URL 매핑 생성
     product_url_map = {}
-    with open('./data/crawling_result/product_crawling_251217.jsonl', 'r', encoding='utf-8') as f:
+    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\crawling_result\product_crawling_2512181751.jsonl', 'r', encoding='utf-8') as f:
         for line in f:
-            data = json.loads(line.strip())
+            line = line.strip()
+            if not line:  # 빈 줄 무시
+                continue
+            data = json.loads(line)
             product_name = data.get('상품명')
             url = data.get('url')
             if product_name and url:
@@ -23,9 +26,12 @@ def add_urls_to_documents():
     matched_count = 0
     unmatched_count = 0
 
-    with open('./data/product_document/product_documents_tagged_251218.jsonl', 'r', encoding='utf-8') as f:
+    with open(r'C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\product_document\product_documents_tagged_v2_1_with_url_251218.jsonl', 'r', encoding='utf-8') as f:
         for line in f:
-            data = json.loads(line.strip())
+            line = line.strip()
+            if not line:  # 빈 줄 무시
+                continue
+            data = json.loads(line)
             product_name = data.get('상품명')
 
             if product_name and product_name in product_url_map:
@@ -39,7 +45,7 @@ def add_urls_to_documents():
             updated_documents.append(data)
 
     # 결과 저장
-    output_path = './data/product_document/product_documents_with_url_251218.jsonl'
+    output_path = './data/product_document/product_documents_tagged_v2_1_with_url_251218.jsonl'
     with open(output_path, 'w', encoding='utf-8') as f:
         for doc in updated_documents:
             f.write(json.dumps(doc, ensure_ascii=False) + '\n')

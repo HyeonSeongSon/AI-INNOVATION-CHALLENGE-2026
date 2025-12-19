@@ -288,8 +288,8 @@ def crawl_and_merge_from_jsonl(input_file, output_file):
 def main():
     """메인 실행 함수"""
     # 입력/출력 파일 경로
-    input_file = "./data/crawling_result/test.jsonl"
-    output_file = "./data/crawling_result/add_coler_image_test.jsonl"
+    input_file = r"C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\product_document\product_documents_v2_included_tags.jsonl"
+    output_file = "./data/product_document/product_documents_v2_included_tags_with_color_251219.jsonl"
 
     print("=" * 60)
     print("아모레몰 상품 색상 크롤링 시작")
