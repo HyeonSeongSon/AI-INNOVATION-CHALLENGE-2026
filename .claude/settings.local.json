@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(wsl.exe:*)",
+      "Bash(C:/Users/user/anaconda3/envs/2026ai/Scripts/conda.exe install:*)",
+      "Bash(docker-compose up:*)"
     ]
   }
 }

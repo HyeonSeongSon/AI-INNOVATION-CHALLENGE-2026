@@ -1,0 +1,10 @@
+# 환경 변수 파일 (민감한 정보 포함)
+.env
+
+# PostgreSQL 데이터 디렉토리 (로컬 개발용)
+pgdata/
+data/
+
+# 로그 파일
+*.log
+logfile

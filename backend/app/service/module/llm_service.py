@@ -9,7 +9,7 @@ from typing import Optional, Generator
 
 # 환경 변수 로드 (.env 파일 경로 지정)
 current_dir = Path(__file__).resolve().parent
-env_path = current_dir.parent.parent.parent / '.env'
+env_path = current_dir / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # 환경 변수 키 매핑
