@@ -63,7 +63,7 @@ class BrandPageCrawler:
         product_links = []
         try:
             # div[3]부터 div[8]까지 모두 시도
-            for div_idx in range(2, 3):
+            for div_idx in range(3, 6):
                 logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
                 div_product_count = 0
 
