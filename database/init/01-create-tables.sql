@@ -30,8 +30,6 @@ CREATE TABLE IF NOT EXISTS products (
     -- 기본 상품 정보
     product_code VARCHAR(100),
     product_name VARCHAR(500) NOT NULL,
-    category VARCHAR(100),
-    sub_category VARCHAR(100),
 
     -- 가격 정보
     original_price DECIMAL(10, 2),
@@ -76,7 +74,6 @@ CREATE TABLE IF NOT EXISTS products (
 
 -- 상품 인덱스
 CREATE INDEX idx_products_brand_id ON products(brand_id);
-CREATE INDEX idx_products_category ON products(category);
 CREATE INDEX idx_products_product_code ON products(product_code);
 CREATE INDEX idx_products_vector_db_id ON products(vector_db_id);
 CREATE INDEX idx_products_rating ON products(rating DESC);
@@ -151,6 +148,20 @@ CREATE TABLE IF NOT EXISTS personas (
     -- 추가 정보
     budget_range VARCHAR(50),
 
+    -- 7. 라이프스타일 & 환경
+    skincare_routine TEXT[] DEFAULT '{}',
+    activity_environment TEXT[] DEFAULT '{}',
+    preferred_texture TEXT[] DEFAULT '{}',
+    has_pet TEXT[] DEFAULT '{}',
+    sleep_hours VARCHAR(50),
+    stress_level VARCHAR(50),
+    residence_area VARCHAR(100),
+    digital_device_usage VARCHAR(50),
+
+    -- 8. 쇼핑 & 구매 성향
+    shopping_style TEXT[] DEFAULT '{}',
+    purchase_decision_factors TEXT[] DEFAULT '{}',
+
     -- 메타데이터
     metadata JSONB DEFAULT '{}',
 
@@ -182,6 +193,16 @@ COMMENT ON COLUMN personas.preferred_ingredients IS '선호 성분 (히알루론
 COMMENT ON COLUMN personas.avoided_ingredients IS '기피 성분 (파라벤, 알코올, 인공향료, 인공색소 등)';
 COMMENT ON COLUMN personas.preferred_scents IS '선호 향 (무향, 플로럴, 시트러스, 허브, 우디, 머스크)';
 COMMENT ON COLUMN personas.special_conditions IS '특수 조건 (천연/유기농, 비건/크루얼티프리, 친환경패키징, 임산부/수유부)';
+COMMENT ON COLUMN personas.skincare_routine IS '스킨케어 루틴 (간단한/기본/복합)';
+COMMENT ON COLUMN personas.activity_environment IS '주 활동 환경 (실내/실외/혼합, 사무실/야외)';
+COMMENT ON COLUMN personas.preferred_texture IS '선호 제형/텍스처 (크림/로션/젤/오일 등)';
+COMMENT ON COLUMN personas.has_pet IS '반려동물 (있음/없음)';
+COMMENT ON COLUMN personas.sleep_hours IS '수면 시간 (5시간 이하, 6-7시간, 8시간 이상)';
+COMMENT ON COLUMN personas.stress_level IS '스트레스 수준 (낮음/보통/높음)';
+COMMENT ON COLUMN personas.residence_area IS '거주지역 (도시/교외/지방)';
+COMMENT ON COLUMN personas.digital_device_usage IS '디지털 기기 사용 시간 (낮음/보통/높음)';
+COMMENT ON COLUMN personas.shopping_style IS '쇼핑 스타일 (신중한/충동적/계획적)';
+COMMENT ON COLUMN personas.purchase_decision_factors IS '구매 결정 요인 (가격/성분/브랜드/리뷰)';
 
 -- ============================================================
 -- 4. 페르소나 분석 결과 테이블 (persona_analysis_results)

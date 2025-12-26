@@ -49,8 +49,6 @@ class Product(Base):
     # 기본 상품 정보
     product_code = Column(String(100), index=True)
     product_name = Column(String(500), nullable=False)
-    category = Column(String(100), index=True)
-    sub_category = Column(String(100))
 
     # 가격 정보
     original_price = Column(DECIMAL(10, 2), comment='원가')
@@ -137,6 +135,20 @@ class Persona(Base):
 
     # 추가 정보
     budget_range = Column(String(50))
+
+    # 7. 라이프스타일 & 환경
+    skincare_routine = Column(ARRAY(Text), default=[], comment='스킨케어 루틴')
+    activity_environment = Column(ARRAY(Text), default=[], comment='주 활동 환경')
+    preferred_texture = Column(ARRAY(Text), default=[], comment='선호 제형/텍스처')
+    has_pet = Column(ARRAY(Text), default=[], comment='반려동물')
+    sleep_hours = Column(String(50), comment='수면 시간')
+    stress_level = Column(String(50), comment='스트레스 수준')
+    residence_area = Column(String(100), comment='거주지역')
+    digital_device_usage = Column(String(50), comment='디지털 기기 사용 시간')
+
+    # 8. 쇼핑 & 구매 성향
+    shopping_style = Column(ARRAY(Text), default=[], comment='쇼핑 스타일')
+    purchase_decision_factors = Column(ARRAY(Text), default=[], comment='구매 결정 요인')
 
     # 메타데이터
     persona_metadata = Column('metadata', JSONB, default={})

@@ -50,7 +50,17 @@ class PersonaCreate(BaseModel):
                 "avoided_ingredients": ["파라벤", "알코올"],
                 "preferred_scents": ["무향", "플로럴"],
                 "special_conditions": ["천연/유기농"],
-                "budget_range": "중"
+                "budget_range": "중",
+                "skincare_routine": ["기본"],
+                "activity_environment": ["실내", "사무실"],
+                "preferred_texture": ["크림", "로션"],
+                "has_pet": ["없음"],
+                "sleep_hours": "6-7시간",
+                "stress_level": "보통",
+                "residence_area": "도시",
+                "digital_device_usage": "높음",
+                "shopping_style": ["신중한", "계획적"],
+                "purchase_decision_factors": ["성분", "리뷰"]
             }
         }
     )
@@ -85,6 +95,20 @@ class PersonaCreate(BaseModel):
     # 추가
     budget_range: Optional[str] = Field(None, description="예산 범위", examples=["중"])
 
+    # 7. 라이프스타일 & 환경
+    skincare_routine: List[str] = Field(default=[], description="스킨케어 루틴", examples=[["간단한"]])
+    activity_environment: List[str] = Field(default=[], description="주 활동 환경", examples=[["실내", "사무실"]])
+    preferred_texture: List[str] = Field(default=[], description="선호 제형/텍스처", examples=[["크림", "로션"]])
+    has_pet: List[str] = Field(default=[], description="반려동물", examples=[["없음"]])
+    sleep_hours: Optional[str] = Field(None, description="수면 시간", examples=["6-7시간"])
+    stress_level: Optional[str] = Field(None, description="스트레스 수준", examples=["보통"])
+    residence_area: Optional[str] = Field(None, description="거주지역", examples=["도시"])
+    digital_device_usage: Optional[str] = Field(None, description="디지털 기기 사용 시간", examples=["높음"])
+
+    # 8. 쇼핑 & 구매 성향
+    shopping_style: List[str] = Field(default=[], description="쇼핑 스타일", examples=[["신중한", "계획적"]])
+    purchase_decision_factors: List[str] = Field(default=[], description="구매 결정 요인", examples=[["성분", "리뷰"]])
+
 
 class PersonaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -101,6 +125,24 @@ class PersonaResponse(BaseModel):
     skin_concerns: List[str]
     preferred_ingredients: List[str]
     avoided_ingredients: List[str]
+    preferred_scents: List[str] = Field(default=[])
+    preferred_point_colors: List[str] = Field(default=[])
+    special_conditions: List[str] = Field(default=[])
+    budget_range: Optional[str] = None
+
+    # 라이프스타일 & 환경
+    skincare_routine: List[str] = Field(default=[])
+    activity_environment: List[str] = Field(default=[])
+    preferred_texture: List[str] = Field(default=[])
+    has_pet: List[str] = Field(default=[])
+    sleep_hours: Optional[str] = None
+    stress_level: Optional[str] = None
+    residence_area: Optional[str] = None
+    digital_device_usage: Optional[str] = None
+
+    # 쇼핑 & 구매 성향
+    shopping_style: List[str] = Field(default=[])
+    purchase_decision_factors: List[str] = Field(default=[])
 
 
 class ProductResponse(BaseModel):
@@ -113,8 +155,6 @@ class ProductResponse(BaseModel):
     # 기본 정보
     product_code: Optional[str] = None
     product_name: str
-    category: Optional[str] = None
-    sub_category: Optional[str] = None
 
     # 가격 정보
     original_price: Optional[float] = None
@@ -154,12 +194,12 @@ class ProductRecommendationResponse(BaseModel):
     product_id: int
     product_name: str
     brand_name: Optional[str]
-    category: Optional[str]
-    price: Optional[float]
+    tags: Optional[dict] = Field(default={})
+    sale_price: Optional[float]
     relevance_score: Optional[float]
     matched_attributes: dict
     matching_reasons: List[str]
-    images: List[str]
+    image_urls: List[str]
 
 
 # ============================================================
@@ -224,7 +264,7 @@ def get_brand_products(brand_id: int, limit: int = 20, db: Session = Depends(get
             {
                 "id": p.id,
                 "product_name": p.product_name,
-                "category": p.category,
+                "tags": p.tags or {},
                 "sale_price": float(p.sale_price) if p.sale_price else None,
                 "rating": float(p.rating) if p.rating else None,
                 "image_urls": p.image_urls[:3] if p.image_urls else []
@@ -242,14 +282,25 @@ def get_brand_products(brand_id: int, limit: int = 20, db: Session = Depends(get
 def get_products(
     limit: int = 20,
     offset: int = 0,
-    category: Optional[str] = None,
+    product_name: Optional[str] = None,
+    tag: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """상품 목록 조회"""
+    """
+    상품 목록 조회
+    - product_name: 상품명으로 검색 (부분 일치)
+    - tag: tags JSONB 필드에서 검색
+    """
     query = db.query(Product).options(joinedload(Product.brand))
 
-    if category:
-        query = query.filter(Product.category.ilike(f"%{category}%"))
+    if product_name:
+        query = query.filter(Product.product_name.ilike(f"%{product_name}%"))
+
+    if tag:
+        # JSONB tags 필드에서 검색 (값이 배열인 경우와 문자열인 경우 모두 지원)
+        query = query.filter(
+            text(f"tags::text ILIKE :tag")
+        ).params(tag=f"%{tag}%")
 
     total = query.count()
     products = query.offset(offset).limit(limit).all()
@@ -258,12 +309,16 @@ def get_products(
         "total": total,
         "offset": offset,
         "limit": limit,
+        "filters": {
+            "product_name": product_name,
+            "tag": tag
+        },
         "products": [
             {
                 "id": p.id,
                 "product_name": p.product_name,
                 "brand_name": p.brand.name if p.brand else None,
-                "category": p.category,
+                "tags": p.tags or {},
                 "sale_price": float(p.sale_price) if p.sale_price else None,
                 "rating": float(p.rating) if p.rating else None,
                 "review_count": p.review_count or 0,
@@ -291,8 +346,6 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         brand_name=product.brand.name if product.brand else None,
         product_code=product.product_code,
         product_name=product.product_name,
-        category=product.category,
-        sub_category=product.sub_category,
         original_price=float(product.original_price) if product.original_price else None,
         discount_rate=float(product.discount_rate) if product.discount_rate else None,
         sale_price=float(product.sale_price) if product.sale_price else None,
