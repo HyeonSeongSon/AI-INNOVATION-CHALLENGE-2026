@@ -8,14 +8,6 @@
 CREATE TABLE IF NOT EXISTS brands (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    brand_url TEXT,
-    tone_description TEXT,
-    target_audience JSONB DEFAULT '{}',
-    brand_positioning TEXT,
-    brand_personality TEXT,
-    tone_style TEXT,
-    core_keywords TEXT[] DEFAULT '{}',
-    prohibited_expressions TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -192,26 +184,7 @@ COMMENT ON COLUMN personas.preferred_scents IS '선호 향 (무향, 플로럴, �
 COMMENT ON COLUMN personas.special_conditions IS '특수 조건 (천연/유기농, 비건/크루얼티프리, 친환경패키징, 임산부/수유부)';
 
 -- ============================================================
--- 4. 상품-페르소나 매핑 테이블 (product_personas)
--- ============================================================
-CREATE TABLE IF NOT EXISTS product_personas (
-    id SERIAL PRIMARY KEY,
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    persona_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
-    relevance_score DECIMAL(5, 4) CHECK (relevance_score >= 0 AND relevance_score <= 1),
-    matched_attributes JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(product_id, persona_id)
-);
-
--- 상품-페르소나 인덱스
-CREATE INDEX idx_product_personas_product_id ON product_personas(product_id);
-CREATE INDEX idx_product_personas_persona_id ON product_personas(persona_id);
-CREATE INDEX idx_product_personas_relevance_score ON product_personas(relevance_score DESC);
-CREATE INDEX idx_product_personas_matched_attributes ON product_personas USING GIN(matched_attributes);
-
--- ============================================================
--- 5. 페르소나 분석 결과 테이블 (persona_analysis_results)
+-- 4. 페르소나 분석 결과 테이블 (persona_analysis_results)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS persona_analysis_results (
     id SERIAL PRIMARY KEY,
