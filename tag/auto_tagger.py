@@ -52,7 +52,7 @@ class AutoTagger:
     def load_documents(self) -> List[Dict]:
         """생성된 상품 문서 로드"""
         BASE_DIR = Path(__file__).parent.parent
-        input_file = BASE_DIR / "create_product_document" / "product_documents_v4.jsonl"
+        input_file = BASE_DIR / "data" / "crawling_result" / "product_crawling_251225_no_tag.jsonl"
 
         print(f"문서 파일 로드: {input_file}")
 
@@ -201,7 +201,8 @@ class AutoTagger:
         """
         brand = document.get('브랜드', '')
         product_name = document.get('상품명', '')
-        product_doc = document.get('생성된_문서', '')
+        # document 또는 생성된_문서 필드 모두 지원
+        product_doc = document.get('document', document.get('생성된_문서', ''))
 
         # 카테고리 리스트를 JSON 형식으로 변환
         categories_json = json.dumps(self.categories, ensure_ascii=False)
@@ -217,7 +218,7 @@ class AutoTagger:
 상품명: {product_name}
 
 상품 문서:
-{product_doc[:2000]}
+{product_doc}
 
 [분류 단계]
 1. 상품의 '브랜드', '상품명', '문서 내용'을 분석하십시오.
@@ -361,11 +362,14 @@ class AutoTagger:
     def save_results(self, results: List[Dict], start_time: datetime):
         """결과를 JSONL 파일로 저장"""
         BASE_DIR = Path(__file__).parent.parent
-        output_path = BASE_DIR / "data" / "product_document" / "product_documents_v4_tagged.jsonl"
+        output_path = BASE_DIR / "data" / "tag" / "product_documents_good_tagged.jsonl"
 
         print("=" * 60)
         print("결과 저장 중...")
         print("=" * 60)
+
+        # 출력 디렉토리가 없으면 생성
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(output_path, 'w', encoding='utf-8') as f:
             for item in results:

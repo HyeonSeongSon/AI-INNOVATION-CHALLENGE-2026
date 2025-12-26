@@ -21,11 +21,11 @@ TARGET_TAGS = [
 ]
 
 # 입력 파일 경로
-input_file = r"C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\product_document\product_documents_tagged_v2_1_with_url_251218.jsonl"
+input_file = r"C:\Users\user\Documents\GitHub\AI-INNOVATION-CHALLENGE-2026\data\product_document\product_documents_v3_tagged.jsonl"
 
 # 출력 파일 경로
-output_included = "./data/product_document/product_documents_v2_included_tags.jsonl"
-output_excluded = "./data/product_document/product_documents_v2_excluded_tags.jsonl"
+output_included = "./data/product_document/product_documents_v3_included_tags.jsonl"
+output_excluded = "./data/product_document/product_documents_v3_excluded_tags.jsonl"
 
 # 카운터
 included_count = 0
