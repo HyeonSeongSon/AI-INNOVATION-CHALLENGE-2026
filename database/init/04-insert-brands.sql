@@ -224,3 +224,23 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO brands (name)
 VALUES ('홀리추얼')
 ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO brands (name)
+VALUES ('구딸')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO brands (name)
+VALUES ('아모레 시티랩')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO brands (name)
+VALUES ('카이피')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO brands (name)
+VALUES ('퍼퓸샵')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO brands (name)
+VALUES ('플로레비다')
+ON CONFLICT (name) DO NOTHING;
