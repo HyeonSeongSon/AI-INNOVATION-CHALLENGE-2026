@@ -1,0 +1,41 @@
+# ============================================================
+# AI Innovation Challenge 2026 - Database Requirements
+# ============================================================
+
+# Core Web Framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.21
+
+# Database
+SQLAlchemy==2.0.45
+psycopg2-binary==2.9.11
+
+# Validation & Settings
+pydantic==2.12.5
+pydantic-settings==2.12.0
+python-dotenv==1.0.0
+
+# HTTP Client
+httpx==0.28.1
+requests==2.32.5
+
+# OpenSearch (Vector Database)
+opensearch-py==2.4.2
+
+# Data Processing
+pandas==2.3.3
+numpy==1.26.4
+
+# AI/ML Libraries (Optional - 벡터 검색 및 임베딩용)
+langchain==0.3.26
+langchain-openai==0.3.27
+langchain-community==0.3.27
+openai==1.109.1
+sentence-transformers==2.7.0
+transformers==4.57.3
+torch==2.9.1
+
+# Utilities
+python-dateutil==2.9.0.post0
+PyYAML==6.0.0
