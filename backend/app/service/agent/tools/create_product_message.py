@@ -146,12 +146,12 @@ class ProductMessageGenerator:
             else:
                 sections.append(f"선호 성분: {ingredients}")
 
-        if persona_info.get('기피 성분'):
-            avoided = persona_info['기피 성분']
-            if isinstance(avoided, list):
-                sections.append(f"기피 성분: {', '.join(avoided)}")
-            else:
-                sections.append(f"기피 성분: {avoided}")
+        # if persona_info.get('기피 성분'):
+        #     avoided = persona_info['기피 성분']
+        #     if isinstance(avoided, list):
+        #         sections.append(f"기피 성분: {', '.join(avoided)}")
+        #     else:
+        #         sections.append(f"기피 성분: {avoided}")
 
         # 가치관
         if persona_info.get('가치관'):
@@ -220,8 +220,8 @@ class ProductMessageGenerator:
                 sections.append(f"브랜드 가치: {', '.join(values)}")
 
         # 전용 제품
-        if product.get('exclusive_product'):
-            sections.append(f"전용 제품: {product['exclusive_product']}")
+        # if product.get('exclusive_product'):
+        #     sections.append(f"전용 제품: {product['exclusive_product']}")
 
         # URL
         if product.get('product_page_url'):
@@ -272,11 +272,11 @@ class ProductMessageGenerator:
 
         # 5. 프롬프트 변수 치환
         formatted_prompt = purpose_prompt.format(
-            브랜드명=brand_name,
-            제품명=product.get('product_name', ''),
-            문서내용=product_text,
-            브랜드톤=brand_tone,
-            페르소나정보=persona_text if persona_text else "정보 없음"
+            brand_name=brand_name,
+            product_name=product.get('product_name', ''),
+            product_text=product_text,
+            brand_tone=brand_tone,
+            persona_text=persona_text if persona_text else "정보 없음"
         )
 
         print(f"\n[DEBUG] 생성 프롬프트 (처음 500자):")
@@ -419,9 +419,9 @@ if __name__ == "__main__":
     # 테스트 상품 정보
     test_product = {
         "product_id": "TEST001",
-        "product_name": "워터뱅크 하이드로 에센스",
-        "brand": "라네즈",
-        "product_tag": "에센스&세럼&오일",
+        "product_name": "[NEW 컬러 출시]센슈얼 틴티드 샤인스틱 3.5g",
+        "brand": "헤라",
+        "product_tag": "립스틱&틴트",
         "sale_price": 35000,
         "discount_rate": 10,
         "rating": 4.8,
@@ -453,7 +453,7 @@ if __name__ == "__main__":
     result = create_product_message.invoke({
         "product": test_product,
         "persona_info": test_persona,
-        "purpose": "브랜드/제품 소개"
+        "purpose": "신상품홍보"
     })
 
     # 결과 출력
