@@ -132,25 +132,30 @@ def _get_parser():
 @tool
 def parse_crm_message_request(user_input: str) -> Dict[str, Any]:
     """
-    CRM 메시지 요청을 파싱합니다.
+    사용자의 CRM 메시지 생성 요청을 구조화된 데이터로 파싱합니다.
 
-    자연어, ID 직접 입력, JSON 형태 모두 지원합니다.
+    **언제 사용하나요?**
+    - 사용자가 자연어, JSON, 또는 비구조화된 형태로 CRM 메시지 생성을 요청했을 때
+    - persona_id, purpose, brands, product_categories 같은 정보를 추출해야 할 때
+    - 아직 페르소나 정보나 캠페인 조건이 구조화되지 않은 상태일 때
 
-    입력 예시:
-    - 자연어: "20대 여성에게 라네즈, 설화수 스킨케어 프로모션 메시지"
-    - ID 입력: "P123 페르소나로 라네즈 스킨케어 프로모션"
-    - JSON: {"persona_id": "A20250001", "brands": ["라네즈"], "product_categories": ["스킨케어"]}
+    **입력 형태:**
+    - 자연어: "20대 건성피부 고객에게 설화수 크림 추천해줘"
+    - JSON: {"persona_id": "PERSONA_002", "brands": ["설화수"], "product_categories": ["크림"]}
 
     Args:
         user_input: 사용자 입력 (자연어, JSON 등)
 
     Returns:
-        파싱된 결과 딕셔너리
-        - persona_id: 페르소나 ID (단일 값)
-        - purpose: 메시지 목적 (단일 값)
-        - product_categories: 상품 카테고리 리스트
-        - brands: 브랜드 리스트
-        - exclusive_target: 특정 대상 전용 제품 (단일 값)
+        파싱된 결과 딕셔너리:
+        {
+            "persona_id": "PERSONA_002",
+            "purpose": "신상품홍보",
+            "brands": ["설화수"],
+            "product_categories": ["크림"],
+            "exclusive_target": None,
+            "persona_info": {...}  # 페르소나 상세 정보 포함
+        }
     """
     parser = _get_parser()
     parsed = parser.parse(user_input)

@@ -26,15 +26,15 @@ class ProductMessageGenerator:
             raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
 
         self.llm = ChatOpenAI(
-            model="gpt-4o",
+            model="gpt-5-mini",
             temperature=0.7,
             api_key=api_key
         )
 
         # YAML 파일 경로 설정
         # __file__의 위치: backend/app/service/agent/tools/create_product_message.py
-        # 프로젝트 루트로 5단계 상위로 이동
-        current_dir = os.path.dirname(__file__)  # tools/
+        # 프로젝트 루트: AI-INNOVATION-CHALLENGE-2026/
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # tools/
         agent_dir = os.path.dirname(current_dir)  # agent/
         service_dir = os.path.dirname(agent_dir)  # service/
         app_dir = os.path.dirname(service_dir)  # app/
@@ -43,10 +43,6 @@ class ProductMessageGenerator:
 
         self.brand_tone_path = os.path.join(project_root, "data", "prompt", "brand_tone.yaml")
         self.purpose_prompt_path = os.path.join(project_root, "data", "prompt", "purpose_prompt.yaml")
-
-        print(f"[DEBUG] 프로젝트 루트: {project_root}")
-        print(f"[DEBUG] 브랜드톤 경로: {self.brand_tone_path}")
-        print(f"[DEBUG] 프롬프트 경로: {self.purpose_prompt_path}")
 
         # YAML 데이터 로드
         self.brand_tones = self._load_yaml(self.brand_tone_path)
@@ -367,35 +363,39 @@ def create_product_message(
     purpose: str = "브랜드/제품 소개"
 ) -> Dict[str, Any]:
     """
-    선택된 상품에 대한 맞춤 메시지 생성
+    선택된 상품과 페르소나 정보를 바탕으로 개인화된 CRM 메시지를 생성합니다.
+
+    **언제 사용하나요?**
+    - 사용자가 특정 상품을 선택한 후 (recommend_products의 결과로 selected_product를 받은 후)
+    - 페르소나 정보와 상품 정보가 모두 있을 때
+    - 최종 CRM 메시지를 생성해야 할 때
+
+    **필수 입력:**
+    - product: 선택된 상품 정보 (recommend_products에서 반환한 selected_product)
+    - persona_info: 페르소나 정보 (parse_crm_message_request에서 반환한 persona_info)
+    - purpose: 메시지 목적 (예: "신상품홍보", "브랜드/제품 소개")
 
     Args:
         product: 선택된 상품 정보 딕셔너리
             - product_name: 상품명
             - brand: 브랜드명
-            - product_tag: 카테고리
             - sale_price: 판매가
-            - rating: 평점
-            - 기타 상품 속성들
+            - 기타 상품 속성
         persona_info: 페르소나 정보 딕셔너리
             - 이름, 나이, 성별
             - 피부타입, 고민 키워드
-            - 선호 성분, 기피 성분
-            - 가치관, 라이프스타일 등
+            - 선호 성분, 가치관 등
         purpose: 메시지 목적 (기본값: "브랜드/제품 소개")
-            - "브랜드/제품 소개" 또는 "제품소개"
-            - "신상품홍보" 또는 "신제품홍보"
 
     Returns:
-        생성된 메시지 딕셔너리
-        - success: 성공 여부
-        - title: 메시지 제목 (40자 이내)
-        - message: 메시지 본문 (350자 이내)
-        - full_content: 전체 생성 내용
-        - product_name: 상품명
-        - brand: 브랜드명
-        - purpose: 메시지 목적
-        - error: 오류 메시지 (실패 시)
+        생성된 메시지:
+        {
+            "success": true,
+            "title": "메시지 제목 (40자 이내)",
+            "message": "메시지 본문 (350자 이내)",
+            "product_name": "상품명",
+            "brand": "브랜드명"
+        }
     """
     generator = _get_message_generator()
     return generator.generate_message(product, persona_info, purpose)

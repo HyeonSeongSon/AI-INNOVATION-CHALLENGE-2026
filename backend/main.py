@@ -5,7 +5,7 @@ CRM Agent API 서버
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import crm_agent
+from app.api import crm_endpoints
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(crm_agent.router)
+app.include_router(crm_endpoints.router)
 
 
 @app.get("/")
