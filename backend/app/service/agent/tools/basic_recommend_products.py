@@ -91,79 +91,82 @@ class BasicRecommendProducts:
         Returns:
             페르소나 정보 딕셔너리
         """
-        # TODO: 실제 DB 엔드포인트 호출
-        # 예시: response = requests.post("http://api/personas/get", json={"persona_id": self.persona_id})
-        # persona_info = response.json()
+        # DB 엔드포인트 호출
+        try:
+            response = requests.post(
+                "http://localhost:8000/api/personas/get",
+                json={"persona_id": self.persona_id}
+            )
+            response.raise_for_status()
+            api_data = response.json()
 
-        # Mock 데이터 (실제 구현 시 제거)
-        persona_info = {
-            "persona_id": self.persona_id,
-            "이름": "지민",
-            "나이": 25,
-            "성별": "여성",
-            "피부타입": ["민감성", "복합성"],
-            "고민 키워드": ["모공", "트러블", "피부 진정", "수분 부족"],
-            "퍼스널 컬러": ["쿨톤"],
-            "베이스 호수": 21,
-            "메이크업 선호 색상": ["핑크", "코랄", "라벤더"],
-            "선호 성분": ["센텔라", "나이아신아마이드", "히알루론산", "세라마이드"],
-            "기피 성분": ["알코올", "인공향료", "파라벤", "미네랄 오일"],
-            "선호 향": "무향 또는 은은한 플로럴",
-            "가치관": ["동물실험 반대", "비건 화장품 선호", "친환경 포장"],
-            "스킨케어 루틴": "10단계 (이중 세안, 토너, 에센스, 세럼, 크림, 선크림 등)",
-            "주 활동 환경": ["사무실 (에어컨)", "대중교통", "카페"],
-            "선호 제형(텍스처)": ["크림", "젤", "로션"],
-            "반려동물": "고양이",
-            "수면 시간": "6시간",
-            "스트레스": "높음",
-            "거주지역": "서울 강남구",
-            "디지털 기기 사용": "하루 10시간 이상",
-            "쇼핑 스타일&예산": "온라인 쇼핑 선호, 월 15만원",
-            "구매 결정 요인": ["리뷰", "성분", "브랜드 신뢰도", "가격"]
-        }
-        return persona_info
+            # API 응답을 기존 형식으로 변환
+            persona_info = {
+                "persona_id": api_data.get("persona_id"),
+                "이름": api_data.get("name"),
+                "나이": api_data.get("age"),
+                "성별": api_data.get("gender"),
+                "직업": api_data.get("occupation"),
+                "피부타입": api_data.get("skin_type", []),
+                "고민 키워드": api_data.get("skin_concerns", []),
+                "퍼스널 컬러": api_data.get("personal_color"),
+                "베이스 호수": api_data.get("shade_number"),
+                "메이크업 선호 색상": api_data.get("preferred_colors", []),
+                "선호 성분": api_data.get("preferred_ingredients", []),
+                "기피 성분": api_data.get("avoided_ingredients", []),
+                "선호 향": api_data.get("preferred_scents", []),
+                "가치관": api_data.get("values", []),
+                "스킨케어 루틴": api_data.get("skincare_routine"),
+                "주 활동 환경": api_data.get("main_environment"),
+                "선호 제형(텍스처)": api_data.get("preferred_texture", []),
+                "반려동물": api_data.get("pets"),
+                "수면 시간": f"{api_data.get('avg_sleep_hours')}시간" if api_data.get('avg_sleep_hours') else None,
+                "스트레스": api_data.get("stress_level"),
+                "디지털 기기 사용": f"하루 {api_data.get('digital_device_usage_time')}시간" if api_data.get('digital_device_usage_time') else None,
+                "쇼핑 스타일&예산": api_data.get("shopping_style"),
+                "구매 결정 요인": api_data.get("purchase_decision_factors", [])
+            }
+
+            print(f"[INFO] 페르소나 정보 조회 성공: {persona_info.get('이름')}")
+            return persona_info
+
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] 페르소나 정보 조회 실패: {e}")
+            raise Exception(f"Failed to fetch persona info for {self.persona_id}: {e}")
 
     def get_product_info(self) -> List[Dict[str, Any]]:
         """
-        JSONL 파일에서 상품 정보 가져오기
+        캠페인 필터 조건에 맞는 상품을 PostgreSQL에서 가져오기
 
         Returns:
             상품 정보 리스트
         """
-        # TODO: 필터 조건 생성
-        # filters = {
-        #     "persona_id": self.persona_id,
-        # }
+        # 필터 조건 생성
+        filters = {}
 
-        # 값이 있는 것만 필터에 추가
-        # if self.brands:
-        #     filters["brands"] = self.brands
-        # if self.product_categories:
-        #     filters["product_categories"] = self.product_categories
-        # if self.exclusive_target:
-        #     filters["exclusive_target"] = self.exclusive_target
+        # 캠페인 필터 (값이 있는 것만 추가)
+        if self.brands:
+            filters["brands"] = self.brands
+        if self.product_categories:
+            filters["product_categories"] = self.product_categories
+        if self.exclusive_target:
+            filters["exclusive_target"] = self.exclusive_target
 
-        # TODO: 실제 DB 엔드포인트 호출
-        # 예시: response = requests.post("http://api/products/filter", json=filters)
-        # product_info = response.json()
-
-        jsonl_path = os.path.join(os.path.dirname(__file__), "tools/espoir_products_filtered.jsonl")
-
-        product_info = []
+        # DB 엔드포인트 호출
         try:
-            with open(jsonl_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    product = json.loads(line.strip())
-                    product_info.append(product)
+            response = requests.post(
+                "http://localhost:8000/api/products/filter",
+                json=filters
+            )
+            response.raise_for_status()
+            product_info = response.json()
 
-            print(f"[INFO] JSONL에서 {len(product_info)}개 상품 로드 완료")
+            print(f"[INFO] DB에서 {len(product_info)}개 상품 조회 완료")
+            return product_info
 
-        except FileNotFoundError:
-            print(f"[WARNING] {jsonl_path} 파일을 찾을 수 없습니다. 빈 리스트 반환.")
-        except Exception as e:
-            print(f"[ERROR] JSONL 파일 읽기 실패: {e}")
-
-        return product_info
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] 상품 정보 조회 실패: {e}")
+            raise Exception(f"Failed to fetch product info: {e}")
 
     def create_persona_analysis_content(self, persona_info: Dict[str, Any]) -> str:
         """
@@ -284,7 +287,7 @@ class BasicRecommendProducts:
         print(f"[INFO] 페르소나 정보 조회: {self.persona_id}")
         persona_info = self.get_persona_info()
 
-        print(f"[INFO] 상품 정보 조회")
+        print(f"[INFO] 상품 정보 조회 (페르소나 정보 기반 필터링)")
         product_info = self.get_product_info()
 
         product_ids = [p["product_id"] for p in product_info]

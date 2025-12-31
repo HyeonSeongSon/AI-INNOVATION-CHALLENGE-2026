@@ -1,6 +1,6 @@
 """
 JSONL 크롤링 데이터를 SQL INSERT 문으로 변환
-opensearch/product_data_251227.jsonl 기준으로 수정
+data/product_data_for_db.jsonl 기준으로 수정
 """
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "opensearch"
+DATA_DIR = PROJECT_ROOT / "data"
 OUTPUT_DIR = Path(__file__).parent / "init"
 
 
@@ -108,11 +108,11 @@ def load_jsonl(file_path: Path) -> List[Dict[str, Any]]:
 
 
 def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 100) -> str:
-    """상품 SQL 생성 (opensearch JSONL 기준)"""
+    """상품 SQL 생성 (data JSONL 기준)"""
     sql_lines = [
         "-- ============================================================",
         "-- Products Data Migration",
-        "-- Source: opensearch/product_data_251227.jsonl",
+        "-- Source: data/product_data_for_db.jsonl",
         "-- ============================================================\n"
     ]
 
@@ -125,8 +125,12 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
             print(f"[WARN] Line {idx}: product_id 없음, 스킵")
             continue
 
-        # vectordb_id (나중에 벡터DB에서 할당될 예정)
-        vectordb_id = 'NULL'
+        # vectordb_id (JSONL에서 읽어오기)
+        vectordb_id_value = product_data.get('vectordb_id', '')
+        if vectordb_id_value:
+            vectordb_id = escape_sql_string(vectordb_id_value)
+        else:
+            vectordb_id = 'NULL'
 
         # product_name
         product_name = product_data.get('상품명', '').strip()
@@ -279,11 +283,11 @@ def main():
     """메인 함수"""
     print("=" * 60)
     print("JSONL to SQL Converter")
-    print("Source: opensearch/product_data_251227.jsonl")
+    print("Source: data/product_data_for_db.jsonl")
     print("=" * 60)
 
     # 데이터 파일
-    product_file = DATA_DIR / "product_data_251227.jsonl"
+    product_file = DATA_DIR / "product_data_for_db.jsonl"
 
     if not product_file.exists():
         print(f"[ERROR] File not found: {product_file}")

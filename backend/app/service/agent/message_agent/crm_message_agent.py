@@ -20,15 +20,33 @@ if __name__ == "__main__":
 
 # Import the parsing tool (상대 경로 지원)
 try:
-    from .tools.parse_crm_request import parse_crm_message_request
+    from ..tools.parse_crm_request import parse_crm_message_request
 except ImportError:
+    import sys
+    import os
+    # 직접 실행 시 경로 추가
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
     from tools.parse_crm_request import parse_crm_message_request
 
 # Import recommend_products (상대 경로 지원)
 try:
-    from .crm_message_with_interrupt import recommend_products
+    from ..tools.basic_recommend_products import recommend_products
 except ImportError:
-    from crm_message_with_interrupt import recommend_products
+    import sys
+    import os
+    # 직접 실행 시 경로 추가
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from tools.basic_recommend_products import recommend_products
+
+# Import create_product_message (상대 경로 지원)
+try:
+    from ..tools.create_product_message import create_product_message
+except ImportError:
+    import sys
+    import os
+    # 직접 실행 시 경로 추가
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from tools.create_product_message import create_product_message
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -65,16 +83,31 @@ class CRMMessageHierarchicalAgent:
 2. recommend_products: 상품 추천 워크플로우 (인터럽트 지원)
    - 1차 호출: persona_id 제공 → status="interrupted", merged_products 반환
    - 2차 호출: thread_id + selected_index 제공 → status="completed", selected_product 반환
+3. create_product_message: 선택된 상품으로 맞춤 메시지 생성
+   - 입력: product (상품 정보), persona_info (페르소나 정보), purpose (메시지 목적)
+   - 출력: title (제목), message (메시지 본문)
+
+**워크플로우:**
+1. parse_crm_message_request로 요청 파싱
+2. recommend_products로 상품 추천 (persona_id만 제공)
+3. status="interrupted" 반환 시:
+   - merged_products 목록을 사용자에게 보여주고 작업 중단
+   - 사용자 선택 대기 (외부에서 처리)
 
 **인터럽트 워크플로우 사용 패턴:**
 - 모든 인터럽트 워크플로우는 status 필드로 상태를 반환합니다
-- status="interrupted": 사용자 입력 대기 중, thread_id를 저장하고 사용자에게 선택 요청
+- status="interrupted": 사용자 입력 대기 중
+  * 이 상태에서는 절대 recommend_products를 다시 호출하지 마세요
+  * merged_products 목록을 사용자에게 보여주고 작업을 중단하세요
+  * 사용자가 직접 선택할 때까지 기다려야 합니다
 - status="completed": 작업 완료, 결과 사용 가능
 - status="error": 오류 발생, error 필드 확인
 
 **중요:**
-- 최종 답변은 생성된 메시지 텍스트를 사용자에게 제공하는 것으로 마무리하세요.
-- 불필요한 도구 호출을 반복하지 마세요.
+- recommend_products를 1번만 호출하세요
+- status="interrupted"가 반환되면, 더 이상 도구를 호출하지 말고 추천 상품 목록을 사용자에게 제시하세요
+- 사용자 선택은 외부에서 처리되므로, 당신이 직접 선택하지 마세요
+- create_product_message는 사용자 선택 후 외부에서 호출됩니다 (Agent에서 호출하지 않음)
 """
 
         # 시스템 프롬프트를 LLM에 바인딩
@@ -86,7 +119,8 @@ class CRMMessageHierarchicalAgent:
             model=self.llm_with_system,
             tools=[
                 parse_crm_message_request,
-                recommend_products
+                recommend_products,
+                create_product_message
             ],
             checkpointer=self.checkpointer
         )
@@ -137,17 +171,6 @@ class CRMMessageHierarchicalAgent:
         Returns:
             파싱된 결과 딕셔너리
         """
-        # LangGraph 에이전트 결과 구조:
-        # result = {
-        #     "messages": [
-        #         HumanMessage(...),
-        #         AIMessage(content="...", tool_calls=[...]),
-        #         ToolMessage(...),
-        #         ...
-        #         AIMessage(content="최종 답변")
-        #     ]
-        # }
-
         messages = result.get("messages", [])
 
         # 최종 AI 메시지 추출 (마지막 AIMessage)
@@ -230,9 +253,9 @@ if __name__ == "__main__":
     result2 = agent.generate(
         # user_request="페르소나 P456으로 신상품홍보목적으로 에스쁘아브랜드의 립스틱 광고메세지를 생성해줘"
         user_request="""{
-            "persona_id": "P456",
+            "persona_id": "PERSONA_002",
             "purpose": "신상품홍보",
-            "brands": ["에스쁘아"],
+            "brands": None,
             "product_categories": ["립스틱"],
             "exclusive_target": None
         }"""
@@ -276,7 +299,15 @@ if __name__ == "__main__":
         for idx, product in enumerate(merged_products):
             print(f"\n{idx}. {product.get('상품명', 'N/A')}")
             print(f"   - 브랜드: {product.get('브랜드', 'N/A')}")
-            print(f"   - 가격: {product.get('판매가', 'N/A'):,}원 (할인율: {product.get('할인율', 0)}%)")
+
+            # 판매가 포맷팅 처리
+            price = product.get('판매가', 'N/A')
+            if isinstance(price, (int, float)):
+                price_str = f"{price:,}원"
+            else:
+                price_str = f"{price}원" if price != 'N/A' else 'N/A'
+
+            print(f"   - 가격: {price_str} (할인율: {product.get('할인율', 0)}%)")
             print(f"   - 별점: {product.get('별점', 'N/A')} ({product.get('리뷰_갯수', 0)}개 리뷰)")
             print(f"   - 벡터 검색 점수: {product.get('vector_search_score', 'N/A')}")
 
@@ -315,6 +346,39 @@ if __name__ == "__main__":
             print(f"  브랜드: {selected_product.get('브랜드', 'N/A')}")
             print(f"  가격: {selected_product.get('판매가', 'N/A'):,}원")
             print(f"  벡터 검색 점수: {selected_product.get('vector_search_score', 'N/A')}")
+
+            # 3단계: 메시지 생성
+            print("\n[3단계] 메시지 생성 중...")
+            print("=" * 80)
+
+            # parse_crm_request 결과에서 persona_info 추출
+            parsed_request = None
+            for msg in messages:
+                if msg.__class__.__name__ == "ToolMessage":
+                    try:
+                        tool_result = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                        if isinstance(tool_result, dict) and "persona_id" in tool_result:
+                            parsed_request = tool_result
+                            break
+                    except:
+                        pass
+
+            # create_product_message 호출
+            if parsed_request:
+                message_result = create_product_message.invoke({
+                    "product": selected_product,
+                    "persona_info": parsed_request.get("persona_info", {}),
+                    "purpose": parsed_request.get("purpose", "브랜드/제품 소개")
+                })
+
+                print(f"\n[생성된 CRM 메시지]")
+                print("=" * 80)
+                print(f"제목: {message_result.get('title', 'N/A')}")
+                print(f"\n메시지:")
+                print(message_result.get('message', 'N/A'))
+                print("=" * 80)
+            else:
+                print("\n[에러] 파싱된 요청 정보를 찾을 수 없습니다.")
         else:
             print(f"\n[에러] {final_result.get('error', '알 수 없는 오류')}")
     else:

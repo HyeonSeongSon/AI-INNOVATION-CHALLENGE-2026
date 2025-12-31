@@ -13,7 +13,7 @@ import os
 import json
 
 # .env 파일 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../../.env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 
 # ============================================================
