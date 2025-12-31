@@ -1,0 +1,16 @@
+# ============================================================
+# AI Innovation Challenge 2026 - Database Requirements
+# PostgreSQL API 서버 실행을 위한 최소 패키지
+# ============================================================
+
+# Core Web Framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+
+# Database (PostgreSQL)
+SQLAlchemy==2.0.45
+psycopg2-binary==2.9.11
+
+# Validation & Settings
+pydantic==2.12.5
+python-dotenv==1.0.0

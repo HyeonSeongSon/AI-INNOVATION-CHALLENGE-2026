@@ -1,0 +1,39 @@
+# FastAPI 웹 프레임워크
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+
+# 데이터 검증 및 직렬화
+pydantic>=2.7.4
+
+# OpenSearch 클라이언트
+opensearch-py==2.4.2
+
+# 임베딩 및 리랭크 모델 (호환성 버전)
+sentence-transformers==2.7.0
+transformers>=4.40.0
+torch>=1.9.0
+huggingface-hub>=0.19.0
+FlagEmbedding>=1.2.0
+
+# 기본 라이브러리
+numpy>=1.21.0,<2.0.0
+python-dotenv==1.0.0
+
+# HTTP 요청 라이브러리 (테스트 클라이언트용)
+requests>=2.25.0
+
+# 선택적 의존성 (성능 향상)
+python-multipart>=0.0.7  # 파일 업로드 지원
+
+# LangChain 및 관련 라이브러리
+langgraph==0.5.2
+langchain==0.3.26
+langchain-openai==0.3.27
+langchain-community==0.3.27
+langchain-core==0.3.68
+
+# 벡터 데이터베이스
+chromadb==0.5.0
+
+# OpenAI API
+openai>=1.86.0
