@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from opensearch_hybrid import OpenSearchHybridClient
+from path_utils import get_absolute_path
 
 # 로깅 설정
 logging.basicConfig(
@@ -279,8 +280,8 @@ def index_products_to_opensearch(
 
 
 if __name__ == "__main__":
-    # 설정
-    JSONL_FILE = "product_data_251231.jsonl"
+    # 설정 - 프로젝트 루트 기준 절대 경로 자동 생성
+    JSONL_FILE = get_absolute_path("data", "product_data_251231.jsonl")
     INDEX_NAME = "product_index"
     RECREATE_INDEX = True  # 기존 인덱스 삭제 후 재생성
 

@@ -1,6 +1,7 @@
 import json
 import logging
 from opensearch_hybrid import OpenSearchHybridClient
+from path_utils import get_absolute_path
 
 # 로깅 설정
 logging.basicConfig(
@@ -122,9 +123,9 @@ def export_product_id_mapping(index_name="product_index", output_file="product_i
 
 
 if __name__ == "__main__":
-    # 설정
+    # 설정 - 프로젝트 루트 기준 절대 경로 자동 생성
     INDEX_NAME = "product_index"
-    OUTPUT_FILE = "product_id_mapping.jsonl"
+    OUTPUT_FILE = get_absolute_path("data", "product_id_mapping.jsonl")
 
     print("=" * 60)
     print("OpenSearch Product ID 매핑 추출")
