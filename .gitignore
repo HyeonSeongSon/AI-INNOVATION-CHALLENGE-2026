@@ -1,13 +1,39 @@
-# 환경 변수 파일 (민감한 정보 포함)
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# PostgreSQL 데이터 디렉토리 (로컬 개발용)
-pgdata/
-data/
-
-# 임시 삭제 대상 폴더
-remove/
-
-# 로그 파일
-*.log
-logfile
+# IDE-specific files
+.vscode/
+.claude/

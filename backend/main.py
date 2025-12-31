@@ -5,7 +5,7 @@ CRM Agent API 서버
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import crm_endpoints
+from app.api import crm_agent_api
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(crm_endpoints.router)
+app.include_router(crm_agent_api.router)
 
 
 @app.get("/")
@@ -54,6 +54,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8001,  # DB 서버(8000)와 충돌 방지
+        port=8005,
         reload=True  # 개발 환경에서만 사용
     )
