@@ -32,11 +32,10 @@ class ProductMessageGenerator:
         )
 
         # YAML 파일 경로 설정
-        # __file__의 위치: backend/app/service/agent/tools/create_product_message.py
+        # __file__의 위치: backend/app/service/tools/create_product_message.py
         # 프로젝트 루트: AI-INNOVATION-CHALLENGE-2026/
         current_dir = os.path.dirname(os.path.abspath(__file__))  # tools/
-        agent_dir = os.path.dirname(current_dir)  # agent/
-        service_dir = os.path.dirname(agent_dir)  # service/
+        service_dir = os.path.dirname(current_dir)  # service/
         app_dir = os.path.dirname(service_dir)  # app/
         backend_dir = os.path.dirname(app_dir)  # backend/
         project_root = os.path.dirname(backend_dir)  # AI-INNOVATION-CHALLENGE-2026/
@@ -56,7 +55,8 @@ class ProductMessageGenerator:
         """YAML 파일 로드"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f)
+                data = yaml.safe_load(f)
+                return data
         except Exception as e:
             print(f"[ERROR] YAML 파일 로드 실패: {file_path}")
             print(f"[ERROR] {e}")
