@@ -1,126 +1,158 @@
 """
-[최종 확정 모델]
-AI Innovation Challenge 2026 표준 스키마 (SQLModel 버전)
-- table_type.md 명세 반영
+AI Innovation Challenge 2026 Database Models
+SQLAlchemy ORM Models for PostgreSQL
+새로운 테이블 스키마 (table_type.md 기준)
 """
-import uuid
-from typing import Optional, List, Dict
+
 from datetime import datetime
-from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, Integer, String, Text, DECIMAL, TIMESTAMP, func, ForeignKey, Numeric
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-
-# =========================================================
-# [1] Persona Table
-# =========================================================
-class Persona(SQLModel, table=True):
-    __tablename__ = "personas"
-    
-    # PK를 varchar로 설정 (UUID 사용 권장)
-    persona_id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True, index=True)
-    
-    name: str = Field(max_length=200)
-    gender: Optional[str] = Field(default=None)
-    age: Optional[int] = Field(default=None)
-    occupation: Optional[str] = Field(default=None)
-    
-    # 배열(List) 데이터
-    skin_type: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    skin_concerns: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    
-    personal_color: Optional[str] = Field(default=None)
-    shade_number: Optional[int] = Field(default=None) # integer
-    
-    preferred_colors: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    preferred_ingredients: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    avoided_ingredients: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    preferred_scents: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    values: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    
-    skincare_routine: Optional[str] = Field(default=None)
-    main_environment: Optional[str] = Field(default=None)
-    preferred_texture: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    pets: Optional[str] = Field(default=None)
-    
-    avg_sleep_hours: Optional[int] = Field(default=None) # integer
-    stress_level: Optional[str] = Field(default=None)
-    digital_device_usage_time: Optional[int] = Field(default=None) # integer
-    shopping_style: Optional[str] = Field(default=None)
-    
-    purchase_decision_factors: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    
-    persona_created_at: Optional[datetime] = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now()))
-
-    # 관계 설정
-    analysis_results: List["AnalysisResult"] = Relationship(back_populates="persona")
+from sqlalchemy import (
+    Column, Integer, String, Text, DECIMAL, TIMESTAMP,
+    ForeignKey, ARRAY
+)
+from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.sql import func
 
 
-# =========================================================
-# [2] Analysis Results Table
-# =========================================================
-class AnalysisResult(SQLModel, table=True):
-    __tablename__ = "analysis_results"
-    
-    analysis_id: Optional[int] = Field(default=None, primary_key=True) # serial (auto-increment)
-    persona_id: str = Field(foreign_key="personas.persona_id")
-    
-    analysis_result: Optional[str] = Field(default=None, sa_column=Column(Text))
-    analysis_created_at: Optional[datetime] = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now()))
-
-    persona: Optional[Persona] = Relationship(back_populates="analysis_results")
-    search_queries: List["SearchQuery"] = Relationship(back_populates="analysis_result")
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 Base class"""
+    pass
 
 
-# =========================================================
-# [3] Search Query Table
-# =========================================================
-class SearchQuery(SQLModel, table=True):
-    __tablename__ = "search_queries"
-    
-    query_id: Optional[int] = Field(default=None, primary_key=True)
-    analysis_id: int = Field(foreign_key="analysis_results.analysis_id")
-    
-    search_query: Optional[str] = Field(default=None, sa_column=Column(Text))
-    query_created_at: Optional[datetime] = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now()))
+# ============================================================
+# 1. Persona Table
+# ============================================================
 
-    analysis_result: Optional[AnalysisResult] = Relationship(back_populates="search_queries")
+class Persona(Base):
+    """페르소나 정보 테이블"""
+    __tablename__ = 'personas'
+
+    persona_id = Column(String(100), primary_key=True)
+    name = Column(String(200), nullable=False)
+    gender = Column(String(20))
+    age = Column(Integer)
+    occupation = Column(String(100))
+
+    # 피부 관련
+    skin_type = Column(ARRAY(Text), default=[])
+    skin_concerns = Column(ARRAY(Text), default=[])
+    personal_color = Column(String(50))
+    shade_number = Column(Integer)
+
+    # 선호 사항
+    preferred_colors = Column(ARRAY(Text), default=[])
+    preferred_ingredients = Column(ARRAY(Text), default=[])
+    avoided_ingredients = Column(ARRAY(Text), default=[])
+    preferred_scents = Column(ARRAY(Text), default=[])
+    values = Column(ARRAY(Text), default=[])
+
+    # 라이프스타일
+    skincare_routine = Column(String(100))
+    main_environment = Column(String(100))
+    preferred_texture = Column(ARRAY(Text), default=[])
+    pets = Column(String(50))
+    avg_sleep_hours = Column(Integer)
+    stress_level = Column(String(50))
+    digital_device_usage_time = Column(Integer)
+
+    # 쇼핑 성향
+    shopping_style = Column(String(100))
+    purchase_decision_factors = Column(ARRAY(Text), default=[])
+
+    # 타임스탬프
+    persona_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    analysis_results = relationship("AnalysisResult", back_populates="persona", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Persona(persona_id='{self.persona_id}', name='{self.name}')>"
 
 
-# =========================================================
-# [4] Product Table
-# =========================================================
-class Product(SQLModel, table=True):
-    __tablename__ = "products"
-    
-    product_id: str = Field(primary_key=True) # varchar PK
-    vectordb_id: Optional[str] = Field(default=None)
-    
-    product_name: str = Field(max_length=500)
-    brand: Optional[str] = Field(default=None)
-    product_tag: Optional[str] = Field(default=None)
-    
-    rating: Optional[float] = Field(default=0.0, sa_column=Column(Numeric))
-    review_count: Optional[int] = Field(default=0)
-    
-    original_price: Optional[int] = Field(default=0)
-    discount_rate: Optional[int] = Field(default=0)
-    sale_price: Optional[int] = Field(default=0)
-    
-    # 배열 데이터
-    skin_type: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    skin_concerns: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    preferred_colors: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    preferred_ingredients: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    avoided_ingredients: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    preferred_scents: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    values: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    
-    exclusive_product: Optional[str] = Field(default=None)
-    
-    personal_color: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    skin_shades: List[str] = Field(default=[], sa_column=Column(ARRAY(Text))) # text array로 처리
-    
-    product_image_url: List[str] = Field(default=[], sa_column=Column(ARRAY(Text)))
-    product_page_url: Optional[str] = Field(default=None, sa_column=Column(Text))
-    
-    product_created_at: Optional[datetime] = Field(sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now()))
+# ============================================================
+# 2. Analysis Results Table
+# ============================================================
+
+class AnalysisResult(Base):
+    """분석 결과 테이블"""
+    __tablename__ = 'analysis_results'
+
+    analysis_id = Column(Integer, primary_key=True, autoincrement=True)
+    persona_id = Column(String(100), ForeignKey('personas.persona_id', ondelete='CASCADE'), nullable=False, index=True)
+    analysis_result = Column(Text)
+    analysis_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    persona = relationship("Persona", back_populates="analysis_results")
+    search_queries = relationship("SearchQuery", back_populates="analysis_result", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<AnalysisResult(analysis_id={self.analysis_id}, persona_id='{self.persona_id}')>"
+
+
+# ============================================================
+# 3. Search Query Table
+# ============================================================
+
+class SearchQuery(Base):
+    """검색 쿼리 테이블"""
+    __tablename__ = 'search_queries'
+
+    query_id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_id = Column(Integer, ForeignKey('analysis_results.analysis_id', ondelete='CASCADE'), nullable=False, index=True)
+    search_query = Column(Text)
+    query_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    analysis_result = relationship("AnalysisResult", back_populates="search_queries")
+
+    def __repr__(self):
+        return f"<SearchQuery(query_id={self.query_id}, analysis_id={self.analysis_id})>"
+
+
+# ============================================================
+# 4. Product Table
+# ============================================================
+
+class Product(Base):
+    """상품 정보 테이블"""
+    __tablename__ = 'products'
+
+    product_id = Column(String(100), primary_key=True)
+    vectordb_id = Column(String(100), index=True)
+    product_name = Column(String(500), nullable=False)
+    brand = Column(String(100), index=True)
+    product_tag = Column(String(200))
+
+    # 평점/리뷰
+    rating = Column(DECIMAL(3, 2))
+    review_count = Column(Integer, default=0)
+
+    # 가격 정보
+    original_price = Column(Integer)
+    discount_rate = Column(Integer)
+    sale_price = Column(Integer)
+
+    # 페르소나 매칭 속성
+    skin_type = Column(ARRAY(Text), default=[])
+    skin_concerns = Column(ARRAY(Text), default=[])
+    preferred_colors = Column(ARRAY(Text), default=[])
+    preferred_ingredients = Column(ARRAY(Text), default=[])
+    avoided_ingredients = Column(ARRAY(Text), default=[])
+    preferred_scents = Column(ARRAY(Text), default=[])
+    values = Column(ARRAY(Text), default=[])
+    exclusive_product = Column(String(200))
+    personal_color = Column(ARRAY(Text), default=[])
+    skin_shades = Column(ARRAY(Integer), default=[])
+
+    # URL 및 이미지
+    product_image_url = Column(ARRAY(Text), default=[])
+    product_page_url = Column(Text)
+
+    # 상품 한줄소개
+    product_comment = Column(Text)
+
+    # 타임스탬프
+    product_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<Product(product_id='{self.product_id}', name='{self.product_name}', brand='{self.brand}')>"

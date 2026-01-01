@@ -15,7 +15,24 @@ def insert_products_from_jsonl():
     jsonl_file = Path(__file__).parent.parent / "data" / "product_data_for_db.jsonl"
 
     if not jsonl_file.exists():
-        print(f"[ERROR] File not found: {jsonl_file}")
+        print("=" * 80)
+        print("❌ 오류: 상품 데이터 파일을 찾을 수 없습니다!")
+        print("=" * 80)
+        print(f"필요한 파일: {jsonl_file}")
+        print()
+        print("⚠️  이 파일은 데이터베이스 설정에 필수입니다.")
+        print()
+        print("📋 다음 단계를 먼저 완료해주세요:")
+        print()
+        print("1. 벡터 데이터베이스에 상품 데이터 색인")
+        print("   → 벡터 인덱싱 스크립트를 실행하여 임베딩 생성")
+        print("   → 이 과정에서 'product_data_for_db.jsonl' 파일이 생성됩니다")
+        print()
+        print("2. 파일이 다음 위치에 있는지 확인:")
+        print(f"   {jsonl_file}")
+        print()
+        print("3. 이 스크립트를 다시 실행")
+        print("=" * 80)
         return
 
     print("=" * 60)
@@ -70,7 +87,8 @@ def insert_products_from_jsonl():
                     personal_color=persona_tags.get('퍼스널컬러', []),
                     skin_shades=persona_tags.get('피부톤번호', []),
                     product_image_url=data.get('상품이미지', []),
-                    product_page_url=data.get('product_url')
+                    product_page_url=data.get('product_url'),
+                    product_comment=data.get('한줄소개')
                 )
 
                 db.add(product)

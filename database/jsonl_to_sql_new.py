@@ -231,6 +231,9 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
         product_url = product_data.get('product_url', '')
         product_page_url = escape_sql_string(product_url)
 
+        # product_comment (한줄소개)
+        product_comment = escape_sql_string(product_data.get('한줄소개', ''))
+
         value = f"""(
     {escape_sql_string(product_id)},
     {vectordb_id},
@@ -253,7 +256,8 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
     {personal_color_sql},
     {skin_shades_sql},
     {product_image_url_sql},
-    {product_page_url}
+    {product_page_url},
+    {product_comment}
 )"""
         values_lines.append(value)
 
@@ -266,7 +270,7 @@ INSERT INTO products (
     skin_type, skin_concerns, preferred_colors,
     preferred_ingredients, avoided_ingredients, preferred_scents,
     values, exclusive_product, personal_color, skin_shades,
-    product_image_url, product_page_url
+    product_image_url, product_page_url, product_comment
 )
 VALUES
 {','.join(values_lines)}

@@ -17,10 +17,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
-COPY . .
+COPY backend/ ./backend/
+COPY database/ .
 
 # 포트 노출
-EXPOSE 8000
+EXPOSE 8020
 
 # FastAPI 서버 실행
-CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8020", "--reload"]

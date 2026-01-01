@@ -117,53 +117,65 @@ docker compose ps
 
 - **OpenSearch**: http://localhost:9200
 - **OpenSearch Dashboards**: http://localhost:5601
-- **FastAPI 문서**: http://localhost:8010/docs
-- **Health Check**: http://localhost:8010/health
+- **FastAPI 검색 API**: http://localhost:8010/docs
+- **FastAPI 백엔드 API (CRM Agent)**: http://localhost:8005/docs
+- **Health Check (검색)**: http://localhost:8010/health
+- **Health Check (백엔드)**: http://localhost:8005/health
 
 ---
 
-## 📊 데이터 색인 (Indexing)
+## 📊 데이터 파이프라인 실행
 
-### 1. 데이터 준비
+### 🚀 자동 파이프라인 (권장)
 
-데이터 파일: `2512252207_with_product_id.jsonl`
-
-**데이터 구조:**
-```json
-{
-  "product_id": "20251200001",
-  "태그": "립스틱",
-  "브랜드": "에스쁘아",
-  "상품명": "촉촉한 립스틱",
-  "문서": "상품 상세 설명...",
-  "퍼스널컬러": ["웜톤", "쿨톤"],
-  "피부호수": "21호",
-  "페르소나태그": {
-    "피부타입": ["건성"],
-    "고민키워드": ["보습"]
-  }
-}
-```
-
-### 2. 인덱스 생성 및 데이터 색인
+전체 데이터 처리 과정을 한 번에 실행합니다:
 
 ```bash
-# 방법 1: Python 스크립트 실행
-python index_products.py
-
-# 방법 2: 로컬에서 실행 (가상환경 사용)
-pip install -r requirements.txt
-python index_products.py
+# 통합 파이프라인 실행
+python setup_pipeline.py
 ```
 
-**색인 과정:**
-1. OpenSearch 연결
-2. 인덱스 매핑 생성 (1024차원 벡터 필드 포함)
-3. 한국어 임베딩 모델(KURE-v1)로 벡터 생성
-4. Bulk API로 데이터 색인
-5. Search Pipeline 생성
+**파이프라인이 자동으로 수행하는 작업:**
+1. 📊 **데이터 색인**: OpenSearch에 상품 데이터 색인
+   - 인덱스 매핑 생성 (1024차원 벡터 필드 포함)
+   - 한국어 임베딩 모델(KURE-v1)로 벡터 생성
+   - Bulk API로 데이터 색인
+   - Search Pipeline 생성
 
-### 3. 색인 확인
+2. 🔍 **VectorDB ID 추출**: product_id와 vector_db_id 매핑 추출
+   - OpenSearch 내부 문서 ID (_id) 추출
+   - `product_id_mapping.jsonl` 파일 생성
+
+3. 🔄 **데이터 병합**: 원본 데이터에 vectordb_id 추가
+   - 원본 JSONL 파일과 ID 매핑 병합
+   - `product_data_for_db.jsonl` 생성 (데이터베이스 저장용)
+
+**입력 파일:** `data/product_data_251231.jsonl`
+
+**출력 파일:**
+- `data/product_id_mapping.jsonl` - ID 매핑 파일
+- `data/product_data_for_db.jsonl` - 최종 병합 파일 (DB 저장용)
+
+---
+
+### 🔧 개별 스크립트 실행 (고급)
+
+필요한 단계만 개별적으로 실행할 수도 있습니다:
+
+```bash
+# 1단계: 데이터 색인만
+python index_products.py
+
+# 2단계: ID 추출만
+python export_product_ids.py
+
+# 3단계: 데이터 병합만
+python merge_product_data.py
+```
+
+---
+
+### ✅ 색인 확인
 
 ```bash
 # 인덱스 확인
@@ -305,18 +317,18 @@ ENVIRONMENT=local
 ## 📁 프로젝트 구조
 
 ```
-skn_final_opensearch/
+opensearch/
 ├── opensearch_api.py              # FastAPI 서버
 ├── opensearch_hybrid.py           # OpenSearch 클라이언트
+├── setup_pipeline.py              # 🚀 통합 파이프라인 (색인 → ID추출 → 병합)
 ├── index_products.py              # 데이터 색인 스크립트
-├── hybrid_search_example.py       # 검색 예제
-├── brand_filter_search.py         # 브랜드 필터 검색
+├── export_product_ids.py          # VectorDB ID 추출
+├── merge_product_data.py          # 데이터 병합
+├── path_utils.py                  # 경로 유틸리티
 ├── docker-compose.yml             # Docker Compose 설정
 ├── .env                           # 로컬 환경 변수
 ├── .env.production.example        # AWS 배포용 예시
 ├── requirements.txt               # Python 패키지
-├── 2512252207_with_product_id.jsonl  # 상품 데이터
-├── DEPLOYMENT.md                  # 배포 가이드
 └── README.md                      # 이 파일
 ```
 

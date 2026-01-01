@@ -133,6 +133,29 @@ services:
       opensearch-node3:
         condition: service_healthy
 
+  fastapi-backend:
+    image: python:3.11-slim
+    container_name: fastapi-backend
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r /requirements.txt &&
+        python main.py
+      "
+    volumes:
+      - ../backend:/app  # backend 디렉토리를 /app으로 마운트
+      - ../requirements.txt:/requirements.txt  # 프로젝트 루트의 requirements.txt 공유
+      - ../data:/data  # data 디렉토리를 /data로 마운트 (프롬프트 YAML 파일 접근용)
+    ports:
+      - 8005:8005
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8005
+    env_file:
+      - ../backend/app/.env  # backend 환경 변수 로드
+    networks:
+      - opensearch-net
+
 volumes:
   opensearch-data1:
   opensearch-data2:

@@ -8,6 +8,7 @@ import {
   Layers, Wind, Home, Feather, Shield, Clock, ShoppingBag, Star, Gift,
   Cat 
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // ✅ Toast 및 API 모듈 불러오기
 import { useToast } from '../components/Toast';
@@ -99,7 +100,7 @@ const Grid = styled.div`
 const PersonaCard = styled.div`
   background: white; border-radius: 24px; padding: 28px; border: 1px solid #f0f0f0;
   box-shadow: 0 10px 40px rgba(0,0,0,0.03); position: relative; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  overflow: hidden;
+  overflow: hidden; cursor: pointer;
   &::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, #6B4DFF, #9D8CFF); opacity: 0; transition: 0.3s; }
   &:hover { transform: translateY(-8px); box-shadow: 0 20px 50px rgba(107, 77, 255, 0.15); &::before { opacity: 1; } }
 `;
@@ -109,7 +110,7 @@ const TagChip = styled.span`
   display: inline-flex; align-items: center; gap: 6px;
 `;
 const DeleteBtn = styled.button`
-  background: none; border: none; color: #ccc; cursor: pointer; padding: 8px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+  background: none; border: none; color: #ccc; cursor: pointer; padding: 8px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; z-index: 10;
   &:hover { color: #ff4d4d; background-color: #fff5f5; }
 `;
 const ModalOverlay = styled.div`
@@ -185,6 +186,7 @@ const RangeLabels = styled.div`display: flex; justify-content: space-between; fo
 
 /* --- [3] 메인 컴포넌트 --- */
 export default function PersonaManager() {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -195,10 +197,10 @@ export default function PersonaManager() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const response = await api.get('/personas');
+        const response = await api.get('/api/personas'); // API 경로 확인
         const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
         
-        // ✅ [수정] 최신 백엔드 스키마에 맞춰 데이터 매핑
+        // 백엔드 스키마 -> 프론트엔드 상태 매핑
         const formatted = rawData.map(p => ({
             ...p,
             id: p.id,
@@ -206,15 +208,14 @@ export default function PersonaManager() {
             age: p.age,
             gender: p.gender,
             occupation: p.occupation,
-            // 리스트인 경우 첫번째 요소를 표시용으로 사용하거나 그대로 저장
             skinType: p.skin_types || [], 
             personalColor: p.personal_color,
             baseColor: p.base_shade,
             priceRange: p.shopping_style,
             petInfo: p.pet_type || '없음', 
-            screenTime: p.digital_time, 
+            screenTime: p.digital_device_hours || 0, // 필드명 확인
             preferredColors: p.preferred_makeup_colors || [],
-            texturePreference: p.preferred_texture || [], 
+            texturePreference: p.texture || [], // api 응답 필드명 확인
             buyingFactor: p.buying_factor ? p.buying_factor : [], 
             skinConcerns: p.concern_keywords || [],
             // values 문자열 파싱 (예: "비건, 친환경")
@@ -322,7 +323,7 @@ export default function PersonaManager() {
       // 시각적 효과를 위해 잠시 대기
       await new Promise(r => setTimeout(r, 2000));
 
-      const response = await api.post('/personas', payload);
+      const response = await api.post('/api/personas', payload);
       const result = response.data;
       
       // 새 페르소나 객체 생성 (화면 갱신용)
@@ -354,11 +355,23 @@ export default function PersonaManager() {
     setData(initialData);
   };
 
-  const handleDelete = (id) => {
-    if(window.confirm('정말 삭제하시겠습니까? (서버에는 유지됩니다)')) {
-      setPersonas(personas.filter(p => p.id !== id));
-      addToast('목록에서 삭제되었습니다.', 'info');
+  // ✅ [수정] 백엔드 삭제 API 호출 추가
+  const handleDelete = async (e, id) => {
+    e.stopPropagation(); // 카드 클릭 이벤트 막기
+    if(window.confirm('정말 삭제하시겠습니까? (DB에서도 완전히 삭제됩니다)')) {
+      try {
+        await api.delete(`/api/personas/${id}`);
+        setPersonas(personas.filter(p => p.id !== id));
+        addToast('삭제되었습니다.', 'info');
+      } catch (error) {
+        console.error("삭제 에러:", error);
+        addToast('삭제 실패: 서버 오류', 'error');
+      }
     }
+  };
+
+  const handleCardClick = (persona) => {
+    navigate('/message', { state: { persona } });
   };
 
   const renderStepContent = () => {
@@ -602,14 +615,13 @@ export default function PersonaManager() {
 
       {personas.length === 0 && (
         <div style={{textAlign:'center', padding:'60px 0', color:'#888'}}>
-          <p>등록된 페르소나가 없거나 서버와 연결할 수 없습니다.</p>
-          <p style={{fontSize:'12px', marginTop:'10px'}}> (F12 > Network 탭에서 붉은색 에러를 확인해보세요) </p>
+          <p>등록된 페르소나가 없습니다. 새로운 페르소나를 추가해보세요!</p>
         </div>
       )}
 
       <Grid>
         {personas.map(p => (
-          <PersonaCard key={p.id}>
+          <PersonaCard key={p.id} onClick={() => handleCardClick(p)}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'15px', borderBottom:'1px solid #f0f0f0', paddingBottom:'15px'}}>
               <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
                 <div style={{width:48, height:48, borderRadius:'50%', background:'#F0EBFF', display:'flex', alignItems:'center', justifyContent:'center', color:'#6B4DFF'}}>
@@ -622,7 +634,7 @@ export default function PersonaManager() {
               </div>
               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                 {p.aiAnalysis && <div style={{background:'#6B4DFF', color:'white', padding:'6px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'bold', boxShadow:'0 4px 10px rgba(107, 77, 255, 0.3)'}}>{p.aiAnalysis.primary_category}</div>}
-                <DeleteBtn onClick={() => handleDelete(p.id)}><Trash2 size={16}/></DeleteBtn>
+                <DeleteBtn onClick={(e) => handleDelete(e, p.id)}><Trash2 size={16}/></DeleteBtn>
               </div>
             </div>
 
