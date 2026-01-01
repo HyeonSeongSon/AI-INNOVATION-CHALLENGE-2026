@@ -3,7 +3,7 @@ CRM 메시지 생성 에이전트 - Tool Calling 방식
 요구사항 문서(crm_interrupt_requirements.md) 기반 구현
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TypedDict
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState, END, START
@@ -13,6 +13,15 @@ from dotenv import load_dotenv
 import os
 import sys
 import json
+
+
+# ============================================================
+# Custom State 정의
+# ============================================================
+
+class CRMState(MessagesState):
+    """CRM Agent용 커스텀 스테이트"""
+    selected_product_id: Optional[str] = None
 
 # .env 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -85,7 +94,7 @@ class CRMMessageAgent:
         """StateGraph 구성"""
 
         # Agent 노드: LLM이 도구를 선택하고 호출
-        def agent_node(state: MessagesState):
+        def agent_node(state: CRMState):
             """LLM이 상황에 맞는 도구를 선택"""
             response = self.llm_with_tools.invoke(state['messages'])
             return {"messages": [response]}
@@ -94,7 +103,7 @@ class CRMMessageAgent:
         tool_node = ToolNode(self.tools)
 
         # 조건부 엣지: 다음 단계 결정
-        def should_continue(state: MessagesState):
+        def should_continue(state: CRMState):
             last_message = state['messages'][-1]
 
             # 도구 호출이 없으면 종료
@@ -112,7 +121,7 @@ class CRMMessageAgent:
             return "tools"
 
         # 그래프 구성
-        workflow = StateGraph(MessagesState)
+        workflow = StateGraph(CRMState)
 
         # 노드 추가
         workflow.add_node("agent", agent_node)
@@ -133,7 +142,7 @@ class CRMMessageAgent:
         )
 
         # tools 실행 후 조건부 분기
-        def after_tools(state: MessagesState):
+        def after_tools(state: CRMState):
             """tools 실행 후 다음 단계 결정"""
             # 이전 AI 메시지에서 recommend_products 호출 여부 확인
             messages = state['messages']
@@ -282,15 +291,18 @@ class CRMMessageAgent:
                     "error": f"선택한 제품을 찾을 수 없습니다: {selected_product_id}"
                 }
 
-            # 🔑 핵심: 사용자 선택을 HumanMessage로 추가
+            # 🔑 핵심: 사용자 선택을 HumanMessage로 추가 + selected_product_id를 state에 저장
             selection_message = HumanMessage(
                 content=f"사용자가 다음 제품을 선택했습니다: {json.dumps(selected, ensure_ascii=False)}"
             )
 
-            # 상태에 메시지 추가
+            # 상태에 메시지와 selected_product_id 추가
             self.app.update_state(
                 config,
-                {"messages": [selection_message]}
+                {
+                    "messages": [selection_message],
+                    "selected_product_id": selected_product_id
+                }
             )
 
             # Agent 재개

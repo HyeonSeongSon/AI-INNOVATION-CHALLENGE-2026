@@ -106,6 +106,7 @@ async def root():
         "message": "OpenSearch Hybrid Search API",
         "version": "1.0.0",
         "endpoints": {
+            "get_product_by_id": "/api/product/{product_id}",
             "search_by_product_ids": "/api/search/product-ids",
             "docs": "/docs"
         }
@@ -123,6 +124,70 @@ async def health_check():
             return {"status": "unhealthy", "opensearch": "disconnected"}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
+
+
+@app.get("/api/product/{product_id}")
+async def get_product_by_id(
+    product_id: str,
+    index_name: str = Query(default="product_index", description="검색할 인덱스 이름")
+):
+    """
+    Product ID로 단일 상품 문서 조회
+
+    - **product_id**: 조회할 상품 ID (필수)
+    - **index_name**: 검색할 인덱스 이름 (기본값: product_index)
+    """
+    try:
+        logging.info(f"Product ID 조회 요청 - product_id: {product_id}")
+
+        # OpenSearch 클라이언트 가져오기
+        client = get_opensearch_client()
+
+        # Product ID로 문서 조회
+        query_body = {
+            "query": {
+                "term": {
+                    "product_id": product_id
+                }
+            },
+            "_source": {
+                "excludes": ["content_vector"]
+            }
+        }
+
+        # 검색 실행
+        response = client.client.search(
+            index=index_name,
+            body=query_body
+        )
+
+        hits = response.get("hits", {}).get("hits", [])
+
+        if not hits:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product ID '{product_id}'를 찾을 수 없습니다."
+            )
+
+        # 첫 번째 결과 반환
+        document = hits[0].get("_source", {})
+
+        logging.info(f"Product ID 조회 성공 - product_id: {product_id}")
+
+        return {
+            "success": True,
+            "product_id": product_id,
+            "document": document
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Product ID 조회 중 오류 발생: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"조회 중 오류가 발생했습니다: {str(e)}"
+        )
 
 
 @app.post("/api/search/product-ids", response_model=SearchResponse)

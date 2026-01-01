@@ -9,6 +9,8 @@ from langchain_core.tools import tool
 from dotenv import load_dotenv
 import os
 import yaml
+import requests
+import json as json_module
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -62,6 +64,44 @@ class ProductMessageGenerator:
             print(f"[ERROR] {e}")
             return {}
 
+    def _get_product_document(self, product_id: str) -> Optional[str]:
+        """
+        오픈서치에서 product_id로 상품 문서 내용만 조회
+
+        Args:
+            product_id: 조회할 상품 ID
+
+        Returns:
+            상품 문서 내용 (텍스트) 또는 None
+        """
+        try:
+            # 오픈서치 API 호출 (GET 방식으로 단일 product_id 조회)
+            response = requests.get(
+                f"http://host.docker.internal:8010/api/product/{product_id}",
+                params={"index_name": "product_index"}
+            )
+            response.raise_for_status()
+            api_response = response.json()
+
+            # 결과 파싱 - 문서 필드만 추출
+            if api_response.get("success") and "document" in api_response:
+                document = api_response["document"]
+                # '문서' 필드만 반환
+                document_text = document.get("문서", "")
+                if document_text:
+                    print(f"[INFO] 상품 문서 조회 성공: {product_id}")
+                    return document_text
+                else:
+                    print(f"[WARNING] 상품 문서에 '문서' 필드가 없음: {product_id}")
+                    return None
+            else:
+                print(f"[WARNING] 상품 문서를 찾을 수 없음: {product_id}")
+                return None
+
+        except Exception as e:
+            print(f"[ERROR] 상품 문서 조회 실패: {e}")
+            return None
+
     def _get_brand_tone(self, brand_name: str) -> str:
         """브랜드톤 가져오기"""
         brand_tones = self.brand_tones.get('brand_ton_prompt', {})
@@ -86,9 +126,7 @@ class ProductMessageGenerator:
         # 목적 매핑 (한글 -> 영문 키)
         purpose_mapping = {
             "브랜드/제품 소개": "INTRODUCTION_PROMPT",
-            "신상품홍보": "NEW_PRODUCTS_PROMPT",
-            "신제품홍보": "NEW_PRODUCTS_PROMPT",
-            "제품소개": "INTRODUCTION_PROMPT",
+            "신제품홍보": "NEW_PRODUCTS_PROMPT"
         }
 
         # 매핑된 키로 검색
@@ -142,12 +180,12 @@ class ProductMessageGenerator:
             else:
                 sections.append(f"선호 성분: {ingredients}")
 
-        # if persona_info.get('기피 성분'):
-        #     avoided = persona_info['기피 성분']
-        #     if isinstance(avoided, list):
-        #         sections.append(f"기피 성분: {', '.join(avoided)}")
-        #     else:
-        #         sections.append(f"기피 성분: {avoided}")
+        if persona_info.get('기피 성분'):
+            avoided = persona_info['기피 성분']
+            if isinstance(avoided, list):
+                sections.append(f"기피 성분: {', '.join(avoided)}")
+            else:
+                sections.append(f"기피 성분: {avoided}")
 
         # 가치관
         if persona_info.get('가치관'):
@@ -247,11 +285,20 @@ class ProductMessageGenerator:
         print(f"[INFO] 상품: {product.get('product_name', 'N/A')}")
         print(f"[INFO] 브랜드: {product.get('brand', 'N/A')}")
 
-        # 1. 브랜드톤 가져오기
+        # 1. product_id로 상품 문서 가져오기
+        product_id = product.get('product_id')
+        product_document = None
+        if product_id:
+            print(f"[INFO] product_id로 상품 문서 조회 중: {product_id}")
+            product_document = self._get_product_document(product_id)
+        else:
+            print(f"[WARNING] product_id가 없어 상품 문서를 가져올 수 없습니다.")
+
+        # 2. 브랜드톤 가져오기
         brand_name = product.get('brand', '')
         brand_tone = self._get_brand_tone(brand_name)
 
-        # 2. 목적별 프롬프트 가져오기
+        # 3. 목적별 프롬프트 가져오기
         purpose_prompt = self._get_purpose_prompt(purpose)
 
         if not purpose_prompt:
@@ -260,34 +307,35 @@ class ProductMessageGenerator:
                 "error": f"목적 '{purpose}'에 해당하는 프롬프트를 찾을 수 없습니다."
             }
 
-        # 3. 페르소나 정보 포맷팅
+        # 4. 페르소나 정보 포맷팅
         persona_text = self._format_persona_info(persona_info)
 
-        # 4. 상품 정보 포맷팅
+        # 5. 상품 정보 포맷팅
         product_text = self._format_product_info(product)
 
-        # 5. 프롬프트 변수 치환
+        # 6. 프롬프트 변수 치환
         formatted_prompt = purpose_prompt.format(
             brand_name=brand_name,
             product_name=product.get('product_name', ''),
             product_text=product_text,
             brand_tone=brand_tone,
-            persona_text=persona_text if persona_text else "정보 없음"
+            persona_text=persona_text if persona_text else "정보 없음",
+            product_document=product_document if product_document else "추가 문서 정보 없음"
         )
 
-        print(f"\n[DEBUG] 생성 프롬프트 (처음 500자):")
+        print(f"\n[DEBUG] 생성 프롬프트")
         print("=" * 80)
-        print(formatted_prompt[:500] + "..." if len(formatted_prompt) > 500 else formatted_prompt)
+        print(formatted_prompt)
         print("=" * 80)
 
-        # 6. LLM 호출
+        # 7. LLM 호출
         try:
             response = self.llm.invoke(formatted_prompt)
             message_content = response.content
 
             print(f"\n[INFO] 메시지 생성 완료")
 
-            # 7. 결과 파싱 (제목/메시지 분리)
+            # 8. 결과 파싱 (제목/메시지 분리)
             result = self._parse_message(message_content)
             result['success'] = True
             result['full_content'] = message_content
@@ -372,11 +420,16 @@ def create_product_message(
 
     **필수 입력:**
     - product: 선택된 상품 정보 (recommend_products에서 반환한 selected_product)
+      - product_id 필드 필수 (상품 문서 조회에 사용됨)
     - persona_info: 페르소나 정보 (parse_crm_message_request에서 반환한 persona_info)
     - purpose: 메시지 목적 (예: "신상품홍보", "브랜드/제품 소개")
 
+    **자동 처리:**
+    - product_id를 사용하여 오픈서치에서 상품의 상세 문서를 자동으로 조회합니다
+
     Args:
         product: 선택된 상품 정보 딕셔너리
+            - product_id: 상품 ID (필수)
             - product_name: 상품명
             - brand: 브랜드명
             - sale_price: 판매가
