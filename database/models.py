@@ -148,6 +148,9 @@ class Product(Base):
     product_image_url = Column(ARRAY(Text), default=[])
     product_page_url = Column(Text)
 
+    # 상품 한줄소개
+    product_comment = Column(Text)
+
     # 타임스탬프
     product_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

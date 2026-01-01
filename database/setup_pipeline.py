@@ -193,7 +193,8 @@ class DatabaseSetupPipeline:
                             personal_color=persona_tags.get('퍼스널컬러', []),
                             skin_shades=persona_tags.get('피부톤번호', []),
                             product_image_url=data.get('상품이미지', []),
-                            product_page_url=data.get('product_url')
+                            product_page_url=data.get('product_url'),
+                            product_comment=data.get('한줄소개')
                         )
 
                         db.add(product)
@@ -282,7 +283,7 @@ def main():
     args = parser.parse_args()
 
     if args.reset:
-        print("⚠️  WARNING: This will DELETE all existing data!")
+        print("WARNING: This will DELETE all existing data!")
         response = input("Are you sure? (yes/no): ")
         if response.lower() != 'yes':
             print("Aborted.")

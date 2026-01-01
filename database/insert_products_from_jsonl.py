@@ -87,7 +87,8 @@ def insert_products_from_jsonl():
                     personal_color=persona_tags.get('퍼스널컬러', []),
                     skin_shades=persona_tags.get('피부톤번호', []),
                     product_image_url=data.get('상품이미지', []),
-                    product_page_url=data.get('product_url')
+                    product_page_url=data.get('product_url'),
+                    product_comment=data.get('한줄소개')
                 )
 
                 db.add(product)

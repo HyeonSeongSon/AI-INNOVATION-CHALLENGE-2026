@@ -81,6 +81,7 @@ class ProductCreate(BaseModel):
     skin_shades: Optional[List[int]] = Field(default=[], description="피부톤 번호")
     product_image_url: Optional[List[str]] = Field(default=[], description="상품 이미지 URL")
     product_page_url: Optional[str] = Field(None, description="상품 페이지 URL")
+    product_comment: Optional[str] = Field(None, description="상품 한줄소개")
 
 
 class ProductFilterRequest(BaseModel):
@@ -190,6 +191,7 @@ class ProductDetailResponse(BaseModel):
     skin_shades: Optional[List[int]] = None
     product_image_url: Optional[List[str]] = None
     product_page_url: Optional[str] = None
+    product_comment: Optional[str] = None
     product_created_at: Optional[datetime] = None
 
 
@@ -498,6 +500,7 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
             skin_shades=p.skin_shades,
             product_image_url=p.product_image_url,
             product_page_url=p.product_page_url,
+            product_comment=p.product_comment,
             product_created_at=p.product_created_at
         )
         for p in products

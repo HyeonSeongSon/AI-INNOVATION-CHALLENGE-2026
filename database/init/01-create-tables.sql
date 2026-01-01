@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS products (
     skin_shades INTEGER[] DEFAULT ARRAY[]::INTEGER[],
     product_image_url TEXT[] DEFAULT ARRAY[]::TEXT[],
     product_page_url TEXT,
+    product_comment TEXT,
     product_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
