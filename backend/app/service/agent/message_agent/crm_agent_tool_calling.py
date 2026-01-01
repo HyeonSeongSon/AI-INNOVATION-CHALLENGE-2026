@@ -19,11 +19,11 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 # Tools import
 try:
-    from ..tools.parse_crm_request import parse_crm_message_request
-    from ..tools.recommend_products_tool import recommend_products
-    from ..tools.create_product_message import create_product_message
+    from ...tools.parse_crm_request import parse_crm_message_request
+    from ...tools.recommend_products_tool import recommend_products
+    from ...tools.create_product_message import create_product_message
 except ImportError:
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
     from tools.parse_crm_request import parse_crm_message_request
     from tools.recommend_products_tool import recommend_products
     from tools.create_product_message import create_product_message
