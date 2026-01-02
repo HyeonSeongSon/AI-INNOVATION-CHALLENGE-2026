@@ -9,6 +9,8 @@ from langchain_core.tools import tool
 from dotenv import load_dotenv
 import os
 import yaml
+import requests
+import json as json_module
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -62,6 +64,44 @@ class ProductMessageGenerator:
             print(f"[ERROR] {e}")
             return {}
 
+    def _get_product_document(self, product_id: str) -> Optional[str]:
+        """
+        오픈서치에서 product_id로 상품 문서 내용만 조회
+
+        Args:
+            product_id: 조회할 상품 ID
+
+        Returns:
+            상품 문서 내용 (텍스트) 또는 None
+        """
+        try:
+            # 오픈서치 API 호출 (GET 방식으로 단일 product_id 조회)
+            response = requests.get(
+                f"http://host.docker.internal:8010/api/product/{product_id}",
+                params={"index_name": "product_index"}
+            )
+            response.raise_for_status()
+            api_response = response.json()
+
+            # 결과 파싱 - 문서 필드만 추출
+            if api_response.get("success") and "document" in api_response:
+                document = api_response["document"]
+                # '문서' 필드만 반환
+                document_text = document.get("문서", "")
+                if document_text:
+                    print(f"[INFO] 상품 문서 조회 성공: {product_id}")
+                    return document_text
+                else:
+                    print(f"[WARNING] 상품 문서에 '문서' 필드가 없음: {product_id}")
+                    return None
+            else:
+                print(f"[WARNING] 상품 문서를 찾을 수 없음: {product_id}")
+                return None
+
+        except Exception as e:
+            print(f"[ERROR] 상품 문서 조회 실패: {e}")
+            return None
+
     def _get_brand_tone(self, brand_name: str) -> str:
         """브랜드톤 가져오기"""
         brand_tones = self.brand_tones.get('brand_ton_prompt', {})
@@ -85,10 +125,13 @@ class ProductMessageGenerator:
 
         # 목적 매핑 (한글 -> 영문 키)
         purpose_mapping = {
-            "브랜드/제품 소개": "INTRODUCTION_PROMPT",
-            "신상품홍보": "NEW_PRODUCTS_PROMPT",
-            "신제품홍보": "NEW_PRODUCTS_PROMPT",
-            "제품소개": "INTRODUCTION_PROMPT",
+            "브랜드/제품 첫소개": "INTRODUCTION_PROMPT",
+            "신제품 홍보": "NEW_PRODUCTS_PROMPT",
+            "베스트셀러 제품 소개": "BESTSELLER_PROMPT",
+            "프로모션/이벤트 소개": "PROMOTION_AND_EVENT",
+            "성분/효능 강조 소개": "INGREDIENT_EFFICACY_POINT_PROMPT",
+            "피부타입/고민 강조 소개": "SKINTYPE_AND_CONCERN_POINT_PROMPT",
+            "라이프스타일/연령대 강조 소개": "LIFESTYLE_AND_AGE_POINT_PROMPT"
         }
 
         # 매핑된 키로 검색
@@ -142,12 +185,12 @@ class ProductMessageGenerator:
             else:
                 sections.append(f"선호 성분: {ingredients}")
 
-        # if persona_info.get('기피 성분'):
-        #     avoided = persona_info['기피 성분']
-        #     if isinstance(avoided, list):
-        #         sections.append(f"기피 성분: {', '.join(avoided)}")
-        #     else:
-        #         sections.append(f"기피 성분: {avoided}")
+        if persona_info.get('기피 성분'):
+            avoided = persona_info['기피 성분']
+            if isinstance(avoided, list):
+                sections.append(f"기피 성분: {', '.join(avoided)}")
+            else:
+                sections.append(f"기피 성분: {avoided}")
 
         # 가치관
         if persona_info.get('가치관'):
@@ -158,11 +201,65 @@ class ProductMessageGenerator:
                 sections.append(f"가치관: {values}")
 
         # 라이프스타일
-        if persona_info.get('주 활동 환경'):
-            sections.append(f"주 활동 환경: {persona_info['주 활동 환경']}")
+        if persona_info.get('직업') or persona_info.get('occupation'):
+            occupation = persona_info.get('직업') or persona_info.get('occupation')
+            sections.append(f"직업: {occupation}")
 
-        if persona_info.get('쇼핑 스타일&예산'):
-            sections.append(f"쇼핑 스타일: {persona_info['쇼핑 스타일&예산']}")
+        if persona_info.get('주 활동 환경') or persona_info.get('main_environment'):
+            env = persona_info.get('주 활동 환경') or persona_info.get('main_environment')
+            sections.append(f"주 활동 환경: {env}")
+
+        if persona_info.get('쇼핑 스타일&예산') or persona_info.get('shopping_style'):
+            shopping = persona_info.get('쇼핑 스타일&예산') or persona_info.get('shopping_style')
+            sections.append(f"쇼핑 스타일: {shopping}")
+
+        if persona_info.get('구매 결정 요인') or persona_info.get('purchase_decision_factors'):
+            factors = persona_info.get('구매 결정 요인') or persona_info.get('purchase_decision_factors')
+            if isinstance(factors, list) and factors:
+                sections.append(f"구매 결정 요인: {', '.join(factors)}")
+            elif factors:
+                sections.append(f"구매 결정 요인: {factors}")
+
+        if persona_info.get('스킨케어 루틴') or persona_info.get('skincare_routine'):
+            routine = persona_info.get('스킨케어 루틴') or persona_info.get('skincare_routine')
+            sections.append(f"스킨케어 루틴: {routine}")
+
+        if persona_info.get('선호 제형') or persona_info.get('preferred_texture'):
+            texture = persona_info.get('선호 제형') or persona_info.get('preferred_texture')
+            if isinstance(texture, list) and texture:
+                sections.append(f"선호 제형: {', '.join(texture)}")
+            elif texture:
+                sections.append(f"선호 제형: {texture}")
+
+        if persona_info.get('선호 향') or persona_info.get('preferred_scents'):
+            scents = persona_info.get('선호 향') or persona_info.get('preferred_scents')
+            if isinstance(scents, list) and scents:
+                sections.append(f"선호 향: {', '.join(scents)}")
+            elif scents:
+                sections.append(f"선호 향: {scents}")
+
+        if persona_info.get('선호 색상') or persona_info.get('preferred_colors'):
+            colors = persona_info.get('선호 색상') or persona_info.get('preferred_colors')
+            if isinstance(colors, list) and colors:
+                sections.append(f"선호 색상: {', '.join(colors)}")
+            elif colors:
+                sections.append(f"선호 색상: {colors}")
+
+        if persona_info.get('반려동물') or persona_info.get('pets'):
+            pets = persona_info.get('반려동물') or persona_info.get('pets')
+            sections.append(f"반려동물: {pets}")
+
+        if persona_info.get('평균 수면시간') or persona_info.get('avg_sleep_hours'):
+            sleep = persona_info.get('평균 수면시간') or persona_info.get('avg_sleep_hours')
+            sections.append(f"평균 수면시간: {sleep}시간")
+
+        if persona_info.get('스트레스 수준') or persona_info.get('stress_level'):
+            stress = persona_info.get('스트레스 수준') or persona_info.get('stress_level')
+            sections.append(f"스트레스 수준: {stress}")
+
+        if persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time'):
+            device_time = persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time')
+            sections.append(f"디지털 기기 사용시간: {device_time}시간")
 
         return "\n".join(sections)
 
@@ -172,7 +269,7 @@ class ProductMessageGenerator:
 
         # 기본 정보
         if product.get('product_name'):
-            sections.append(f"상품명: {product['product_name']}")
+            sections.append(f"{product['product_name']}")
 
         if product.get('brand'):
             sections.append(f"브랜드: {product['brand']}")
@@ -210,14 +307,15 @@ class ProductMessageGenerator:
             if isinstance(ingredients, list) and ingredients:
                 sections.append(f"주요 성분: {', '.join(ingredients)}")
 
+        if product.get('preferred_colors'):
+            colors = product['preferred_colors']
+            if isinstance(colors, list) and colors:
+                sections.append(f"선호 색상: {', '.join(colors)}")
+
         if product.get('values'):
             values = product['values']
             if isinstance(values, list) and values:
                 sections.append(f"브랜드 가치: {', '.join(values)}")
-
-        # 전용 제품
-        # if product.get('exclusive_product'):
-        #     sections.append(f"전용 제품: {product['exclusive_product']}")
 
         # URL
         if product.get('product_page_url'):
@@ -247,11 +345,20 @@ class ProductMessageGenerator:
         print(f"[INFO] 상품: {product.get('product_name', 'N/A')}")
         print(f"[INFO] 브랜드: {product.get('brand', 'N/A')}")
 
-        # 1. 브랜드톤 가져오기
+        # 1. product_id로 상품 문서 가져오기
+        product_id = product.get('product_id')
+        product_document = None
+        if product_id:
+            print(f"[INFO] product_id로 상품 문서 조회 중: {product_id}")
+            product_document = self._get_product_document(product_id)
+        else:
+            print(f"[WARNING] product_id가 없어 상품 문서를 가져올 수 없습니다.")
+
+        # 2. 브랜드톤 가져오기
         brand_name = product.get('brand', '')
         brand_tone = self._get_brand_tone(brand_name)
 
-        # 2. 목적별 프롬프트 가져오기
+        # 3. 목적별 프롬프트 가져오기
         purpose_prompt = self._get_purpose_prompt(purpose)
 
         if not purpose_prompt:
@@ -260,34 +367,35 @@ class ProductMessageGenerator:
                 "error": f"목적 '{purpose}'에 해당하는 프롬프트를 찾을 수 없습니다."
             }
 
-        # 3. 페르소나 정보 포맷팅
+        # 4. 페르소나 정보 포맷팅
         persona_text = self._format_persona_info(persona_info)
 
-        # 4. 상품 정보 포맷팅
+        # 5. 상품 정보 포맷팅
         product_text = self._format_product_info(product)
 
-        # 5. 프롬프트 변수 치환
+        # 6. 프롬프트 변수 치환
         formatted_prompt = purpose_prompt.format(
             brand_name=brand_name,
             product_name=product.get('product_name', ''),
             product_text=product_text,
             brand_tone=brand_tone,
-            persona_text=persona_text if persona_text else "정보 없음"
+            persona_text=persona_text if persona_text else "정보 없음",
+            product_document=product_document if product_document else "추가 문서 정보 없음"
         )
 
-        print(f"\n[DEBUG] 생성 프롬프트 (처음 500자):")
+        print(f"\n[DEBUG] 생성 프롬프트")
         print("=" * 80)
-        print(formatted_prompt[:500] + "..." if len(formatted_prompt) > 500 else formatted_prompt)
+        print(formatted_prompt)
         print("=" * 80)
 
-        # 6. LLM 호출
+        # 7. LLM 호출
         try:
             response = self.llm.invoke(formatted_prompt)
             message_content = response.content
 
             print(f"\n[INFO] 메시지 생성 완료")
 
-            # 7. 결과 파싱 (제목/메시지 분리)
+            # 8. 결과 파싱 (제목/메시지 분리)
             result = self._parse_message(message_content)
             result['success'] = True
             result['full_content'] = message_content
@@ -360,7 +468,7 @@ def _get_message_generator():
 def create_product_message(
     product: Dict[str, Any],
     persona_info: Dict[str, Any],
-    purpose: str = "브랜드/제품 소개"
+    purpose: str = "브랜드/제품 첫소개"
 ) -> Dict[str, Any]:
     """
     선택된 상품과 페르소나 정보를 바탕으로 개인화된 CRM 메시지를 생성합니다.
@@ -372,11 +480,29 @@ def create_product_message(
 
     **필수 입력:**
     - product: 선택된 상품 정보 (recommend_products에서 반환한 selected_product)
+      - product_id 필드 필수 (상품 문서 조회에 사용됨)
     - persona_info: 페르소나 정보 (parse_crm_message_request에서 반환한 persona_info)
-    - purpose: 메시지 목적 (예: "신상품홍보", "브랜드/제품 소개")
+    - purpose: 메시지 목적 - **반드시 다음 7개 중 정확히 하나를 사용하세요**
+      - "브랜드/제품 첫소개" (기본값)
+      - "신제품 홍보"
+      - "베스트셀러 제품 소개"
+      - "프로모션/이벤트 소개"
+      - "성분/효능 강조 소개"
+      - "피부타입/고민 강조 소개"
+      - "라이프스타일/연령대 강조 소개"
+
+    **중요: purpose 값 주의사항**
+    - purpose 파라미터는 parse_crm_message_request에서 반환된 값을 **그대로** 사용해야 합니다
+    - 절대로 임의로 값을 변형하거나 추가 텍스트를 붙이지 마세요
+    - 예시) "신제품 홍보 - 라이프스타일 강조" (❌ 잘못됨)
+    - 예시) "신제품 홍보" (✅ 올바름)
+
+    **자동 처리:**
+    - product_id를 사용하여 오픈서치에서 상품의 상세 문서를 자동으로 조회합니다
 
     Args:
         product: 선택된 상품 정보 딕셔너리
+            - product_id: 상품 ID (필수)
             - product_name: 상품명
             - brand: 브랜드명
             - sale_price: 판매가
@@ -385,7 +511,7 @@ def create_product_message(
             - 이름, 나이, 성별
             - 피부타입, 고민 키워드
             - 선호 성분, 가치관 등
-        purpose: 메시지 목적 (기본값: "브랜드/제품 소개")
+        purpose: 메시지 목적 (기본값: "브랜드/제품 첫소개")
 
     Returns:
         생성된 메시지:
