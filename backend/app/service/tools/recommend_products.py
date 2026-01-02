@@ -23,7 +23,7 @@ class ProductRecommender:
             raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
 
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model="gpt-4o-mini",
             temperature=0.7,
             api_key=api_key
         )
@@ -32,7 +32,7 @@ class ProductRecommender:
         """페르소나 정보 조회"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/personas/get",
+                "http://host.docker.internal:8005/api/pipeline/personas/get",
                 json={"persona_id": persona_id}
             )
             response.raise_for_status()
@@ -75,7 +75,7 @@ class ProductRecommender:
         """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/analysis-results/get",
+                "http://host.docker.internal:8005/api/api/analysis-results/get",
                 json={"persona_id": persona_id}
             )
             response.raise_for_status()
@@ -102,7 +102,7 @@ class ProductRecommender:
             analysis_result_text = json.dumps(analysis_result, ensure_ascii=False)
 
             response = requests.post(
-                "http://host.docker.internal:8020/api/analysis-results",
+                "http://host.docker.internal:8005/api/api/analysis-results/get",
                 json={
                     "persona_id": persona_id,
                     "analysis_result": analysis_result_text
@@ -123,7 +123,7 @@ class ProductRecommender:
         try:
             for query in queries:
                 response = requests.post(
-                    "http://host.docker.internal:8020/api/search-queries",
+                    "http://host.docker.internal:8005/api/api/search-queries",
                     json={
                         "analysis_id": analysis_id,
                         "search_query": query
@@ -154,7 +154,7 @@ class ProductRecommender:
 
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/products/filter",
+                "http://host.docker.internal:8005/api/api/products/filter",
                 json=filters
             )
             response.raise_for_status()

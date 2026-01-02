@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 import json
-import uuid
+import uuid  # uuid는 이제 쓰이지 않지만 만약을 위해 둠
 
 # DB 관련
 from database import get_db
@@ -43,9 +43,13 @@ class PersonaCreateRequest(BaseModel):
     values: List[str] = []
     full_raw_data: Optional[Dict[str, Any]] = {}
 
+# ✅ [추가] 단건 조회를 위한 요청 모델
+class PersonaIDRequest(BaseModel):
+    persona_id: str
+
 
 # ---------------------------------------------------------
-# [API 1] 조회 (GET) - ✅ 에러 수정됨
+# [API 1] 전체 조회 (GET)
 # ---------------------------------------------------------
 @router.get("/personas")
 def get_personas(db: Session = Depends(get_db)):
@@ -53,7 +57,7 @@ def get_personas(db: Session = Depends(get_db)):
     저장된 모든 페르소나 목록 조회
     """
     try:
-        # ✅ [수정] models.py에 정의된 컬럼명(persona_created_at) 사용
+        # 최신순 정렬 (persona_created_at 기준)
         personas = db.query(Persona).order_by(Persona.persona_created_at.desc()).all()
         result = []
         
@@ -113,16 +117,36 @@ def get_personas(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------
-# [API 2] 생성 (POST)
+# [API 2] 생성 (POST) - ✅ 순차적 ID 적용됨
 # ---------------------------------------------------------
 @router.post("/personas/create-analyze")
 async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = Depends(get_db)):
     try:
         data = req.dict()
-        new_persona_id = str(uuid.uuid4())
+        
+        # ✅ [수정] 순차적 ID 생성 로직 (PERSONA_001, PERSONA_002 ...)
+        # 1. DB에서 'PERSONA_'로 시작하는 ID들을 모두 조회합니다.
+        existing_ids = db.query(Persona.persona_id).filter(Persona.persona_id.like("PERSONA_%")).all()
+        
+        max_num = 0
+        for (pid,) in existing_ids:
+            try:
+                # "PERSONA_" 뒷부분의 숫자를 추출 (예: PERSONA_005 -> 5)
+                num_part = pid.replace("PERSONA_", "")
+                if num_part.isdigit():
+                    num = int(num_part)
+                    if num > max_num:
+                        max_num = num
+            except:
+                continue
+        
+        # 2. 가장 큰 번호 + 1 하여 새 ID 생성 (3자리 숫자로 빈자리 채움)
+        new_persona_id = f"PERSONA_{max_num + 1:03d}"
+        
+        print(f"🆕 생성된 페르소나 ID: {new_persona_id}")
         
         new_persona = Persona(
-            persona_id=new_persona_id,
+            persona_id=new_persona_id, # ✅ 생성한 ID 사용
             name=data.get('name'),
             age=data.get('age'),
             gender=data.get('gender'),
@@ -150,7 +174,7 @@ async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = De
         db.commit()
         db.refresh(new_persona)
 
-        # AI 분석
+        # AI 분석 서비스 호출
         analysis_data = await ai_service.analyze_profile(data)
         
         # 분석 결과 저장
@@ -185,7 +209,75 @@ async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = De
 
 
 # ---------------------------------------------------------
-# [API 3] 삭제 (DELETE)
+# [API 3] 단건 조회 (POST) - ✅ 새로 추가됨!
+# ---------------------------------------------------------
+@router.post("/personas/get")
+def get_persona_by_id(req: PersonaIDRequest, db: Session = Depends(get_db)):
+    """
+    ID로 페르소나 단건 조회 (Tool 호출용)
+    """
+    try:
+        persona = db.query(Persona).filter(Persona.persona_id == req.persona_id).first()
+        
+        if not persona:
+            raise HTTPException(status_code=404, detail=f"Persona {req.persona_id} not found")
+        
+        # 최신 분석 결과 조회
+        analysis = db.query(AnalysisResult).filter(
+            AnalysisResult.persona_id == persona.persona_id
+        ).order_by(AnalysisResult.analysis_created_at.desc()).first()
+        
+        ai_data = {}
+        if analysis and analysis.analysis_result:
+            try:
+                ai_data = json.loads(analysis.analysis_result)
+            except:
+                ai_data = {}
+
+        return {
+            "persona_id": persona.persona_id,
+            "name": persona.name,
+            "age": persona.age,
+            "gender": persona.gender,
+            "occupation": persona.occupation,
+            
+            "skin_type": persona.skin_type,
+            "skin_concerns": persona.skin_concerns,
+            "personal_color": persona.personal_color,
+            "shade_number": persona.shade_number,
+            
+            "preferred_colors": persona.preferred_colors,
+            "preferred_ingredients": persona.preferred_ingredients,
+            "avoided_ingredients": persona.avoided_ingredients,
+            "preferred_scents": persona.preferred_scents,
+            
+            "skincare_routine": persona.skincare_routine,
+            "main_environment": persona.main_environment,
+            "preferred_texture": persona.preferred_texture,
+            
+            "pets": persona.pets,
+            "avg_sleep_hours": persona.avg_sleep_hours,
+            "stress_level": persona.stress_level,
+            "digital_device_usage_time": persona.digital_device_usage_time,
+            "shopping_style": persona.shopping_style,
+            "purchase_decision_factors": persona.purchase_decision_factors,
+            "values": persona.values,
+            
+            "ai_analysis": {
+                "primary_category": ai_data.get('primary_category'),
+                "ai_analysis_text": ai_data.get('ai_analysis_text'),
+                "tagging_keywords": ai_data.get('tagging_keywords')
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Get Persona By ID Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------
+# [API 4] 삭제 (DELETE)
 # ---------------------------------------------------------
 @router.delete("/personas/{persona_id}")
 def delete_persona(persona_id: str, db: Session = Depends(get_db)):

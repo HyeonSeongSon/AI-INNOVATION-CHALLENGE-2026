@@ -10,16 +10,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
 from models import Persona, Product, AnalysisResult, SearchQuery
-from api_endpoints import router as db_router
 
 app = FastAPI(
     title="AI Innovation Challenge 2026 API",
     description="화장품 추천 시스템 API",
     version="2.0.0"
 )
-
-# 라우터 등록
-app.include_router(db_router)
 
 # CORS 설정
 app.add_middleware(

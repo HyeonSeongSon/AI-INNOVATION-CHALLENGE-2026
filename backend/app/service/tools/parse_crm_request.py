@@ -86,7 +86,7 @@ class MultiValueParser:
                 "backend/app/.env 파일에 OPENAI_API_KEY를 설정해주세요."
             )
 
-        self.llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+        self.llm = ChatOpenAI(model="gpt-5-mini", temperature=1)
         self.parser = self.llm.with_structured_output(MultiMessageRequest)
         print(f"[INFO] OpenAI API 연결 완료")
 
@@ -277,8 +277,39 @@ def parse_crm_message_request(user_input: str) -> Dict[str, Any]:
         }
     """
     parser = _get_parser()
+    
+    # 1. 정보 보존 로직 (작성하신 부분)
+    preserved_data = {}
+    try:
+        input_json = json.loads(user_input)
+        if isinstance(input_json, dict):
+            # persona_detail이 있으면 persona_info로 매핑해서 저장
+            if "persona_detail" in input_json:
+                preserved_data["persona_info"] = input_json["persona_detail"]
+            elif "persona_info" in input_json:
+                preserved_data["persona_info"] = input_json["persona_info"]
+            
+            # season 정보 보존
+            if "season" in input_json:
+                preserved_data["season"] = input_json["season"]
+    except Exception:
+        pass
+
+    # 2. 파싱 실행
     parsed = parser.parse(user_input)
+    
+    # 3. [핵심 수정] 안전하게 Dict로 변환 (에러 방지)
+    if isinstance(parsed, dict):
+        result = parsed
+    else:
+        result = parsed.model_dump()
+
+    # 4. [핵심 수정] 보존해둔 정보 병합
+    result.update(preserved_data)
+
     print("======파싱결과======")
-    print(parsed)
+    print(result) # 여기에 season과 persona_info가 들어있어야 함
     print("====================")
-    return parsed.model_dump()
+    
+    # 5. [핵심 수정] 합쳐진 최종 결과(result) 반환
+    return result

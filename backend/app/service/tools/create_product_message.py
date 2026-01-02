@@ -29,7 +29,7 @@ class ProductMessageGenerator:
 
         self.llm = ChatOpenAI(
             model="gpt-5-mini",
-            temperature=0.7,
+            temperature=1,
             api_key=api_key
         )
 

@@ -52,7 +52,7 @@ export default function Message() {
 
   const [personas, setPersonas] = useState([]);
   
-  // ✅ [수정] 기본 Purpose를 새로운 리스트 중 하나로 변경
+  // ✅ 기본 설정
   const [config, setConfig] = useState({
     personaId: '', purpose: '신제품 홍보', category: '스킨케어', season: '환절기'
   });
@@ -69,7 +69,7 @@ export default function Message() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // ✅ 페르소나 데이터 로드 (pipeline/personas 경로)
+  // ✅ 페르소나 데이터 로드
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
@@ -104,6 +104,9 @@ export default function Message() {
     }
   };
 
+  /* -------------------------------------------
+     1단계: 상품 추천 요청 (CRM API 호출)
+  ------------------------------------------- */
   const handleRecommend = async () => {
     if (!config.personaId) { alert("페르소나를 먼저 선택해주세요."); return; }
     setIsGenerating(true);
@@ -130,7 +133,16 @@ export default function Message() {
       });
       
       const result = response.data;
-      if (result.thread_id) setCurrentThreadId(result.thread_id);
+      
+      // ✅ [중요] thread_id 저장 로직 강화
+      console.log("👉 [DEBUG] 1단계 서버 응답:", result);
+      
+      if (result.thread_id) {
+          console.log("✅ thread_id 저장됨:", result.thread_id);
+          setCurrentThreadId(result.thread_id);
+      } else {
+          console.error("🚨 서버 응답에 thread_id가 없습니다!");
+      }
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
           id: p.product_id, 
@@ -162,20 +174,30 @@ export default function Message() {
     setSelectedProduct(product.id);
     setSimProduct(product);
     setIsSimModalOpen(true);
+    // 모달 열릴 때 메시지 생성 시작
     await generateMarketingMessage(product.id);
   };
 
+  /* -------------------------------------------
+     2단계: 마케팅 메시지 생성 (CRM API 호출)
+  ------------------------------------------- */
   const generateMarketingMessage = async (productId) => {
     setSimLoading(true);
     setSimMessage(""); 
 
     try {
+      // ✅ [중요] thread_id 검증 로직 추가 (없으면 요청 막음)
       if (!currentThreadId) {
-        console.warn("Thread ID 없음. 신규 생성 시도...");
+        alert("세션 정보가 없습니다. 제품 추천을 다시 받아주세요.");
+        console.error("🚨 [ERROR] currentThreadId가 null입니다. 요청을 중단합니다.");
+        setSimLoading(false);
+        return; // ⛔️ 실행 중단
       }
 
+      console.log(`🚀 메시지 생성 요청 (Thread: ${currentThreadId}, Product: ${productId})`);
+
       const response = await api.post('/crm/select-product', {
-        thread_id: currentThreadId,
+        thread_id: currentThreadId, // 저장된 ID 전송
         selected_product_id: productId
       });
 
@@ -220,7 +242,6 @@ export default function Message() {
           </Select>
         </FormGroup>
         
-        {/* ✅ [수정] 목적(Purpose) 옵션 변경 */}
         <FormGroup>
           <SectionLabel>Purpose</SectionLabel>
           <Select value={config.purpose} onChange={(e) => setConfig({...config, purpose: e.target.value})}>

@@ -54,7 +54,7 @@ class CRMMessageAgent:
 
         self.llm = ChatOpenAI(
             model="gpt-5-mini",
-            temperature=0.7,
+            temperature=1,
             api_key=api_key
         )
 
@@ -85,16 +85,20 @@ class CRMMessageAgent:
     "purpose": "브랜드/제품 첫소개",
     "brands": ["에스쁘아"],
     "product_categories": ["메이크업-립스틱"],
-    "exclusive_target": null
+    "exclusive_target": null,
+    "persona_info": {...},
+    "season": "환절기"
   }
 
 - `recommend_products_persona` 호출할 때:
-  ✅ 올바른 방법: 파서 결과를 **그대로** 사용
+  ✅ 올바른 방법: 파서 결과를 **그대로** 사용 (persona_info, season 포함)
     recommend_products_persona(
       persona_id="PERSONA_001",           # 파서 결과 그대로
       user_input="에스쁘아 립스틱 제품 소개",
-      brands=["에스쁘아"],                # 파서 결과 그대로
-      product_categories=["메이크업-립스틱"]  # 파서 결과 그대로
+      brands=["에스쁘아"],
+      product_categories=["메이크업-립스틱"],
+      persona_info={...},                 # 파서 결과의 persona_info 전달
+      season="환절기"                     # 파서 결과의 season 전달
     )
 
   ❌ 잘못된 방법: 자신이 추론하거나 수정
@@ -324,10 +328,27 @@ class CRMMessageAgent:
                     "error": f"선택한 제품을 찾을 수 없습니다: {selected_product_id}"
                 }
 
-            # 🔑 핵심: 사용자 선택을 HumanMessage로 추가 + selected_product_id를 state에 저장
-            selection_message = HumanMessage(
-                content=f"사용자가 다음 제품을 선택했습니다: {json.dumps(selected, ensure_ascii=False)}"
-            )
+            # [수정] 파서 결과에서 persona_info와 purpose를 다시 추출하여 에이전트에게 상기시킴
+            parser_result = self._extract_tool_result(messages, 'parse_crm_message_request')
+            persona_info = {}
+            purpose = "브랜드/제품 첫소개"
+            
+            if parser_result:
+                try:
+                    parsed_data = json.loads(parser_result)
+                    persona_info = parsed_data.get('persona_info', {})
+                    purpose = parsed_data.get('purpose', purpose)
+                except:
+                    pass
+
+            # 🔑 핵심: 사용자 선택 + 페르소나 정보/목적을 함께 전달하여 create_product_message 호출 유도
+            selection_content = f"사용자가 다음 제품을 선택했습니다: {json.dumps(selected, ensure_ascii=False)}"
+            selection_content += f"\n\n[System Note]\n다음 단계로 `create_product_message` 도구를 호출하세요.\n"
+            selection_content += f"이때 아래 정보를 인자로 전달하세요:\n"
+            selection_content += f"- purpose: \"{purpose}\"\n"
+            selection_content += f"- persona_info: {json.dumps(persona_info, ensure_ascii=False)}"
+
+            selection_message = HumanMessage(content=selection_content)
 
             # 상태에 메시지와 selected_product_id 추가
             self.app.update_state(

@@ -149,12 +149,30 @@ class AnalysisResultResponse(BaseModel):
     analysis_created_at: Optional[datetime] = None
 
 
+class AnalysisResultDetailResponse(BaseModel):
+    """분석 결과 상세 응답"""
+    analysis_id: int
+    persona_id: str
+    analysis_result: str
+    analysis_created_at: Optional[datetime] = None
+
+
+class AnalysisResultGetRequest(BaseModel):
+    """분석 결과 조회 요청"""
+    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
+
+
 class SearchQueryResponse(BaseModel):
     """검색 쿼리 응답"""
     query_id: int
     analysis_id: int
     search_query: str
     query_created_at: Optional[datetime] = None
+
+
+class SearchQueryGetRequest(BaseModel):
+    """검색 쿼리 조회 요청"""
+    analysis_id: int = Field(..., description="분석 ID", examples=[1])
 
 
 class ProductResponse(BaseModel):
@@ -314,6 +332,42 @@ async def create_analysis_result(request: AnalysisResultCreate, db: Session = De
     )
 
 
+@router.post("/analysis-results/get", response_model=List[AnalysisResultDetailResponse], summary="분석 결과 조회")
+async def get_analysis_results(request: AnalysisResultGetRequest, db: Session = Depends(get_db)):
+    """
+    페르소나 ID로 분석 결과 조회
+
+    **테이블:** analysis_results
+
+    **필수 필드:**
+    - persona_id: 페르소나 ID
+
+    **반환:**
+    - 해당 페르소나의 모든 분석 결과 (시간순 정렬)
+    """
+    from models import AnalysisResult, Persona
+
+    # 페르소나 존재 확인
+    persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    # 분석 결과 조회 (최신순)
+    results = db.query(AnalysisResult).filter(
+        AnalysisResult.persona_id == request.persona_id
+    ).order_by(AnalysisResult.analysis_created_at.desc()).all()
+
+    return [
+        AnalysisResultDetailResponse(
+            analysis_id=result.analysis_id,
+            persona_id=result.persona_id,
+            analysis_result=result.analysis_result,
+            analysis_created_at=result.analysis_created_at
+        )
+        for result in results
+    ]
+
+
 @router.post("/search-queries", response_model=SearchQueryResponse, summary="검색 쿼리 생성")
 async def create_search_query(request: SearchQueryCreate, db: Session = Depends(get_db)):
     """
@@ -344,6 +398,42 @@ async def create_search_query(request: SearchQueryCreate, db: Session = Depends(
         search_query=search.search_query,
         query_created_at=search.query_created_at
     )
+
+
+@router.post("/search-queries/get", response_model=List[SearchQueryResponse], summary="검색 쿼리 조회")
+async def get_search_queries(request: SearchQueryGetRequest, db: Session = Depends(get_db)):
+    """
+    분석 ID로 검색 쿼리 조회
+
+    **테이블:** search_queries
+
+    **필수 필드:**
+    - analysis_id: 분석 ID
+
+    **반환:**
+    - 해당 분석 ID의 모든 검색 쿼리 (시간순 정렬)
+    """
+    from models import SearchQuery, AnalysisResult
+
+    # 분석 결과 존재 확인
+    analysis = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == request.analysis_id).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail=f"Analysis with ID '{request.analysis_id}' not found")
+
+    # 검색 쿼리 조회 (최신순)
+    queries = db.query(SearchQuery).filter(
+        SearchQuery.analysis_id == request.analysis_id
+    ).order_by(SearchQuery.query_created_at.desc()).all()
+
+    return [
+        SearchQueryResponse(
+            query_id=query.query_id,
+            analysis_id=query.analysis_id,
+            search_query=query.search_query,
+            query_created_at=query.query_created_at
+        )
+        for query in queries
+    ]
 
 
 @router.post("/products", response_model=ProductResponse, summary="상품 생성")
