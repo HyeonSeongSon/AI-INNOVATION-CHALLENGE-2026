@@ -71,6 +71,72 @@ class ProductRecommender:
             print(f"[ERROR] 페르소나 정보 조회 실패: {e}")
             raise
 
+    def get_existing_analysis(self, persona_id: str) -> Optional[Dict[str, Any]]:
+        """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
+        try:
+            response = requests.post(
+                "http://host.docker.internal:8020/api/analysis-results/get",
+                json={"persona_id": persona_id}
+            )
+            response.raise_for_status()
+            results = response.json()
+
+            if results and len(results) > 0:
+                # 가장 최신 결과 반환 (이미 시간순 정렬되어 있음)
+                return results[0]
+            return None
+
+        except requests.exceptions.HTTPException as e:
+            if e.response.status_code == 404:
+                return None
+            print(f"[ERROR] 분석 결과 조회 실패: {e}")
+            raise
+        except Exception as e:
+            print(f"[ERROR] 분석 결과 조회 실패: {e}")
+            return None
+
+    def save_analysis_result(self, persona_id: str, analysis_result: Dict[str, Any]) -> int:
+        """분석 결과를 DB에 저장"""
+        try:
+            # JSON을 문자열로 변환
+            analysis_result_text = json.dumps(analysis_result, ensure_ascii=False)
+
+            response = requests.post(
+                "http://host.docker.internal:8020/api/analysis-results",
+                json={
+                    "persona_id": persona_id,
+                    "analysis_result": analysis_result_text
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            # analysis_id 반환
+            return result.get("analysis_id")
+
+        except Exception as e:
+            print(f"[ERROR] 분석 결과 저장 실패: {e}")
+            raise
+
+    def save_search_queries(self, analysis_id: int, queries: List[str]) -> None:
+        """검색 쿼리를 DB에 저장"""
+        try:
+            for query in queries:
+                response = requests.post(
+                    "http://host.docker.internal:8020/api/search-queries",
+                    json={
+                        "analysis_id": analysis_id,
+                        "search_query": query
+                    }
+                )
+                response.raise_for_status()
+
+            print(f"[INFO] {len(queries)}개 쿼리 저장 완료")
+
+        except Exception as e:
+            print(f"[ERROR] 쿼리 저장 실패: {e}")
+            raise
+
     def get_filtered_products(
         self,
         brands: Optional[List[str]] = None,

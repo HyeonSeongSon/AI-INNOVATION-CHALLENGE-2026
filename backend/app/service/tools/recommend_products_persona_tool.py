@@ -76,26 +76,62 @@ def recommend_products_persona(
     try:
         recommender = ProductRecommender()
 
-        # 1. 페르소나 조회 및 다단계×다차원 분석
-        print("[1단계] 페르소나 조회 및 분석 중...")
-        analysis_result = recommender.recommend_persona(
-            user_input=user_input,
-            persona_id=persona_id
-        )
-
-        # 2. 페르소나 정보 다시 조회 (반환용)
+        # 1. 페르소나 정보 조회
+        print("[1단계] 페르소나 정보 조회 중...")
         persona_info = recommender.get_persona_info(persona_id)
 
-        # 3. 멀티 쿼리 생성
-        print("[2단계] 멀티 쿼리 생성 중...")
+        # 2. DB에서 기존 분석 결과 조회
+        print("[2단계] 기존 분석 결과 확인 중...")
+        existing_analysis = recommender.get_existing_analysis(persona_id)
+
+        if existing_analysis:
+            print(f"  → 기존 분석 결과 발견 (analysis_id: {existing_analysis['analysis_id']})")
+            analysis_result_text = existing_analysis['analysis_result']
+            analysis_id = existing_analysis['analysis_id']
+            # JSON 파싱
+            try:
+                analysis_result = json.loads(analysis_result_text)
+            except json.JSONDecodeError:
+                print("[WARNING] 기존 분석 결과 파싱 실패, 새로 생성합니다.")
+                analysis_result = None
+        else:
+            print("  → 기존 분석 결과 없음, 새로 생성합니다.")
+            analysis_result = None
+            analysis_id = None
+
+        # 3. 분석 결과가 없으면 새로 생성
+        if not analysis_result:
+            print("[3단계] 페르소나 분석 수행 중...")
+            analysis_result = recommender.recommend_persona(
+                user_input=user_input,
+                persona_id=persona_id
+            )
+
+            # DB에 저장
+            print("[4단계] 분석 결과 DB 저장 중...")
+            analysis_id = recommender.save_analysis_result(
+                persona_id=persona_id,
+                analysis_result=analysis_result
+            )
+            print(f"  → 저장 완료 (analysis_id: {analysis_id})")
+
+        # 5. 멀티 쿼리 생성
+        print("[5단계] 멀티 쿼리 생성 중...")
         queries = recommender.generate_multi_queries(
             user_input=user_input,
             analysis_result=analysis_result,
             product_categories=product_categories
         )
 
-        # 4. 멀티 쿼리로 벡터 검색 (내부에서 필터링 수행)
-        print("[3단계] 멀티 쿼리 검색 중...")
+        # 6. 생성된 쿼리를 DB에 저장
+        print("[6단계] 쿼리 DB 저장 중...")
+        recommender.save_search_queries(
+            analysis_id=analysis_id,
+            queries=queries
+        )
+
+        # 7. 멀티 쿼리로 벡터 검색 (내부에서 필터링 수행)
+        print("[7단계] 멀티 쿼리 검색 중...")
         search_results = recommender.search_with_multi_queries(
             queries=queries,
             brands=brands,
@@ -110,8 +146,8 @@ def recommend_products_persona(
                 "products": []
             }, ensure_ascii=False)
 
-        # 5. 상품 데이터 병합을 위해 필터링된 상품 목록 가져오기
-        print("[4단계] 상품 데이터 병합 중...")
+        # 8. 상품 데이터 병합을 위해 필터링된 상품 목록 가져오기
+        print("[8단계] 상품 데이터 병합 중...")
         all_products = recommender.get_filtered_products(
             brands=brands,
             product_categories=product_categories,
@@ -123,10 +159,11 @@ def recommend_products_persona(
             all_products=all_products
         )
 
-        # 7. 결과 반환 (JSON 문자열)
+        # 9. 결과 반환 (JSON 문자열)
         result = {
             "persona_info": persona_info,
             "analysis_result": analysis_result,
+            "analysis_id": analysis_id,
             "queries": queries,
             "products": merged_products,
             "count": len(merged_products)
