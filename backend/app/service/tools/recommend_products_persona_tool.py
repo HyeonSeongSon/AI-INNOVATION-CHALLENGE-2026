@@ -159,17 +159,20 @@ def recommend_products_persona(
             all_products=all_products
         )
 
-        # 9. 결과 반환 (JSON 문자열)
+        # 9. 상위 3개만 선택
+        top_3_products = merged_products[:3]
+
+        # 10. 결과 반환 (JSON 문자열)
         result = {
             "persona_info": persona_info,
             "analysis_result": analysis_result,
             "analysis_id": analysis_id,
             "queries": queries,
-            "products": merged_products,
-            "count": len(merged_products)
+            "products": top_3_products,
+            "count": len(top_3_products)
         }
 
-        print(f"[recommend_products_persona Tool 완료] {len(merged_products)}개 상품 추천")
+        print(f"[recommend_products_persona Tool 완료] 상위 {len(top_3_products)}개 상품 추천 (전체 {len(merged_products)}개 중)")
         return json.dumps(result, ensure_ascii=False)
 
     except Exception as e:
