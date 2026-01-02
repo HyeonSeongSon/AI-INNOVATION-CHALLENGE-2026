@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import api from '../api'; 
 
-/* --- [1] 데이터 및 옵션 설정 (기존과 동일) --- */
+/* --- [1] 데이터 및 옵션 설정 --- */
 const OPTIONS = {
   occupations: ['학생', '직장인', '취준생', '주부', '프리랜서', '사업가', '전문직', '공무원', '예술가', '은퇴', '기타'],
   gender: [
@@ -197,38 +197,40 @@ export default function PersonaManager() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const response = await api.get('/api/personas'); // API 경로 확인
+        const response = await api.get('/personas'); 
         const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
         
-        // 백엔드 스키마 -> 프론트엔드 상태 매핑
+        // 백엔드 응답(snake_case) -> 프론트엔드 상태(camelCase) 매핑
         const formatted = rawData.map(p => ({
             ...p,
-            id: p.id,
+            id: p.persona_id || p.id,
             name: p.name,
             age: p.age,
             gender: p.gender,
             occupation: p.occupation,
-            skinType: p.skin_types || [], 
+            skinType: p.skin_type || [], 
             personalColor: p.personal_color,
-            baseColor: p.base_shade,
+            baseColor: p.shade_number,
             priceRange: p.shopping_style,
-            petInfo: p.pet_type || '없음', 
-            screenTime: p.digital_device_hours || 0, // 필드명 확인
-            preferredColors: p.preferred_makeup_colors || [],
-            texturePreference: p.texture || [], // api 응답 필드명 확인
-            buyingFactor: p.buying_factor ? p.buying_factor : [], 
-            skinConcerns: p.concern_keywords || [],
-            // values 문자열 파싱 (예: "비건, 친환경")
-            naturalOrganic: p.values && p.values.includes('천연'),
+            petInfo: p.pets || '없음', 
+            screenTime: p.digital_device_usage_time || 0,
+            preferredColors: p.preferred_colors || [],
+            texturePreference: p.preferred_texture || [],
+            buyingFactor: p.purchase_decision_factors || [], 
+            skinConcerns: p.skin_concerns || [],
+            // values 배열 처리
+            naturalOrganic: p.values && p.values.includes('천연/유기농'),
             veganCrueltyFree: p.values && p.values.includes('비건'),
+            
+            // ✅ [수정] 백엔드에서 ai_analysis(json)으로 옴 -> 프론트엔드 aiAnalysis 객체로 매핑
             aiAnalysis: {
-                primary_category: p.aiAnalysis?.primary_category || '분석 중',
-                reasoning: p.aiAnalysis?.reasoning || '상세 리포트 준비 중'
+                primary_category: p.ai_analysis?.primary_category || '분석 중',
+                reasoning: p.ai_analysis?.ai_analysis_text || '상세 리포트 준비 중'
             }
         }));
         setPersonas(formatted);
       } catch (err) {
-        console.warn("페르소나 목록 로드 실패:", err);
+        console.warn("페르소나 목록 로드 실패 (API 서버 확인 필요):", err);
         setPersonas([]);
       }
     };
@@ -237,7 +239,7 @@ export default function PersonaManager() {
 
   const initialData = {
     name: '', age: '', gender: '', 
-    skinType: [], // 배열로 관리
+    skinType: [], 
     personalColor: '', 
     baseColor: '', 
     skinConcerns: [], 
@@ -272,6 +274,7 @@ export default function PersonaManager() {
     }));
   };
 
+  // ✅ [수정] handleSave: 백엔드 응답 구조(result.analysis)에 맞춰 수정
   const handleSave = async () => {
     if (!data.name) return addToast('페르소나 이름을 입력해주세요.', 'error');
     if (data.skinType.length === 0) return addToast('피부 타입을 하나 이상 선택해주세요.', 'error');
@@ -280,69 +283,65 @@ export default function PersonaManager() {
     setIsAnalyzing(true); 
 
     try {
-      // ✅ [수정] 백엔드 스키마 매핑
+      // 1. Pydantic 모델(PersonaCreateRequest) 필드명과 100% 일치하도록 매핑
       const payload = {
         name: data.name,
         age: Number(data.age) || 0,
         gender: data.gender,
         occupation: data.occupation,
-        
         skin_type: data.skinType, 
+        skin_concerns: data.skinConcerns, 
         personal_color: data.personalColor,
-        base_shade: String(data.baseColor), 
-        concern_keywords: data.skinConcerns,
-        
-        preferred_makeup_colors: data.preferredColors,
+        shade_number: Number(data.baseColor) || 21, 
+        preferred_colors: data.preferredColors,
         preferred_ingredients: data.preferredIngredients,
         avoided_ingredients: data.avoidedIngredients,
-        // 단일 선택이지만 백엔드는 리스트로 받을 수도 있으니 체크
-        preferred_scent: Array.isArray(data.preferredScent) ? data.preferredScent[0] : null,
-        
-        routine_type: data.skincareRoutine,
-        activity_environment: data.dailyEnvironment,
+        preferred_scents: Array.isArray(data.preferredScent) ? data.preferredScent : [data.preferredScent],
+        skincare_routine: data.skincareRoutine,
+        main_environment: data.dailyEnvironment,
         preferred_texture: data.texturePreference, 
-        
-        pet_type: data.petInfo, 
-        digital_device_hours: Number(data.screenTime),
-        sleep_hours: String(data.sleepHours), 
+        pets: data.petInfo, 
+        digital_device_usage_time: Number(data.screenTime),
+        avg_sleep_hours: Number(data.sleepHours) || 0, 
         stress_level: data.stressLevel,
-        
         shopping_style: data.priceRange,
-        purchase_factor: data.buyingFactor.join(', '), 
-        
+        purchase_decision_factors: data.buyingFactor, 
         values: [
           data.naturalOrganic ? '천연/유기농' : '',
           data.veganCrueltyFree ? '비건' : '',
           data.ecoPackaging ? '친환경' : '',
           data.pregnancyLactation ? '임신/수유' : ''
-        ].filter(Boolean).join(', '),
-        
-        full_raw_data: data 
+        ].filter(Boolean)
       };
 
-      // 시각적 효과를 위해 잠시 대기
-      await new Promise(r => setTimeout(r, 2000));
+      // 시각적 효과
+      await new Promise(r => setTimeout(r, 1500));
 
-      const response = await api.post('/api/personas', payload);
+      // 2. 파이프라인 API 호출
+      const response = await api.post('/pipeline/personas/create-analyze', payload);
       const result = response.data;
       
-      // 새 페르소나 객체 생성 (화면 갱신용)
+      // ✅ [핵심 수정] 백엔드 응답에서 analysis 객체를 바로 꺼냅니다.
+      const aiData = result.analysis || {};
+
       const newPersona = {
         ...data,
         id: result.persona_id, // UUID
         aiAnalysis: {
-          primary_category: result.data.category,
-          reasoning: result.data.analysis_text
+          primary_category: aiData.primary_category || '분석 완료',
+          reasoning: aiData.ai_analysis_text || '상세 리포트'
         }
       };
 
       setPersonas([newPersona, ...personas]);
-      addToast(`분석 완료! [${result.data.category}]`, 'success');
+      addToast(`분석 완료! [${newPersona.aiAnalysis.primary_category}]`, 'success');
       closeModal();
 
     } catch (error) {
       console.error("에러:", error);
-      const errMsg = error.response?.data?.detail || error.message;
+      const errMsg = error.response?.data?.detail 
+         ? (typeof error.response.data.detail === 'string' ? error.response.data.detail : JSON.stringify(error.response.data.detail))
+         : error.message;
       addToast(`저장 실패: ${errMsg}`, 'error');
     } finally {
       setIsAnalyzing(false); 
@@ -355,12 +354,11 @@ export default function PersonaManager() {
     setData(initialData);
   };
 
-  // ✅ [수정] 백엔드 삭제 API 호출 추가
   const handleDelete = async (e, id) => {
-    e.stopPropagation(); // 카드 클릭 이벤트 막기
+    e.stopPropagation(); 
     if(window.confirm('정말 삭제하시겠습니까? (DB에서도 완전히 삭제됩니다)')) {
       try {
-        await api.delete(`/api/personas/${id}`);
+        await api.delete(`/personas/${id}`); 
         setPersonas(personas.filter(p => p.id !== id));
         addToast('삭제되었습니다.', 'info');
       } catch (error) {
@@ -640,7 +638,6 @@ export default function PersonaManager() {
 
             <div style={{fontSize:'13px', color:'#555', display:'flex', flexDirection:'column', gap:'12px'}}>
               <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
-                 {/* ✅ 배열 처리 안전하게 수정 */}
                  {p.skinType && p.skinType.map(type => <TagChip key={type} $bg="#F0EBFF" $color="#6B4DFF">{type}</TagChip>)}
                  {p.personalColor && <TagChip>{p.personalColor}</TagChip>}
                  {p.baseColor && <TagChip>{p.baseColor}호</TagChip>}
@@ -696,7 +693,7 @@ export default function PersonaManager() {
             <ButtonGroup>
               {step > 1 && (
                 <NavButton onClick={() => setStep(step - 1)}>
-                   <ChevronLeft size={16} style={{marginBottom:-2, marginRight:5}}/>이전
+                    <ChevronLeft size={16} style={{marginBottom:-2, marginRight:5}}/>이전
                 </NavButton>
               )}
               {step < 7 ? (
@@ -705,7 +702,7 @@ export default function PersonaManager() {
                 </NavButton>
               ) : (
                 <NavButton $primary onClick={handleSave} disabled={isAnalyzing}>
-                   <Check size={16} style={{marginBottom:-2, marginLeft:5}}/> 완료 및 저장
+                    <Check size={16} style={{marginBottom:-2, marginLeft:5}}/> 완료 및 저장
                 </NavButton>
               )}
             </ButtonGroup>

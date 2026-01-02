@@ -1,0 +1,26 @@
+# === Web Framework ===
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+requests>=2.25.0
+
+# === Database ===
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+# === Data & Utils ===
+pydantic>=2.7.4
+python-dotenv==1.0.0
+numpy>=1.21.0
+
+# === AI & LLM (OpenAI) ===
+openai>=1.30.0
+
+# === LangChain & Agent (핵심 추가 항목) ===
+langchain==0.2.1
+langchain-core==0.2.1
+langchain-community==0.2.1
+langchain-openai==0.1.7
+langgraph==0.0.53
+
+# === Search Engine ===
+opensearch-py==2.6.0

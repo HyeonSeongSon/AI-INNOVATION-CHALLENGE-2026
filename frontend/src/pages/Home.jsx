@@ -1,9 +1,10 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom'; // 페이지 이동 훅 추가
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
+import api from '../api'; // ✅ API 모듈 임포트
 
-/* --- 스타일 컴포넌트 --- */
+/* --- 스타일 컴포넌트 (기존 유지) --- */
 const PageContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -254,6 +255,35 @@ const RankCount = styled.span`
 /* --- 메인 컴포넌트 --- */
 export default function Home() {
   const navigate = useNavigate();
+  
+  // ✅ DB 데이터 상태 관리
+  const [personaStats, setPersonaStats] = useState({
+    count: 0,
+    list: []
+  });
+
+  // ✅ 페르소나 데이터 불러오기 (실제 DB 연동)
+  useEffect(() => {
+    const fetchPersonas = async () => {
+      try {
+        const response = await api.get('/personas'); // API 호출
+        const data = response.data;
+        
+        // 최신순으로 정렬 (ID 기준 역순 가정)
+        // 실제 popularity 데이터가 없으므로 최신 등록된 페르소나를 보여줌
+        const sorted = [...data].reverse();
+
+        setPersonaStats({
+          count: data.length, // 실제 개수
+          list: sorted.slice(0, 5) // 실제 목록 (최대 5개)
+        });
+      } catch (error) {
+        console.error("페르소나 데이터 로드 실패:", error);
+        // 에러 시 0개로 표시하거나 하드코딩된 값 유지
+      }
+    };
+    fetchPersonas();
+  }, []);
 
   return (
     <PageContainer>
@@ -269,15 +299,16 @@ export default function Home() {
             <StatLabel>오늘 생성된 메시지</StatLabel>
             <StatIcon $bg="#E0F2F1" $color="#00695C"><MessageSquare size={20} /></StatIcon>
           </StatHeader>
-          <StatValue>24 <span>건</span></StatValue>
+          <StatValue>24 <span>건</span></StatValue> {/* 하드코딩 (메시지 이력 DB 없음) */}
         </StatCard>
         
-        <StatCard>
+        <StatCard onClick={() => navigate('/persona')} style={{cursor: 'pointer'}}>
           <StatHeader>
             <StatLabel>등록된 페르소나</StatLabel>
             <StatIcon $bg="#F3E5F5" $color="#7B1FA2"><Users size={20} /></StatIcon>
           </StatHeader>
-          <StatValue>8 <span>개</span></StatValue>
+          {/* ✅ 실제 DB 데이터 반영 */}
+          <StatValue>{personaStats.count} <span>개</span></StatValue>
         </StatCard>
         
         <StatCard>
@@ -308,7 +339,7 @@ export default function Home() {
 
       {/* 하단 영역 */}
       <BottomSection>
-        {/* 왼쪽: 최근 생성 이력 */}
+        {/* 왼쪽: 최근 생성 이력 (하드코딩 유지 - DB에 메시지 저장 기능 없음) */}
         <SectionBox>
           <SectionHeader>
             <SectionTitle><History size={18}/> 최근 생성 내역</SectionTitle>
@@ -339,37 +370,36 @@ export default function Home() {
           </MessageItem>
         </SectionBox>
 
-        {/* 오른쪽: 인기 페르소나 랭킹 */}
+        {/* 오른쪽: 등록된 페르소나 목록 (실제 데이터 연동) */}
         <SectionBox>
           <SectionHeader>
-            <SectionTitle><TrendingUp size={18}/> 인기 타겟 페르소나</SectionTitle>
+            <SectionTitle><TrendingUp size={18}/> 최근 등록된 페르소나</SectionTitle>
           </SectionHeader>
           
-          <RankItem>
-            <RankNumber $top>1</RankNumber>
-            <RankName>20대 수부지 대학생</RankName>
-            <RankCount>42건</RankCount>
-          </RankItem>
-          <RankItem>
-            <RankNumber $top>2</RankNumber>
-            <RankName>30대 뷰티 고관여</RankName>
-            <RankCount>35건</RankCount>
-          </RankItem>
-          <RankItem>
-            <RankNumber>3</RankNumber>
-            <RankName>40대 럭셔리 선호</RankName>
-            <RankCount>18건</RankCount>
-          </RankItem>
-          <RankItem>
-            <RankNumber>4</RankNumber>
-            <RankName>트러블 케어 입문자</RankName>
-            <RankCount>12건</RankCount>
-          </RankItem>
-          <RankItem>
-            <RankNumber>5</RankNumber>
-            <RankName>비건 뷰티 선호</RankName>
-            <RankCount>9건</RankCount>
-          </RankItem>
+          {/* DB에 데이터가 있으면 실제 목록 표시, 없으면 하드코딩된 예시 표시 */}
+          {personaStats.list.length > 0 ? (
+            personaStats.list.map((persona, index) => (
+              <RankItem key={persona.id || index}>
+                <RankNumber $top={index < 3}>{index + 1}</RankNumber>
+                <RankName>{persona.name} ({persona.age}세)</RankName>
+                <RankCount>New</RankCount>
+              </RankItem>
+            ))
+          ) : (
+            // 데이터가 없을 때 보여줄 기본(하드코딩) 예시
+            <>
+              <RankItem>
+                <RankNumber $top>1</RankNumber>
+                <RankName>20대 수부지 대학생</RankName>
+                <RankCount>Example</RankCount>
+              </RankItem>
+              <RankItem>
+                <RankNumber $top>2</RankNumber>
+                <RankName>30대 뷰티 고관여</RankName>
+                <RankCount>Example</RankCount>
+              </RankItem>
+            </>
+          )}
         </SectionBox>
       </BottomSection>
     </PageContainer>
