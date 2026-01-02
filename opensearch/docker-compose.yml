@@ -92,6 +92,8 @@ services:
       - ../backend:/app/backend         # 백엔드 코드 마운트
       - ../requirements.txt:/requirements.txt # 라이브러리 목록 마운트
       - ../database:/app/database       # database 폴더 마운트
+      # 👇 [추가됨] data 폴더 마운트 (categories.json 경로 해결)
+      - ../data:/app/data
     ports:
       - 8005:8005
     env_file:
@@ -109,24 +111,24 @@ services:
       opensearch-node1:
         condition: service_healthy
 
-  # [5] pgAdmin (DB 관리 도구) - ✅ 추가됨
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: pgadmin_container
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-    networks:
-      - opensearch-net
+  # [5] pgAdmin (주석 처리됨)
+  # pgadmin:
+  #   image: dpage/pgadmin4
+  #   container_name: pgadmin_container
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@admin.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #   ports:
+  #     - "5050:80"
+  #   volumes:
+  #     - pgadmin-data:/var/lib/pgadmin
+  #   networks:
+  #     - opensearch-net
 
 volumes:
   opensearch-data1:
-  pgadmin-data: # ✅ 추가됨
+  pgadmin-data:
 
 networks:
   opensearch-net:

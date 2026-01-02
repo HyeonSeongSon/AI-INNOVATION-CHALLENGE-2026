@@ -266,11 +266,13 @@ export default function Home() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const response = await api.get('/personas'); // API 호출
-        const data = response.data;
+        // [수정 완료] 기존 '/personas' -> '/pipeline/personas' 로 변경
+        const response = await api.get('/pipeline/personas'); 
+        
+        // 백엔드 응답 구조에 따라 데이터 추출 (배열인지, 객체 안의 배열인지 확인)
+        const data = Array.isArray(response.data) ? response.data : (response.data.personas || []);
         
         // 최신순으로 정렬 (ID 기준 역순 가정)
-        // 실제 popularity 데이터가 없으므로 최신 등록된 페르소나를 보여줌
         const sorted = [...data].reverse();
 
         setPersonaStats({
@@ -279,7 +281,7 @@ export default function Home() {
         });
       } catch (error) {
         console.error("페르소나 데이터 로드 실패:", error);
-        // 에러 시 0개로 표시하거나 하드코딩된 값 유지
+        // 에러 시 기존 상태 유지 (0개)
       }
     };
     fetchPersonas();

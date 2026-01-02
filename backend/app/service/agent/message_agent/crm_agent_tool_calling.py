@@ -4,7 +4,7 @@ CRM 메시지 생성 에이전트 - Tool Calling 방식
 """
 
 from typing import Dict, Any, Optional, TypedDict
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState, END, START
 from langgraph.prebuilt import ToolNode
@@ -147,14 +147,8 @@ class CRMMessageAgent:
             if not hasattr(last_message, 'tool_calls') or not last_message.tool_calls:
                 return END
 
-            # recommend_products_persona 도구가 호출되었는지 확인
-            tool_names = [tc['name'] for tc in last_message.tool_calls]
-
-            if 'recommend_products_persona' in tool_names:
-                # 제품 추천 후 → Interrupt 발생시킬 노드로 이동
-                return "wait_for_selection"
-
-            # 다른 도구들은 바로 실행
+            # ✅ [수정 1] 도구가 호출되면 무조건 실행(tools)하러 갑니다.
+            # (기존 코드는 여기서 바로 wait_for_selection으로 가서 실행을 안 했습니다)
             return "tools"
 
         # 그래프 구성
@@ -173,25 +167,27 @@ class CRMMessageAgent:
             should_continue,
             {
                 "tools": "tools",
-                "wait_for_selection": "tools",  # tools 먼저 실행
                 END: END
             }
         )
 
-        # tools 실행 후 조건부 분기
+        # ✅ [수정 2] tools 실행 후 조건부 분기 (after_tools 추가)
         def after_tools(state: CRMState):
             """tools 실행 후 다음 단계 결정"""
-            # 이전 AI 메시지에서 recommend_products_persona 호출 여부 확인
+            # 방금 실행된 도구가 무엇인지 확인 (직전 AI 메시지 확인)
             messages = state['messages']
             for msg in reversed(messages):
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
                     tool_names = [tc['name'] for tc in msg.tool_calls]
                     if 'recommend_products_persona' in tool_names:
+                        # 추천 도구가 실행 완료되었으니 대기 상태로 이동
                         return "wait_for_selection"
                     break
 
+            # 그 외 도구는 다시 에이전트로
             return "agent"
 
+        # tools 노드 뒤에 분기점 연결
         workflow.add_conditional_edges(
             "tools",
             after_tools,

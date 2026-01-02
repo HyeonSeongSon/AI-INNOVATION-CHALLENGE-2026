@@ -45,25 +45,24 @@ class PersonaCreateRequest(BaseModel):
 
 
 # ---------------------------------------------------------
-# [API 1] 조회 (GET) - 이게 없어서 안 보였던 것입니다!
+# [API 1] 조회 (GET) - ✅ 에러 수정됨
 # ---------------------------------------------------------
-@router.get("/personas")  # 실제 호출 경로: /api/pipeline/personas
+@router.get("/personas")
 def get_personas(db: Session = Depends(get_db)):
     """
-    저장된 모든 페르소나 목록과 최신 분석 결과를 불러옵니다.
+    저장된 모든 페르소나 목록 조회
     """
     try:
-        # 최신순 정렬 조회
-        personas = db.query(Persona).order_by(Persona.created_at.desc()).all()
+        # ✅ [수정] models.py에 정의된 컬럼명(persona_created_at) 사용
+        personas = db.query(Persona).order_by(Persona.persona_created_at.desc()).all()
         result = []
         
         for p in personas:
-            # 해당 페르소나의 최신 분석 결과 조회
+            # 최신 분석 결과 조회
             analysis = db.query(AnalysisResult).filter(
                 AnalysisResult.persona_id == p.persona_id
-            ).order_by(AnalysisResult.analysis_id.desc()).first()
+            ).order_by(AnalysisResult.analysis_created_at.desc()).first()
             
-            # 분석 결과 JSON 파싱
             ai_data = {}
             if analysis and analysis.analysis_result:
                 try:
@@ -71,7 +70,6 @@ def get_personas(db: Session = Depends(get_db)):
                 except:
                     ai_data = {}
 
-            # 프론트엔드가 원하는 구조로 변환
             result.append({
                 "persona_id": p.persona_id,
                 "name": p.name,
@@ -97,12 +95,10 @@ def get_personas(db: Session = Depends(get_db)):
                 "avg_sleep_hours": p.avg_sleep_hours,
                 "stress_level": p.stress_level,
                 "digital_device_usage_time": p.digital_device_usage_time,
-                
                 "shopping_style": p.shopping_style,
                 "purchase_decision_factors": p.purchase_decision_factors,
                 "values": p.values,
                 
-                # 프론트엔드 매핑용 ai_analysis 객체
                 "ai_analysis": {
                     "primary_category": ai_data.get('primary_category'),
                     "ai_analysis_text": ai_data.get('ai_analysis_text'),
@@ -113,11 +109,11 @@ def get_personas(db: Session = Depends(get_db)):
         
     except Exception as e:
         print(f"❌ Get Personas Error: {e}")
-        return [] # 에러나면 빈 배열 반환
+        return []
 
 
 # ---------------------------------------------------------
-# [API 2] 생성 + 분석 (POST)
+# [API 2] 생성 (POST)
 # ---------------------------------------------------------
 @router.post("/personas/create-analyze")
 async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = Depends(get_db)):
@@ -125,7 +121,6 @@ async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = De
         data = req.dict()
         new_persona_id = str(uuid.uuid4())
         
-        # 1. 페르소나 저장
         new_persona = Persona(
             persona_id=new_persona_id,
             name=data.get('name'),
@@ -155,10 +150,10 @@ async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = De
         db.commit()
         db.refresh(new_persona)
 
-        # 2. AI 분석 (기존 에이전트 활용)
+        # AI 분석
         analysis_data = await ai_service.analyze_profile(data)
         
-        # 3. 분석 결과 저장
+        # 분석 결과 저장
         final_analysis_json = {
             "tagging_keywords": analysis_data.get('tagging_keywords', []),
             "ai_analysis_text": analysis_data.get('ai_analysis_text', ''),
@@ -172,7 +167,6 @@ async def create_and_analyze_persona(req: PersonaCreateRequest, db: Session = De
         db.add(new_analysis)
         db.commit()
 
-        # 4. 응답
         return {
             "status": "success",
             "persona_id": new_persona.persona_id,

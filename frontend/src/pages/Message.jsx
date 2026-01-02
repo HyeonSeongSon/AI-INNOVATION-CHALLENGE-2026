@@ -5,7 +5,7 @@ import {
   Tag, Bot, Trash2, X, Copy, RefreshCw, Check, MessageCircle 
 } from 'lucide-react';
 
-// ✅ API 및 Context (실제 백엔드와 통신)
+// ✅ API 및 Context
 import api from '../api';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../components/Toast';
@@ -51,41 +51,41 @@ export default function Message() {
   const scrollRef = useRef(null);
 
   const [personas, setPersonas] = useState([]);
+  
+  // ✅ [수정] 기본 Purpose를 새로운 리스트 중 하나로 변경
   const [config, setConfig] = useState({
-    personaId: '', purpose: '신상품', category: '스킨케어', season: '환절기'
+    personaId: '', purpose: '신제품 홍보', category: '스킨케어', season: '환절기'
   });
 
-  // 상태: 현재 진행 중인 스레드 ID (2단계 생성 시 필요)
   const [currentThreadId, setCurrentThreadId] = useState(null);
 
-  // --- 시뮬레이션 모달 상태 ---
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [simProduct, setSimProduct] = useState(null); 
   const [simMessage, setSimMessage] = useState("");
   const [simLoading, setSimLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // 스크롤 자동 이동
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // 페이지 로드 시 페르소나 데이터 가져오기
+  // ✅ 페르소나 데이터 로드 (pipeline/personas 경로)
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        // ✅ [API] 페르소나 목록 조회
-        const pResponse = await api.get('/personas');
-        const pData = pResponse.data.map(p => ({
-          ...p, 
-          // 안전하게 배열 처리 및 라벨링
-          displayLabel: `${p.name} / ${p.age}세 / ${p.skin_type?.[0] || '피부타입미정'}`
+        const response = await api.get('/pipeline/personas');
+        const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
+        
+        const pData = rawData.map(p => ({
+          ...p,
+          persona_id: p.persona_id || p.id,
+          displayLabel: `${p.name} / ${p.age}세 / ${Array.isArray(p.skin_type) ? p.skin_type[0] : (p.skin_type || '정보없음')}`
         }));
+        
         setPersonas(pData);
-        // 첫 번째 페르소나가 있으면 기본 선택
+        
         if (pData.length > 0) setConfig(prev => ({ ...prev, personaId: pData[0].persona_id }));
         
-        // 채팅방에 아무 메시지도 없으면 환영 메시지 추가
         if (messages.length === 0) {
            addMessage({ id: Date.now(), role: 'ai', text: '안녕하세요! 페르소나를 선택하고 맞춤 상품을 추천받아보세요.' });
         }
@@ -104,38 +104,34 @@ export default function Message() {
     }
   };
 
-  // ✅ [API] 1단계: 상품 추천 및 분석 요청 (AI Agent)
   const handleRecommend = async () => {
     if (!config.personaId) { alert("페르소나를 먼저 선택해주세요."); return; }
     setIsGenerating(true);
     
-    // 사용자 입력을 JSON 문자열로 변환하여 에이전트에게 전달
+    const targetPersona = personas.find(p => String(p.persona_id) === String(config.personaId));
+    
+    // CRM API 호출용 데이터 구성
     const userInput = JSON.stringify({
         persona_id: config.personaId,
         purpose: config.purpose,
         product_categories: [config.category], 
-        season: config.season
+        season: config.season,
+        persona_detail: targetPersona 
     });
     
-    // 화면에 보여줄 메시지 구성
-    const targetPersona = personas.find(p => String(p.persona_id) === String(config.personaId));
     const displayPrompt = `[${config.purpose}] ${targetPersona?.name || '고객'}님을 위한 ${config.season} ${config.category} 추천 부탁해.`;
     
     addMessage({ id: Date.now(), role: 'user', text: displayPrompt });
 
     try {
-      // ✅ [API 호출] /api/crm/generate
       const response = await api.post('/crm/generate', {
         user_input: userInput,
-        thread_id: currentThreadId // 기존 대화 맥락이 있으면 이어가기
+        thread_id: currentThreadId 
       });
       
       const result = response.data;
-      
-      // 스레드 ID 저장 (다음 단계에서 사용)
       if (result.thread_id) setCurrentThreadId(result.thread_id);
 
-      // 추천 상품 데이터 매핑
       const mappedProducts = (result.recommended_products || []).map(p => ({
           id: p.product_id, 
           name: p.product_name || "상품명 없음",
@@ -143,11 +139,9 @@ export default function Message() {
           image: p.image_url || "https://dummyimage.com/300x300/eee/aaa",
           tags: p.keywords || ["AI추천"],
           price: p.sale_price,
-          // ✅ [추가] 한줄평 데이터 매핑 (설명이 너무 길면 자름)
-          oneLineReview: p.description ? (p.description.length > 50 ? p.description.substring(0, 50) + "..." : p.description) : "피부 고민을 해결해줄 맞춤 솔루션 아이템"
+          oneLineReview: p.description ? (p.description.length > 50 ? p.description.substring(0, 50) + "..." : p.description) : "맞춤 솔루션 아이템"
       }));
 
-      // AI 응답 추가
       addMessage({ 
         id: Date.now() + 1, 
         role: 'ai', 
@@ -168,22 +162,18 @@ export default function Message() {
     setSelectedProduct(product.id);
     setSimProduct(product);
     setIsSimModalOpen(true);
-    
-    // 모달 열리면서 바로 메시지 생성 시작
     await generateMarketingMessage(product.id);
   };
 
-  // ✅ [API] 2단계: 제품 선택 및 메시지 생성 (AI Agent)
   const generateMarketingMessage = async (productId) => {
     setSimLoading(true);
-    setSimMessage(""); // 초기화
+    setSimMessage(""); 
 
     try {
       if (!currentThreadId) {
-        throw new Error("세션이 만료되었습니다. 처음부터 다시 진행해주세요.");
+        console.warn("Thread ID 없음. 신규 생성 시도...");
       }
 
-      // ✅ [API 호출] /api/crm/select-product
       const response = await api.post('/crm/select-product', {
         thread_id: currentThreadId,
         selected_product_id: productId
@@ -191,7 +181,6 @@ export default function Message() {
 
       const result = response.data;
       
-      // 최종 메시지 추출 (단순 문자열 또는 JSON 객체 대응)
       let finalMsg = "";
       if (result.final_message) {
           if (typeof result.final_message === 'string') {
@@ -227,10 +216,24 @@ export default function Message() {
         <FormGroup>
           <SectionLabel>Target Persona</SectionLabel>
           <Select value={config.personaId} onChange={(e) => setConfig({...config, personaId: e.target.value})}>
-            {personas.length > 0 ? personas.map(p => <option key={p.persona_id} value={p.persona_id}>{p.displayLabel || p.name}</option>) : <option value="">데이터 없음</option>}
+            {personas.length > 0 ? personas.map(p => <option key={p.persona_id} value={p.persona_id}>{p.displayLabel}</option>) : <option value="">데이터 없음</option>}
           </Select>
         </FormGroup>
-        <FormGroup><SectionLabel>Purpose</SectionLabel><Select value={config.purpose} onChange={(e) => setConfig({...config, purpose: e.target.value})}><option>신상품홍보</option><option>프로모션</option><option>재구매유도</option></Select></FormGroup>
+        
+        {/* ✅ [수정] 목적(Purpose) 옵션 변경 */}
+        <FormGroup>
+          <SectionLabel>Purpose</SectionLabel>
+          <Select value={config.purpose} onChange={(e) => setConfig({...config, purpose: e.target.value})}>
+            <option>브랜드/제품 첫소개</option>
+            <option>신제품 홍보</option>
+            <option>베스트셀러 제품 소개</option>
+            <option>프로모션/이벤트 소개</option>
+            <option>성분/효능 강조 소개</option>
+            <option>피부타입/고민 강조 소개</option>
+            <option>라이프스타일/연령대 강조 소개</option>
+          </Select>
+        </FormGroup>
+
         <FormGroup><SectionLabel>Category</SectionLabel><Input value={config.category} onChange={(e) => setConfig({...config, category: e.target.value})} /></FormGroup>
         <FormGroup><SectionLabel>Season</SectionLabel><Input value={config.season} onChange={(e) => setConfig({...config, season: e.target.value})} /></FormGroup>
         <GenerateButton onClick={handleRecommend} disabled={isGenerating}>
@@ -254,12 +257,9 @@ export default function Message() {
                       <CardImage><span className="brand-badge">{product.brand}</span><img src={product.image} alt={product.name} onError={(e)=>e.target.style.display='none'} /></CardImage>
                       <CardContent>
                         <ProductName>{product.name}</ProductName>
-                        
-                        {/* ✅ [추가] 한줄평 표시 영역 */}
                         <div style={{fontSize: '12px', color: '#666', marginBottom: '10px', height: '32px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'}}>
                           {product.oneLineReview}
                         </div>
-
                         <TagContainer>{product.tags?.slice(0, 3).map((t,i)=><TagChip key={i}>{t}</TagChip>)}</TagContainer>
                       </CardContent>
                     </ProductCard>
@@ -273,7 +273,6 @@ export default function Message() {
         <InputArea><ShoppingBag size={20} color="#bbb" /><ChatInput placeholder="추천된 가이드에 대해 더 물어보세요" disabled /><SendBtn disabled><Send size={18} /></SendBtn></InputArea>
       </ChatArea>
 
-      {/* ✅ [모달] 마케팅 메시지 생성 */}
       {isSimModalOpen && simProduct && (
         <ModalOverlay onClick={() => setIsSimModalOpen(false)}>
           <ModalBox onClick={e => e.stopPropagation()}>
