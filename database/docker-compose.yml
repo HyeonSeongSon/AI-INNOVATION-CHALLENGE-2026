@@ -64,6 +64,8 @@ services:
     volumes:
       # 코드 변경 시 자동 리로드를 위한 볼륨 마운트
       - .:/app
+      # data 폴더 마운트 (categories.json 등 데이터 파일)
+      - ../data:/app/data
     networks:
       - ai-innovation-network
     depends_on:

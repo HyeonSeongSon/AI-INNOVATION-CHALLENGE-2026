@@ -29,12 +29,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 # Tools import
 try:
     from ...tools.parse_crm_request import parse_crm_message_request
-    from ...tools.recommend_products_tool import recommend_products
+    from ...tools.recommend_products_persona_tool import recommend_products_persona
     from ...tools.create_product_message import create_product_message
 except ImportError:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
     from tools.parse_crm_request import parse_crm_message_request
-    from tools.recommend_products_tool import recommend_products
+    from tools.recommend_products_persona_tool import recommend_products_persona
     from tools.create_product_message import create_product_message
 
 
@@ -61,7 +61,7 @@ class CRMMessageAgent:
         # 도구 목록
         self.tools = [
             parse_crm_message_request,
-            recommend_products,
+            recommend_products_persona,
             create_product_message
         ]
 
@@ -75,24 +75,40 @@ class CRMMessageAgent:
 - 각 도구의 "언제 사용하나요?" 섹션을 확인하여 현재 상황에 맞는 도구를 선택하세요
 - 도구의 description에는 언제 사용해야 하는지, 어떤 입력이 필요한지가 명시되어 있습니다
 
+**🔥 핵심 규칙 - 도구 결과 재사용 🔥**:
+이전에 도구를 실행한 결과가 있다면, 그 결과를 **절대 수정하지 말고 정확히 그대로** 다음 도구에 전달하세요.
+
+예시:
+- `parse_crm_message_request` 실행 결과:
+  {
+    "persona_id": "PERSONA_001",
+    "purpose": "브랜드/제품 첫소개",
+    "brands": ["에스쁘아"],
+    "product_categories": ["메이크업-립스틱"],
+    "exclusive_target": null
+  }
+
+- `recommend_products_persona` 호출할 때:
+  ✅ 올바른 방법: 파서 결과를 **그대로** 사용
+    recommend_products_persona(
+      persona_id="PERSONA_001",           # 파서 결과 그대로
+      user_input="에스쁘아 립스틱 제품 소개",
+      brands=["에스쁘아"],                # 파서 결과 그대로
+      product_categories=["메이크업-립스틱"]  # 파서 결과 그대로
+    )
+
+  ❌ 잘못된 방법: 자신이 추론하거나 수정
+    recommend_products_persona(
+      persona_id="PERSONA_002",  # ❌ 파서는 001이라고 했는데 변경
+      brands=["에스쁘아", "헤라"],  # ❌ 파서에 없던 브랜드 추가
+      product_categories=["립스틱"]  # ❌ 파서는 "메이크업-립스틱"이라고 했는데 변경
+    )
+
 **중요 규칙**:
 1. 같은 도구를 여러 번 호출하지 마세요
-2. 도구 실행 결과를 확인하고, 다음에 필요한 도구가 무엇인지 판단하세요
-3. 사용자의 추가 입력이 필요한 경우 대기하세요
-
-**매우 중요 - purpose 파라미터 규칙**:
-- parse_crm_message_request 도구에서 반환된 purpose 값을 **절대로 변형하지 마세요**
-- create_product_message 도구를 호출할 때, purpose는 parse_crm_message_request의 결과를 **그대로** 사용해야 합니다
-- 잘못된 예시: "신제품 홍보 - 라이프스타일 강조" (❌)
-- 올바른 예시: "신제품 홍보" (✅)
-- 허용된 purpose 값은 정확히 7개뿐입니다:
-  1. "브랜드/제품 첫소개"
-  2. "신제품 홍보"
-  3. "베스트셀러 제품 소개"
-  4. "프로모션/이벤트 강조 소개"
-  5. "성분/효능 강조 소개"
-  6. "피부타입/고민 강조 소개"
-  7. "라이프스타일/연령대 강조 소개"
+2. 이전 도구의 실행 결과가 있으면 **반드시 그 결과를 그대로** 사용하세요
+3. 도구 실행 결과를 확인하고, 다음에 필요한 도구가 무엇인지 판단하세요
+4. 사용자의 추가 입력이 필요한 경우 대기하세요
 """
 
         # LLM에 도구 바인딩
@@ -110,7 +126,14 @@ class CRMMessageAgent:
         # Agent 노드: LLM이 도구를 선택하고 호출
         def agent_node(state: CRMState):
             """LLM이 상황에 맞는 도구를 선택"""
-            response = self.llm_with_tools.invoke(state['messages'])
+            from langchain_core.messages import SystemMessage
+
+            # 시스템 메시지 주입
+            messages = state['messages']
+            if not any(isinstance(m, SystemMessage) for m in messages):
+                messages = [SystemMessage(content=self.system_message)] + messages
+
+            response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
         # Tool 노드
@@ -124,10 +147,10 @@ class CRMMessageAgent:
             if not hasattr(last_message, 'tool_calls') or not last_message.tool_calls:
                 return END
 
-            # recommend_products 도구가 호출되었는지 확인
+            # recommend_products_persona 도구가 호출되었는지 확인
             tool_names = [tc['name'] for tc in last_message.tool_calls]
 
-            if 'recommend_products' in tool_names:
+            if 'recommend_products_persona' in tool_names:
                 # 제품 추천 후 → Interrupt 발생시킬 노드로 이동
                 return "wait_for_selection"
 
@@ -158,12 +181,12 @@ class CRMMessageAgent:
         # tools 실행 후 조건부 분기
         def after_tools(state: CRMState):
             """tools 실행 후 다음 단계 결정"""
-            # 이전 AI 메시지에서 recommend_products 호출 여부 확인
+            # 이전 AI 메시지에서 recommend_products_persona 호출 여부 확인
             messages = state['messages']
             for msg in reversed(messages):
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
                     tool_names = [tc['name'] for tc in msg.tool_calls]
-                    if 'recommend_products' in tool_names:
+                    if 'recommend_products_persona' in tool_names:
                         return "wait_for_selection"
                     break
 
@@ -220,11 +243,11 @@ class CRMMessageAgent:
 
             # Interrupt 확인 (state.next는 튜플)
             if state.next and "wait_for_selection" in state.next:
-                # 메시지 히스토리에서 recommend_products 결과 추출
+                # 메시지 히스토리에서 recommend_products_persona 결과 추출
                 messages = state.values['messages']
 
-                # recommend_products의 ToolMessage 찾기
-                products_result = self._extract_tool_result(messages, 'recommend_products')
+                # recommend_products_persona의 ToolMessage 찾기
+                products_result = self._extract_tool_result(messages, 'recommend_products_persona')
 
                 if products_result:
                     # JSON 파싱
@@ -286,7 +309,7 @@ class CRMMessageAgent:
 
             # 추천된 제품 목록에서 선택한 제품 찾기
             messages = state.values['messages']
-            products_result = self._extract_tool_result(messages, 'recommend_products')
+            products_result = self._extract_tool_result(messages, 'recommend_products_persona')
 
             try:
                 products_data = json.loads(products_result)

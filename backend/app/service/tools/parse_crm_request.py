@@ -15,6 +15,29 @@ import json
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 
+# 카테고리 목록 로드
+def load_categories():
+    """categories.json에서 카테고리 목록 로드"""
+    # 프로젝트 루트 찾기: /app 또는 로컬 개발 환경
+    current_dir = os.path.dirname(__file__)
+
+    # Docker 환경: /app/data/categories.json
+    docker_path = "/app/data/categories.json"
+    # 로컬 환경: backend/app/service/tools -> ../../../../data/categories.json
+    local_path = os.path.join(current_dir, "../../../../data/categories.json")
+
+    # Docker 환경 우선 시도
+    if os.path.exists(docker_path):
+        categories_path = docker_path
+    else:
+        categories_path = local_path
+
+    with open(categories_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data['categories']
+
+VALID_CATEGORIES = load_categories()
+
 
 # ============================================================
 # 다중 값 지원 스키마
@@ -70,7 +93,10 @@ class MultiValueParser:
     def parse(self, user_input: str) -> MultiMessageRequest:
         """자연어 → 다중 값 파싱"""
 
-        system_prompt = """
+        # 카테고리 목록을 프롬프트에 포함
+        categories_list = "\n".join([f"  - {cat}" for cat in VALID_CATEGORIES])
+
+        system_prompt = f"""
 당신은 CRM 메시지 요청을 파싱하는 전문가입니다.
 
 **중요 규칙:**
@@ -81,11 +107,10 @@ class MultiValueParser:
 
 **입력 형태:**
 - 자연어: "20대 여성에게 라네즈, 설화수 스킨케어 프로모션 메시지"
-- JSON: {"persona_id": "A20250001", "brands": ["라네즈"], "product_categories": ["스킨케어"]}
+- JSON: {{"persona_id": "A20250001", "brands": ["라네즈"], "product_categories": ["스킨&토너"]}}
 
 **파싱 규칙:**
 - "라네즈, 설화수, 이니스프리" → brands: ["라네즈", "설화수", "이니스프리"]
-- "스킨케어와 메이크업" → product_categories: ["스킨케어", "메이크업"]
 - JSON 입력 시 → 필드를 그대로 매핑
 
 **목적(purpose) 매핑 - 절대 규칙:**
@@ -144,6 +169,50 @@ class MultiValueParser:
 - "20대 여성" → persona_id: "P123"
 - "30대 남성" → persona_id: "P456"
 - "40대 여성" → persona_id: "P789"
+
+**상품 카테고리(product_categories) 매핑 - 절대 규칙:**
+**경고: product_categories는 반드시 아래 허용된 카테고리 목록 중에서만 선택해야 합니다.**
+
+**허용된 카테고리 목록 (반드시 이 중에서만 선택):**
+{categories_list}
+
+**매핑 규칙:**
+1. ❌ 위 목록에 없는 카테고리는 절대 사용 불가
+2. ✅ 사용자 입력을 분석하여 위 목록에서 가장 관련 있는 카테고리 선택
+3. ✅ 대분류로 입력된 경우 → 해당하는 구체적 카테고리들로 변환
+
+**대분류 → 구체적 카테고리 변환 예시:**
+- "메이크업", "색조화장품" → 문맥 분석:
+  - 입술 관련 → ["립스틱", "립글로스", "립틴트"]
+  - 눈 관련 → ["아이섀도우", "아이라이너", "마스카라"]
+  - 베이스 관련 → ["파운데이션", "쿠션", "컨실러"]
+  - 구체적 제품 없으면 → ["립스틱", "아이섀도우", "파운데이션"]
+
+- "스킨케어", "기초화장품" → 문맥 분석:
+  - 토너 관련 → ["스킨&토너"]
+  - 세럼 관련 → ["에센스&세럼", "앰플"]
+  - 크림 관련 → ["크림", "로션&에멀젼"]
+  - 구체적 제품 없으면 → ["스킨&토너", "에센스&세럼", "크림"]
+
+- "헤어케어", "헤어" → ["샴푸", "린스&컨디셔너", "트리트먼트&팩"]
+- "바디케어", "바디" → ["바디워시", "바디모이스처라이저", "바디스크럽"]
+- "클렌징" → ["클렌징 폼", "클렌징 오일", "클렌징 워터"]
+- "선케어", "자외선차단" → ["선블럭", "선스프레이", "선스틱"]
+
+**브랜드별 대표 상품 참고:**
+- 에스쁘아: ["립스틱", "아이섀도우", "쿠션"]
+- 라네즈: ["크림", "스킨&토너", "마스크&팩"]
+- 설화수: ["에센스&세럼", "크림", "스킨&토너"]
+- 이니스프리: ["스킨&토너", "에센스&세럼", "마스크&팩"]
+- VDIVOV: ["아이섀도우", "립스틱", "마스카라"]
+
+**매핑 예시:**
+- "에스쁘아 립스틱" → ["립스틱"]
+- "라네즈 메이크업" → ["립스틱", "아이섀도우", "파운데이션"]
+- "설화수 스킨케어" → ["스킨&토너", "에센스&세럼", "크림"]
+- "이니스프리 그린티 토너" → ["스킨&토너"]
+- "클렌징 제품" → ["클렌징 폼", "클렌징 오일"]
+- "선크림" → ["선블럭"]
 
 **특정 대상 전용 제품 매핑:**
 - "남성전용", "남성용", "남성제품" → exclusive_target: "남성"
@@ -209,89 +278,7 @@ def parse_crm_message_request(user_input: str) -> Dict[str, Any]:
     """
     parser = _get_parser()
     parsed = parser.parse(user_input)
+    print("======파싱결과======")
+    print(parsed)
+    print("====================")
     return parsed.model_dump()
-
-
-# ============================================================
-# 테스트
-# ============================================================
-
-
-if __name__ == "__main__":
-    print("=== 다중 값 파싱 테스트 ===\n")
-
-    parser = MultiValueParser()
-
-    test_cases = [
-        # 테스트 1: 여러 브랜드
-        {
-            "input": "20대 여성 페르소나로 라네즈, 마녀공장, 이니스프리 스킨케어 프로모션 메시지",
-            "description": "여러 브랜드"
-        },
-
-        # 테스트 2: 여러 카테고리
-        {
-            "input": "마녀공장 스킨케어, 메이크업, 헤어케어 프로모션 메시지. 20대 여성",
-            "description": "여러 카테고리"
-        },
-
-        # 테스트 3: 브랜드 + 카테고리 조합
-        {
-            "input": "마녀공장, 설화수 브랜드의 스킨케어, 메이크업 프로모션. 남성제품",
-            "description": "브랜드 x 카테고리 조합"
-        },
-
-        # 테스트 4: 페르소나 ID 직접 입력
-        {
-            "input": "P123 페르소나로 라네즈 스킨케어 프로모션 메시지",
-            "description": "페르소나 ID 직접 입력"
-        },
-
-        # 테스트 5: 페르소나 ID + 여러 브랜드
-        {
-            "input": "P456 타겟으로 라네즈, 설화수 메이크업 재구매유도",
-            "description": "페르소나 ID + 여러 브랜드"
-        },
-
-        # 테스트 6: JSON 형태 - 페르소나 ID만
-        {
-            "input": """{
-                "persona_id": "A20250001"
-            }""",
-            "description": "JSON 형태 - 페르소나 ID만"
-        },
-
-        # 테스트 7: JSON 형태 - 전체 필드
-        {
-            "input": """{
-                "persona_id": "A20250001",
-                "purpose": "프로모션",
-                "brands": ["라네즈", "설화수"],
-                "product_categories": ["스킨케어", "메이크업"],
-                "exclusive_target": "남성"
-            }""",
-            "description": "JSON 형태 - 전체 필드"
-        },
-
-        # 테스트 8: JSON 형태 - 일부 필드만
-        {
-            "input": """{
-                "persona_id": "P123",
-                "brands": ["마녀공장", "이니스프리"],
-                "product_categories": ["스킨케어"]
-            }""",
-            "description": "JSON 형태 - 일부 필드"
-        }
-    ]
-
-    for i, test_case in enumerate(test_cases, 1):
-        print("=" * 80)
-        print(f"\n[테스트 {i}] {test_case['description']}")
-        print(f"입력: \"{test_case['input']}\"")
-        print("-" * 80)
-
-        # 파싱
-        parsed = parser.parse(test_case['input'])
-
-        print(f"\n[파싱 결과]")
-        print(parsed)
