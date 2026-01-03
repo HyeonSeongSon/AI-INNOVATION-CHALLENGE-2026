@@ -77,7 +77,7 @@ class ProductMessageGenerator:
         try:
             # 오픈서치 API 호출 (GET 방식으로 단일 product_id 조회)
             response = requests.get(
-                f"http://host.docker.internal:8010/api/product/{product_id}",
+                f"http://fastapi-search:8010/api/product/{product_id}",
                 params={"index_name": "product_index"}
             )
             response.raise_for_status()

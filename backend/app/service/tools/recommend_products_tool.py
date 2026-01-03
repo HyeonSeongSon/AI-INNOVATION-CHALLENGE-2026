@@ -33,7 +33,7 @@ class ProductRecommender:
         """페르소나 정보 조회"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/personas/get",
+                "http://host.docker.internal:8005/api/pipeline/personas/get",
                 json={"persona_id": persona_id}
             )
             response.raise_for_status()
@@ -89,7 +89,7 @@ class ProductRecommender:
 
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/products/filter",
+                "http://host.docker.internal:8005/api/api/products/filter",
                 json=filters
             )
             response.raise_for_status()

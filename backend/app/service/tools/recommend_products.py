@@ -32,8 +32,9 @@ class ProductRecommender:
         """페르소나 정보 조회"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8005/api/pipeline/personas/get",
-                json={"persona_id": persona_id}
+                "http://127.0.0.1:8005/api/pipeline/personas/get",
+                json={"persona_id": persona_id},
+                timeout=30
             )
             response.raise_for_status()
             api_data = response.json()
@@ -75,8 +76,9 @@ class ProductRecommender:
         """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8005/api/api/analysis-results/get",
-                json={"persona_id": persona_id}
+                "http://127.0.0.1:8005/api/api/analysis-results/get",
+                json={"persona_id": persona_id},
+                timeout=30
             )
             response.raise_for_status()
             results = response.json()
@@ -102,16 +104,23 @@ class ProductRecommender:
             analysis_result_text = json.dumps(analysis_result, ensure_ascii=False)
 
             response = requests.post(
-                "http://host.docker.internal:8005/api/api/analysis-results/get",
+                "http://127.0.0.1:8005/api/api/analysis-results/get",
                 json={
                     "persona_id": persona_id,
                     "analysis_result": analysis_result_text
-                }
+                },
+                timeout=30
             )
             response.raise_for_status()
             result = response.json()
 
-            # analysis_id 반환
+            # [수정] 응답이 리스트인 경우 처리 (List vs Dict)
+            if isinstance(result, list):
+                if result:
+                    return result[0].get("analysis_id")
+                return None
+
+            # 딕셔너리인 경우
             return result.get("analysis_id")
 
         except Exception as e:
@@ -123,11 +132,12 @@ class ProductRecommender:
         try:
             for query in queries:
                 response = requests.post(
-                    "http://host.docker.internal:8005/api/api/search-queries",
+                    "http://127.0.0.1:8005/api/api/search-queries",
                     json={
                         "analysis_id": analysis_id,
                         "search_query": query
-                    }
+                    },
+                    timeout=30
                 )
                 response.raise_for_status()
 
@@ -154,8 +164,9 @@ class ProductRecommender:
 
         try:
             response = requests.post(
-                "http://host.docker.internal:8005/api/api/products/filter",
-                json=filters
+                "http://127.0.0.1:8005/api/api/products/filter",
+                json=filters,
+                timeout=30
             )
             response.raise_for_status()
             products = response.json()
@@ -553,14 +564,15 @@ class ProductRecommender:
             print(f"[INFO] 쿼리 {i}/{len(queries)} 검색 중: {query}")
             try:
                 response = requests.post(
-                    "http://host.docker.internal:8010/api/search/product-ids",
+                    "http://fastapi-search:8010/api/search/product-ids",
                     json={
                         "index_name": "product_index",
                         "pipeline_id": "hybrid-minmax-pipeline",
                         "product_ids": product_ids,
                         "query": query,
                         "top_k": top_k
-                    }
+                    },
+                    timeout=30
                 )
                 response.raise_for_status()
                 api_response = response.json()
