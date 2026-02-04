@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal, List, Dict, Any
 
 # Agent import (relative import)
-from ..service.agent.message_agent.crm_agent_tool_calling import CRMMessageAgent
+from ..agents.crm_agent.crm_agent import CRMAgent
 
 # 라우터 생성
 router = APIRouter(prefix="/api/crm", tags=["CRM"])
@@ -17,11 +17,11 @@ router = APIRouter(prefix="/api/crm", tags=["CRM"])
 _agent_instance = None
 
 
-def get_agent() -> CRMMessageAgent:
+def get_agent() -> CRMAgent:
     """Agent 인스턴스 가져오기 (싱글톤)"""
     global _agent_instance
     if _agent_instance is None:
-        _agent_instance = CRMMessageAgent()
+        _agent_instance = CRMAgent()
     return _agent_instance
 
 
@@ -78,24 +78,38 @@ async def generate_crm_message(request: CRMRequest):
     """
     1단계: CRM 메시지 생성 시작
 
-    - LLM이 툴을 선택하여 실행
-    - recommend_products 실행 후 Interrupt 발생
-    - 추천 제품 목록 반환
+    - 워크플로우를 통해 사용자 요청 파싱 및 상품 추천
+    - 추천 제품 목록 반환 (Human-in-the-loop)
+    - 사용자가 제품을 선택할 때까지 대기
 
     **흐름**:
-    1. parse_crm_message_request 툴 호출 (LLM 자동 판단)
-    2. recommend_products 툴 호출 (LLM 자동 판단)
-    3. Interrupt 발생 → 제품 목록 반환
+    1. 사용자 요청 파싱 (페르소나, 브랜드, 카테고리, 목적)
+    2. 페르소나 기반 상품 추천
+    3. 상품 리스트 반환 (waiting_for_user 상태)
     """
     try:
         agent = get_agent()
 
-        result = agent.generate(
+        result = agent.run(
             user_input=request.user_input,
             thread_id=request.thread_id
         )
 
-        return CRMResponse(**result)
+        # CRMAgent의 응답을 CRMResponse 형식으로 변환
+        status = "needs_selection" if result.get("status") == "waiting_for_user" else \
+                 "completed" if result.get("status") == "completed" else "error"
+
+        return CRMResponse(
+            status=status,
+            thread_id=result.get("thread_id"),
+            recommended_products=result.get("recommended_products"),
+            persona_info=result.get("persona_info"),
+            search_query=None,  # CRMAgent는 queries 반환, 필요시 매핑
+            count=len(result.get("recommended_products", [])) if result.get("recommended_products") else None,
+            final_message=result.get("messages"),
+            selected_product=None,
+            error=result.get("error")
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -106,25 +120,50 @@ async def select_product(request: ProductSelection):
     """
     2단계: 사용자 제품 선택 처리
 
-    - 선택한 제품 정보를 메시지로 추가
-    - Agent 재개 → create_product_message 실행
+    - 선택한 제품의 상품 ID로 워크플로우 재개
+    - create_product_message_node 실행
     - 최종 CRM 메시지 생성 완료
 
     **흐름**:
-    1. 사용자 선택을 HumanMessage로 추가
-    2. Agent 재개
-    3. create_product_message 툴 호출 (LLM 자동 판단)
+    1. 사용자가 선택한 상품 ID를 state에 저장
+    2. 워크플로우 재개
+    3. create_product_message_node에서 상품 ID로 상품 검색 후 메시지 생성
     4. 최종 메시지 반환
     """
     try:
         agent = get_agent()
 
-        result = agent.select_product(
+        result = agent.resume_with_selection(
             thread_id=request.thread_id,
             selected_product_id=request.selected_product_id
         )
 
-        return CRMResponse(**result)
+        # CRMAgent의 응답을 CRMResponse 형식으로 변환
+        status = "completed" if result.get("status") == "completed" else "error"
+
+        # 선택된 상품 정보 추출
+        selected_product = None
+        messages = result.get("messages", [])
+        if messages:
+            msg = messages[0]
+            selected_product = {
+                "product_id": msg.get("product_id"),
+                "product_name": msg.get("product_name"),
+                "brand": msg.get("brand"),
+                "sale_price": msg.get("sale_price")
+            }
+
+        return CRMResponse(
+            status=status,
+            thread_id=result.get("thread_id"),
+            recommended_products=result.get("recommended_products"),
+            persona_info=result.get("persona_info"),
+            search_query=None,
+            count=len(result.get("recommended_products", [])) if result.get("recommended_products") else None,
+            final_message=messages,
+            selected_product=selected_product,
+            error=result.get("error")
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
