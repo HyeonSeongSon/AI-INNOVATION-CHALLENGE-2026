@@ -1,4 +1,13 @@
 def build_crm_parse_prompt(categories: list[str]) -> str:
+    """
+    사용자 요청에서 페르소나id, 브랜드, 상품 카테고리, 목적을 파싱하는 프롬프트
+
+    Args:
+        categories: 상품 카테고리 리스트
+
+    Returns:
+        prompt
+    """
     categories_list = "\n".join(f"- {c}" for c in categories)
 
     return f"""당신은 CRM 메시지 요청을 파싱하는 전문가입니다.

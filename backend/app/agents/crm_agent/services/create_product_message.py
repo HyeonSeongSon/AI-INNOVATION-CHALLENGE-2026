@@ -5,12 +5,11 @@
 
 from typing import Dict, Any, Optional
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
 from dotenv import load_dotenv
+from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 import os
 import yaml
 import requests
-import json as json_module
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -42,17 +41,14 @@ class ProductMessageGenerator:
         app_dir = os.path.dirname(agents_dir)  # app/
         backend_dir = os.path.dirname(app_dir)  # backend/
         project_root = os.path.dirname(backend_dir)  # AI-INNOVATION-CHALLENGE-2026/
-
+        
         self.brand_tone_path = os.path.join(project_root, "data", "prompt", "brand_tone.yaml")
-        self.purpose_prompt_path = os.path.join(project_root, "data", "prompt", "purpose_prompt.yaml")
 
         # YAML 데이터 로드
         self.brand_tones = self._load_yaml(self.brand_tone_path)
-        self.purpose_prompts = self._load_yaml(self.purpose_prompt_path)
 
         print(f"[INFO] 메시지 생성기 초기화 완료")
         print(f"[INFO] 브랜드톤 데이터: {len(self.brand_tones.get('brand_ton_prompt', {}))}개 브랜드")
-        print(f"[INFO] 목적별 프롬프트: {len(self.purpose_prompts.get('MESSAGE_PURPOSE_PROMPT', {}))}개 목적")
 
     def _load_yaml(self, file_path: str) -> Dict[str, Any]:
         """YAML 파일 로드"""
@@ -119,34 +115,6 @@ class ProductMessageGenerator:
         # 브랜드톤이 없으면 기본 톤 반환
         print(f"[WARNING] '{brand_name}' 브랜드톤을 찾을 수 없습니다. 기본 톤 사용")
         return "친근하면서도 전문적이고 신뢰감 있는 어조"
-
-    def _get_purpose_prompt(self, purpose: str) -> str:
-        """목적별 프롬프트 가져오기"""
-        purpose_prompts = self.purpose_prompts.get('MESSAGE_PURPOSE_PROMPT', {})
-
-        # 목적 매핑 (한글 -> 영문 키)
-        purpose_mapping = {
-            "브랜드/제품 첫소개": "INTRODUCTION_PROMPT",
-            "신제품 홍보": "NEW_PRODUCTS_PROMPT",
-            "베스트셀러 제품 소개": "BESTSELLER_PROMPT",
-            "프로모션/이벤트 소개": "PROMOTION_AND_EVENT",
-            "성분/효능 강조 소개": "INGREDIENT_EFFICACY_POINT_PROMPT",
-            "피부타입/고민 강조 소개": "SKINTYPE_AND_CONCERN_POINT_PROMPT",
-            "라이프스타일/연령대 강조 소개": "LIFESTYLE_AND_AGE_POINT_PROMPT"
-        }
-
-        # 매핑된 키로 검색
-        prompt_key = purpose_mapping.get(purpose)
-        if prompt_key and prompt_key in purpose_prompts:
-            return purpose_prompts[prompt_key]
-
-        # 직접 키로 검색
-        if purpose in purpose_prompts:
-            return purpose_prompts[purpose]
-
-        # 기본값: INTRODUCTION_PROMPT 사용
-        print(f"[WARNING] '{purpose}' 목적 프롬프트를 찾을 수 없습니다. INTRODUCTION_PROMPT 사용")
-        return purpose_prompts.get("INTRODUCTION_PROMPT", "")
 
     def _format_persona_info(self, persona_info: Dict[str, Any]) -> str:
         """페르소나 정보를 텍스트로 포맷팅"""
@@ -359,40 +327,27 @@ class ProductMessageGenerator:
         brand_name = product.get('brand', '')
         brand_tone = self._get_brand_tone(brand_name)
 
-        # 3. 목적별 프롬프트 가져오기
-        purpose_prompt = self._get_purpose_prompt(purpose)
-
-        if not purpose_prompt:
-            return {
-                "success": False,
-                "error": f"목적 '{purpose}'에 해당하는 프롬프트를 찾을 수 없습니다."
-            }
-
-        # 4. 페르소나 정보 포맷팅
+        # 3. 페르소나 정보 포맷팅
         persona_text = self._format_persona_info(persona_info)
 
-        # 5. 상품 정보 포맷팅
+        # 4. 상품 정보 포맷팅
         product_text = self._format_product_info(product)
 
-        # 6. 프롬프트 변수 치환
-        formatted_prompt = purpose_prompt.format(
-            brand_name=brand_name,
-            product_name=product.get('product_name', ''),
-            product_text=product_text,
-            brand_tone=brand_tone,
-            persona_text=persona_text if persona_text else "정보 없음",
-            product_document=product_document if product_document else "추가 문서 정보 없음"
-        )
+        # 5. 프롬프트 빌드
+        PURPOSE_PROMPT_MAP = {
+            "브랜드/제품 첫소개": build_purpose_introduction_prompt,
+            "신제품 홍보": build_purpose_new_products_prompt,
+            "베스트셀러 제품 소개": build_purpose_bestseller_prompt,
+            "프로모션/이벤트 소개": build_purpose_promotion_and_evnet_prompt,
+            "성분/효능 강조 소개": build_purpose_ingredient_efficacy_point_prompt,
+            "피부타입/고민 강조 소개": build_purpose_skintype_and_concern_point_prompt,
+            "라이프스타일/연령대 강조 소개": build_purpose_lifestyle_and_age_point_prompt
+        }
+        build_func = PURPOSE_PROMPT_MAP.get(purpose)
+        prompt = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)
 
-        # 디버그 출력 (인코딩 에러 방지를 위해 주석 처리)
-        # print(f"\n[DEBUG] 생성 프롬프트")
-        # print("=" * 80)
-        # print(formatted_prompt)
-        # print("=" * 80)
-
-        # 7. LLM 호출
         try:
-            response = self.llm.invoke(formatted_prompt)
+            response = self.llm.invoke(prompt)
             message_content = response.content
 
             print(f"\n[INFO] 메시지 생성 완료")
