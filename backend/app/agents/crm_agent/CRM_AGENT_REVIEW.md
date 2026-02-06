@@ -296,8 +296,8 @@ def test_parse_introduction_request():
 ## 5. 우선순위별 개선 로드맵
 
 ### Phase 1: 즉시 개선 (1~2일)
-- [ ] 에러 핸들링: 모든 외부 API 호출에 timeout + try/except 추가
-- [ ] 하드코딩 제거: API URL, 모델명 등을 환경변수로 분리
+- [O] 에러 핸들링: 모든 외부 API 호출에 timeout + try/except 추가
+- [O] 하드코딩 제거: API URL, 모델명 등을 환경변수로 분리
 - [ ] TODO 파일 정리: 빈 파일 삭제 또는 구현
 - [ ] `print()` → `logging` 교체
 

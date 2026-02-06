@@ -146,13 +146,15 @@ services:
       - ../backend:/app  # backend 디렉토리를 /app으로 마운트
       - ../requirements.txt:/requirements.txt  # 프로젝트 루트의 requirements.txt 공유
       - ../data:/data  # data 디렉토리를 /data로 마운트 (프롬프트 YAML 파일 접근용)
-    ports:
-      - 8005:8005
     environment:
-      - HOST=0.0.0.0
-      - PORT=8005
+      HOST: 0.0.0.0
+      PORT: 8005
+      APP_ROOT: /app
+      DATA_ROOT: /data
     env_file:
       - ../backend/app/.env  # backend 환경 변수 로드
+    ports:
+      - 8005:8005
     networks:
       - opensearch-net
 

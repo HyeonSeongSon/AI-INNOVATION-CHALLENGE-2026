@@ -14,21 +14,27 @@ class ProductRecommender:
     """상품 추천 로직"""
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
+        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
+        self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
+        self.db_api_url = os.getenv("DATABASE_API_URL")
+
         if not api_key:
             raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
 
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model=chat_gpt_model_name,
             temperature=0.7,
-            api_key=api_key
+            api_key=api_key,
+            request_timeout=30
         )
 
     def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
         """페르소나 정보 조회"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/personas/get",
-                json={"persona_id": persona_id}
+                f"{self.db_api_url}/api/personas/get",
+                json={"persona_id": persona_id},
+                timeout=10
             )
             response.raise_for_status()
             api_data = response.json()
@@ -70,8 +76,9 @@ class ProductRecommender:
         """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/analysis-results/get",
-                json={"persona_id": persona_id}
+                f"{self.db_api_url}/api/analysis-results/get",
+                json={"persona_id": persona_id},
+                timeout=10
             )
             response.raise_for_status()
             results = response.json()
@@ -97,11 +104,12 @@ class ProductRecommender:
             analysis_result_text = json.dumps(analysis_result, ensure_ascii=False)
 
             response = requests.post(
-                "http://host.docker.internal:8020/api/analysis-results",
+                f"{self.db_api_url}/api/analysis-results",
                 json={
                     "persona_id": persona_id,
                     "analysis_result": analysis_result_text
-                }
+                },
+                timeout=10
             )
             response.raise_for_status()
             result = response.json()
@@ -118,11 +126,12 @@ class ProductRecommender:
         try:
             for query in queries:
                 response = requests.post(
-                    "http://host.docker.internal:8020/api/search-queries",
+                    f"{self.db_api_url}/api/search-queries",
                     json={
                         "analysis_id": analysis_id,
                         "search_query": query
-                    }
+                    },
+                    timeout=10
                 )
                 response.raise_for_status()
 
@@ -149,8 +158,9 @@ class ProductRecommender:
 
         try:
             response = requests.post(
-                "http://host.docker.internal:8020/api/products/filter",
-                json=filters
+                f"{self.db_api_url}/api/products/filter",
+                json=filters,
+                timeout=10
             )
             response.raise_for_status()
             products = response.json()
@@ -198,7 +208,14 @@ class ProductRecommender:
         prompt = self._build_analysis_prompt(user_input, persona_info)
 
         # 3. LLM 호출하여 분석 수행
-        response = self.llm.invoke(prompt)
+        try:
+            response = self.llm.invoke(prompt)
+        except Exception as e:
+            print(f"[ERROR] LLM 호출 실패 (페르소나 분석): {e}")
+            return {
+                "multi_level_analysis": {},
+                "multi_dimensional_analysis": {}
+            }
 
         # 4. 응답 파싱 (JSON 형태로 받음)
         try:
@@ -209,7 +226,6 @@ class ProductRecommender:
             return result
         except json.JSONDecodeError:
             print(f"[ERROR] LLM 응답 파싱 실패: {response.content}")
-            # 폴백: 빈 분석 결과 반환
             return {
                 "multi_level_analysis": {},
                 "multi_dimensional_analysis": {}
@@ -244,7 +260,11 @@ class ProductRecommender:
         prompt = build_multil_query_generate_prompt(user_input, analysis_result, product_categories)
 
         # LLM 호출하여 멀티 쿼리 생성
-        response = self.llm.invoke(prompt)
+        try:
+            response = self.llm.invoke(prompt)
+        except Exception as e:
+            print(f"[ERROR] LLM 호출 실패 (멀티 쿼리 생성): {e}")
+            return [user_input]
 
         # 응답 파싱
         try:
@@ -256,7 +276,6 @@ class ProductRecommender:
             return queries
         except json.JSONDecodeError:
             print(f"[ERROR] LLM 응답 파싱 실패: {response.content}")
-            # 폴백: 사용자 입력을 기본 쿼리로 사용
             return [user_input]
 
     def search_with_multi_queries(
@@ -306,14 +325,15 @@ class ProductRecommender:
             print(f"[INFO] 쿼리 {i}/{len(queries)} 검색 중: {query}")
             try:
                 response = requests.post(
-                    "http://host.docker.internal:8010/api/search/product-ids",
+                    f"{self.vector_db_api_url}/api/search/product-ids",
                     json={
                         "index_name": "product_index",
                         "pipeline_id": "hybrid-minmax-pipeline",
                         "product_ids": product_ids,
                         "query": query,
                         "top_k": top_k
-                    }
+                    },
+                    timeout=15
                 )
                 response.raise_for_status()
                 api_response = response.json()

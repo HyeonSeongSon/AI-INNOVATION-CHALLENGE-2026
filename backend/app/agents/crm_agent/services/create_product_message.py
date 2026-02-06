@@ -6,6 +6,7 @@
 from typing import Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 import os
 import yaml
@@ -23,29 +24,31 @@ class ProductMessageGenerator:
     def __init__(self):
         """메시지 생성기 초기화"""
         api_key = os.getenv("OPENAI_API_KEY")
+        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
+        self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
+        self.db_api_url = os.getenv("DATABASE_API_URL")
+
         if not api_key:
             raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
 
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model=chat_gpt_model_name,
             temperature=0.7,
-            api_key=api_key
+            api_key=api_key,
+            request_timeout=30
         )
 
-        # YAML 파일 경로 설정
-        # __file__의 위치: backend/app/agents/crm_agent/services/create_product_message.py
-        # 프로젝트 루트: AI-INNOVATION-CHALLENGE-2026/
-        current_dir = os.path.dirname(os.path.abspath(__file__))  # services/
-        crm_agent_dir = os.path.dirname(current_dir)  # crm_agent/
-        agents_dir = os.path.dirname(crm_agent_dir)  # agents/
-        app_dir = os.path.dirname(agents_dir)  # app/
-        backend_dir = os.path.dirname(app_dir)  # backend/
-        project_root = os.path.dirname(backend_dir)  # AI-INNOVATION-CHALLENGE-2026/
-        
-        self.brand_tone_path = os.path.join(project_root, "data", "prompt", "brand_tone.yaml")
-
         # YAML 데이터 로드
-        self.brand_tones = self._load_yaml(self.brand_tone_path)
+        if os.environ.get("APP_ROOT"):
+            ROOT_DIR = Path(os.environ.get("APP_ROOT"))
+            DATA_PATH = ROOT_DIR / "agents" / "crm_agent" / "prompts" / "brand_tone.yaml"
+            print(f"[INFO] os.environ 경로 사용")
+        else:        
+            ROOT_DIR = Path(__file__).resolve().parents[1]
+            DATA_PATH = ROOT_DIR / "prompts" / "brand_tone.yaml"
+            print(f'[INFO] Path(__file__) 경로 사용')
+        
+        self.brand_tones = self._load_yaml(DATA_PATH)
 
         print(f"[INFO] 메시지 생성기 초기화 완료")
         print(f"[INFO] 브랜드톤 데이터: {len(self.brand_tones.get('brand_ton_prompt', {}))}개 브랜드")
@@ -74,8 +77,9 @@ class ProductMessageGenerator:
         try:
             # 오픈서치 API 호출 (GET 방식으로 단일 product_id 조회)
             response = requests.get(
-                f"http://host.docker.internal:8010/api/product/{product_id}",
-                params={"index_name": "product_index"}
+                f"{self.vector_db_api_url}/api/product/{product_id}",
+                params={"index_name": "product_index"},
+                timeout=10
             )
             response.raise_for_status()
             api_response = response.json()

@@ -63,6 +63,7 @@ class MultiMessageRequest(BaseModel):
 class MultiValueParser:
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
+        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
 
         if not api_key:
             raise ValueError(
@@ -70,19 +71,23 @@ class MultiValueParser:
                 "backend/app/.env 파일에 OPENAI_API_KEY를 설정해주세요."
             )
 
-        self.llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+        self.llm = ChatOpenAI(model=chat_gpt_model_name, temperature=0, request_timeout=30)
         self.parser = self.llm.with_structured_output(MultiMessageRequest)
         print(f"[INFO] OpenAI API 연결 완료")
 
-    def parse(self, user_input: str) -> MultiMessageRequest:
+    def parse(self, user_input: str) -> str:
         """자연어 → 다중 값 파싱"""
 
         messages = [
             SystemMessage(content=build_crm_parse_prompt(load_categories())),
             HumanMessage(content=user_input)
         ]
-        response = self.parser.invoke(messages)
-        return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
+        try:
+            response = self.parser.invoke(messages)
+            return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[ERROR] LLM 호출 실패 (CRM 파싱): {e}")
+            return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
 
 if __name__ == "__main__":
     parser = MultiValueParser()
