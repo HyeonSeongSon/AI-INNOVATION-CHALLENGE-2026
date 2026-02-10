@@ -47,6 +47,9 @@ opensearch-py==3.1.0
 # YAML Processing
 PyYAML==6.0.2
 
+# Logging
+structlog==24.4.0
+
 # Utils
 python-dateutil==2.9.0.post0
 typing_extensions==4.14.1

@@ -8,6 +8,10 @@ from typing import Dict, Any, Optional
 import uuid
 from .state import CRMState
 from .workflow import build_crm_workflow
+from ...core.logging import get_logger
+from ...core.context import set_thread_id
+
+_logger = get_logger("crm_agent")
 
 
 class CRMAgent:
@@ -24,7 +28,7 @@ class CRMAgent:
     def __init__(self):
         """CRM Agent 초기화 (checkpointer 포함)"""
         self.workflow = build_crm_workflow()  # checkpointer 자동 설정됨
-        print("[INFO] CRM Agent 초기화 완료 (Human-in-the-loop 지원)")
+        _logger.info("agent_initialized", features=["human_in_the_loop"])
 
     def run(
         self,
@@ -55,6 +59,9 @@ class CRMAgent:
         # 스레드 ID 생성 (없으면)
         if thread_id is None:
             thread_id = str(uuid.uuid4())
+
+        # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
+        set_thread_id(thread_id)
 
         # 초기 상태 생성
         initial_state: CRMState = {
@@ -142,6 +149,9 @@ class CRMAgent:
             Dict[str, Any]: 실행 결과 (메시지 생성 완료)
         """
         try:
+            # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
+            set_thread_id(thread_id)
+
             # 현재 상태 가져오기
             config = {"configurable": {"thread_id": thread_id}}
             current_state = self.workflow.get_state(config)

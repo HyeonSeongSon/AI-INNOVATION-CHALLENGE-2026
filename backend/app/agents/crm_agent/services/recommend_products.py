@@ -2,12 +2,16 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from ..prompts.crm_recommend_products import build_persona_info_analysis_prompt, build_multil_query_generate_prompt
+from ....core.logging import get_logger
+from ....core.langsmith_config import traced
 import os
 import json
 import requests
 
 # .env 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
+
+logger = get_logger("recommend_products")
 
 
 class ProductRecommender:
@@ -28,6 +32,9 @@ class ProductRecommender:
             request_timeout=30
         )
 
+        logger.info("recommender_initialized", model=chat_gpt_model_name)
+
+    @traced(name="get_persona_info", run_type="tool")
     def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
         """페르소나 정보 조회"""
         try:
@@ -65,13 +72,14 @@ class ProductRecommender:
                 "구매 결정 요인": api_data.get("purchase_decision_factors", [])
             }
 
-            print(f"[INFO] 페르소나 정보 조회 성공: {persona_info.get('이름')}")
+            logger.info("persona_fetched", persona_id=persona_id, persona_name=persona_info.get("이름"))
             return persona_info
 
         except Exception as e:
-            print(f"[ERROR] 페르소나 정보 조회 실패: {e}")
+            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
             raise
 
+    @traced(name="get_existing_analysis", run_type="tool")
     def get_existing_analysis(self, persona_id: str) -> Optional[Dict[str, Any]]:
         """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
         try:
@@ -91,12 +99,13 @@ class ProductRecommender:
         except requests.exceptions.HTTPException as e:
             if e.response.status_code == 404:
                 return None
-            print(f"[ERROR] 분석 결과 조회 실패: {e}")
+            logger.error("analysis_fetch_failed", persona_id=persona_id, error=str(e))
             raise
         except Exception as e:
-            print(f"[ERROR] 분석 결과 조회 실패: {e}")
+            logger.error("analysis_fetch_failed", persona_id=persona_id, error=str(e))
             return None
 
+    @traced(name="save_analysis_result", run_type="tool")
     def save_analysis_result(self, persona_id: str, analysis_result: Dict[str, Any]) -> int:
         """분석 결과를 DB에 저장"""
         try:
@@ -118,9 +127,10 @@ class ProductRecommender:
             return result.get("analysis_id")
 
         except Exception as e:
-            print(f"[ERROR] 분석 결과 저장 실패: {e}")
+            logger.error("analysis_save_failed", persona_id=persona_id, error=str(e), exc_info=True)
             raise
 
+    @traced(name="save_search_queries", run_type="tool")
     def save_search_queries(self, analysis_id: int, queries: List[str]) -> None:
         """검색 쿼리를 DB에 저장"""
         try:
@@ -135,12 +145,13 @@ class ProductRecommender:
                 )
                 response.raise_for_status()
 
-            print(f"[INFO] {len(queries)}개 쿼리 저장 완료")
+            logger.info("queries_saved", analysis_id=analysis_id, query_count=len(queries))
 
         except Exception as e:
-            print(f"[ERROR] 쿼리 저장 실패: {e}")
+            logger.error("queries_save_failed", analysis_id=analysis_id, error=str(e), exc_info=True)
             raise
 
+    @traced(name="get_filtered_products", run_type="tool")
     def get_filtered_products(
         self,
         brands: Optional[List[str]] = None,
@@ -164,13 +175,14 @@ class ProductRecommender:
             )
             response.raise_for_status()
             products = response.json()
-            print(f"[INFO] 필터링된 상품 수: {len(products)}개")
+            logger.info("products_filtered", product_count=len(products), filters=filters)
             return products
 
         except Exception as e:
-            print(f"[ERROR] 상품 필터링 실패: {e}")
+            logger.error("products_filter_failed", error=str(e), exc_info=True)
             raise
-        
+
+    @traced(name="recommend_persona", run_type="chain")
     def recommend_persona(self, user_input: str, persona_id: str) -> Dict[str, Any]:
         """
         페르소나 기반 다단계 × 다차원 분석
@@ -181,25 +193,6 @@ class ProductRecommender:
 
         Returns:
             Dict[str, Any]: 다단계 × 다차원 분석 결과
-            {
-                "multi_level_analysis": {
-                    "basic_profile": {...},
-                    "lifestyle_pattern": {...},
-                    "beauty_needs": {...},
-                    "situational_needs": {...},
-                    "improvement_goals": {...}
-                },
-                "multi_dimensional_analysis": {
-                    "skin_science": {...},
-                    "ingredients": {...},
-                    "lifestyle": {...},
-                    "values_emotion": {...},
-                    "color_makeup": {...},
-                    "price_value": {...},
-                    "usability": {...},
-                    "safety_risk": {...}
-                }
-            }
         """
         # 1. 페르소나 정보 가져오기
         persona_info = self.get_persona_info(persona_id)
@@ -211,7 +204,7 @@ class ProductRecommender:
         try:
             response = self.llm.invoke(prompt)
         except Exception as e:
-            print(f"[ERROR] LLM 호출 실패 (페르소나 분석): {e}")
+            logger.error("llm_persona_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return {
                 "multi_level_analysis": {},
                 "multi_dimensional_analysis": {}
@@ -220,12 +213,15 @@ class ProductRecommender:
         # 4. 응답 파싱 (JSON 형태로 받음)
         try:
             result = json.loads(response.content)
-            print(f"[INFO] 페르소나 분석 완료")
-            print(f"  - 다단계 분석: {len(result.get('multi_level_analysis', {}))}개 레벨")
-            print(f"  - 다차원 분석: {len(result.get('multi_dimensional_analysis', {}))}개 차원")
+            logger.info(
+                "persona_analysis_completed",
+                persona_id=persona_id,
+                multi_level_count=len(result.get("multi_level_analysis", {})),
+                multi_dimensional_count=len(result.get("multi_dimensional_analysis", {})),
+            )
             return result
         except json.JSONDecodeError:
-            print(f"[ERROR] LLM 응답 파싱 실패: {response.content}")
+            logger.error("llm_response_parse_failed", persona_id=persona_id, response_preview=str(response.content)[:200])
             return {
                 "multi_level_analysis": {},
                 "multi_dimensional_analysis": {}
@@ -239,6 +235,7 @@ class ProductRecommender:
         prompt = build_persona_info_analysis_prompt(user_input, persona_info)
         return prompt
 
+    @traced(name="generate_multi_queries", run_type="chain")
     def generate_multi_queries(
         self,
         user_input: str,
@@ -251,7 +248,7 @@ class ProductRecommender:
         Args:
             user_input: 사용자 입력 텍스트
             analysis_result: recommend_persona 함수의 분석 결과
-            product_categories: 제품 카테고리 리스트 (선택, 예: ["스킨케어-크림", "메이크업-립스틱"])
+            product_categories: 제품 카테고리 리스트 (선택)
 
         Returns:
             List[str]: 3~5개의 다각도 검색 쿼리
@@ -263,21 +260,20 @@ class ProductRecommender:
         try:
             response = self.llm.invoke(prompt)
         except Exception as e:
-            print(f"[ERROR] LLM 호출 실패 (멀티 쿼리 생성): {e}")
+            logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
             return [user_input]
 
         # 응답 파싱
         try:
             result = json.loads(response.content)
             queries = result.get("queries", [])
-            print(f"[INFO] 생성된 쿼리 수: {len(queries)}개")
-            for i, q in enumerate(queries, 1):
-                print(f"  {i}. {q}")
+            logger.info("multi_queries_generated", query_count=len(queries), queries=queries)
             return queries
         except json.JSONDecodeError:
-            print(f"[ERROR] LLM 응답 파싱 실패: {response.content}")
+            logger.error("llm_response_parse_failed", response_preview=str(response.content)[:200])
             return [user_input]
 
+    @traced(name="search_opensearch", run_type="retriever")
     def search_with_multi_queries(
         self,
         queries: List[str],
@@ -288,23 +284,6 @@ class ProductRecommender:
     ) -> List[Dict[str, Any]]:
         """
         멀티 쿼리로 벡터 검색 수행 및 결과 병합
-
-        Args:
-            queries: 검색 쿼리 리스트 (3~5개)
-            brands: 브랜드 필터 (선택)
-            product_categories: 상품 카테고리 필터 (선택)
-            exclusive_target: 타겟 필터 (선택)
-            top_k: 각 쿼리당 가져올 상품 수
-
-        Returns:
-            List[Dict[str, Any]]: 중복 제거된 검색 결과 (스코어 높은 순)
-            [
-                {
-                    "product_id": "PROD001",
-                    "score": 0.95,
-                    ...
-                }
-            ]
         """
         # 1. 필터링된 상품 조회
         filtered_products = self.get_filtered_products(
@@ -315,14 +294,14 @@ class ProductRecommender:
         product_ids = [p["product_id"] for p in filtered_products]
 
         if not product_ids:
-            print("[WARNING] 필터링 결과 상품이 없습니다.")
+            logger.warning("no_filtered_products")
             return []
 
         all_results = []
 
         # 2. 각 쿼리로 검색 수행
         for i, query in enumerate(queries, 1):
-            print(f"[INFO] 쿼리 {i}/{len(queries)} 검색 중: {query}")
+            logger.info("query_searching", query_index=i, total_queries=len(queries), query=query)
             try:
                 response = requests.post(
                     f"{self.vector_db_api_url}/api/search/product-ids",
@@ -346,10 +325,10 @@ class ProductRecommender:
 
                 # 결과를 전체 리스트에 추가
                 all_results.extend(results)
-                print(f"  → {len(results)}개 상품 검색됨")
+                logger.info("query_results", query_index=i, result_count=len(results))
 
             except Exception as e:
-                print(f"[ERROR] 쿼리 {i} 검색 실패: {e}")
+                logger.error("query_search_failed", query_index=i, query=query, error=str(e))
                 continue
 
         # 중복 제거: product_id별로 최고 스코어만 유지
@@ -372,9 +351,11 @@ class ProductRecommender:
             reverse=True
         )
 
-        print(f"[INFO] 멀티 쿼리 검색 완료")
-        print(f"  - 전체 검색 결과: {len(all_results)}개")
-        print(f"  - 중복 제거 후: {len(merged_results)}개")
+        logger.info(
+            "multi_query_search_completed",
+            total_raw=len(all_results),
+            deduplicated=len(merged_results),
+        )
 
         return merged_results
 
@@ -394,5 +375,5 @@ class ProductRecommender:
                 product_data["vector_search_score"] = result.get("score")
                 merged.append(product_data)
 
-        print(f"[INFO] 상품 데이터 병합 완료: {len(merged)}개")
+        logger.info("products_merged", merged_count=len(merged))
         return merged

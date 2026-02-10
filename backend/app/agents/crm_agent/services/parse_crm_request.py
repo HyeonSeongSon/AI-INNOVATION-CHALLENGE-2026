@@ -4,9 +4,12 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from ..prompts.crm_parse_prompt import build_crm_parse_prompt
+from ....core.logging import get_logger
 from dotenv import load_dotenv
 import os
 import json
+
+logger = get_logger("parse_crm_request")
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -73,7 +76,7 @@ class MultiValueParser:
 
         self.llm = ChatOpenAI(model=chat_gpt_model_name, temperature=0, request_timeout=30)
         self.parser = self.llm.with_structured_output(MultiMessageRequest)
-        print(f"[INFO] OpenAI API 연결 완료")
+        logger.info("parser_initialized", model=chat_gpt_model_name)
 
     def parse(self, user_input: str) -> str:
         """자연어 → 다중 값 파싱"""
@@ -86,7 +89,7 @@ class MultiValueParser:
             response = self.parser.invoke(messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[ERROR] LLM 호출 실패 (CRM 파싱): {e}")
+            logger.error("llm_parse_failed", error=str(e), exc_info=True)
             return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
 
 if __name__ == "__main__":

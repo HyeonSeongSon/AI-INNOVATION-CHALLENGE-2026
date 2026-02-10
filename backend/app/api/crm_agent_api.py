@@ -10,6 +10,12 @@ from typing import Optional, Literal, List, Dict, Any
 # Agent import (relative import)
 from ..agents.crm_agent.crm_agent import CRMAgent
 
+# Logging
+from ..core.logging import get_logger
+from ..core.context import set_agent_name
+
+logger = get_logger("crm_api")
+
 # 라우터 생성
 router = APIRouter(prefix="/api/crm", tags=["CRM"])
 
@@ -81,14 +87,16 @@ async def generate_crm_message(request: CRMRequest):
     - 워크플로우를 통해 사용자 요청 파싱 및 상품 추천
     - 추천 제품 목록 반환 (Human-in-the-loop)
     - 사용자가 제품을 선택할 때까지 대기
-
-    **흐름**:
-    1. 사용자 요청 파싱 (페르소나, 브랜드, 카테고리, 목적)
-    2. 페르소나 기반 상품 추천
-    3. 상품 리스트 반환 (waiting_for_user 상태)
     """
     try:
         agent = get_agent()
+        set_agent_name("crm_agent")
+
+        logger.info(
+            "generate_started",
+            thread_id=request.thread_id,
+            input_length=len(request.user_input),
+        )
 
         result = agent.run(
             user_input=request.user_input,
@@ -99,12 +107,19 @@ async def generate_crm_message(request: CRMRequest):
         status = "needs_selection" if result.get("status") == "waiting_for_user" else \
                  "completed" if result.get("status") == "completed" else "error"
 
+        logger.info(
+            "generate_completed",
+            status=status,
+            thread_id=result.get("thread_id"),
+            product_count=len(result.get("recommended_products", [])),
+        )
+
         return CRMResponse(
             status=status,
             thread_id=result.get("thread_id"),
             recommended_products=result.get("recommended_products"),
             persona_info=result.get("persona_info"),
-            search_query=None,  # CRMAgent는 queries 반환, 필요시 매핑
+            search_query=None,
             count=len(result.get("recommended_products", [])) if result.get("recommended_products") else None,
             final_message=result.get("messages"),
             selected_product=None,
@@ -112,6 +127,7 @@ async def generate_crm_message(request: CRMRequest):
         )
 
     except Exception as e:
+        logger.error("generate_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -123,15 +139,16 @@ async def select_product(request: ProductSelection):
     - 선택한 제품의 상품 ID로 워크플로우 재개
     - create_product_message_node 실행
     - 최종 CRM 메시지 생성 완료
-
-    **흐름**:
-    1. 사용자가 선택한 상품 ID를 state에 저장
-    2. 워크플로우 재개
-    3. create_product_message_node에서 상품 ID로 상품 검색 후 메시지 생성
-    4. 최종 메시지 반환
     """
     try:
         agent = get_agent()
+        set_agent_name("crm_agent")
+
+        logger.info(
+            "select_product_started",
+            thread_id=request.thread_id,
+            selected_product_id=request.selected_product_id,
+        )
 
         result = agent.resume_with_selection(
             thread_id=request.thread_id,
@@ -153,6 +170,13 @@ async def select_product(request: ProductSelection):
                 "sale_price": msg.get("sale_price")
             }
 
+        logger.info(
+            "select_product_completed",
+            status=status,
+            thread_id=request.thread_id,
+            message_count=len(messages),
+        )
+
         return CRMResponse(
             status=status,
             thread_id=result.get("thread_id"),
@@ -166,6 +190,12 @@ async def select_product(request: ProductSelection):
         )
 
     except Exception as e:
+        logger.error(
+            "select_product_failed",
+            thread_id=request.thread_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 

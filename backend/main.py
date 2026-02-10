@@ -3,9 +3,29 @@ FastAPI 메인 애플리케이션
 CRM Agent API 서버
 """
 
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import crm_agent_api
+from app.core.logging import configure_logging, get_logger
+from app.core.middleware import RequestLoggingMiddleware
+from app.core.langsmith_config import configure_langsmith
+
+# Load .env before anything else
+load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"))
+
+# Configure structured logging (must be first)
+configure_logging(
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    json_output=True,
+    environment=os.getenv("ENVIRONMENT", "production"),
+)
+
+logger = get_logger("main")
+
+# Configure LangSmith tracing
+configure_langsmith()
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -14,7 +34,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS 설정 (프론트엔드와 통신 허용)
+# Middleware (order matters: outermost first)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 프로덕션에서는 specific origins 사용
@@ -47,6 +68,15 @@ def health_check():
             "agent": "ok"
         }
     }
+
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info(
+        "application_started",
+        port=8005,
+        environment=os.getenv("ENVIRONMENT", "production"),
+    )
 
 
 if __name__ == "__main__":

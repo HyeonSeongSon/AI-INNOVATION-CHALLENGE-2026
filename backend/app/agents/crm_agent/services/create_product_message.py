@@ -8,12 +8,16 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
+from ....core.logging import get_logger
+from ....core.langsmith_config import traced
 import os
 import yaml
 import requests
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
+
+logger = get_logger("create_product_message")
 
 
 # ============================================================
@@ -42,16 +46,19 @@ class ProductMessageGenerator:
         if os.environ.get("APP_ROOT"):
             ROOT_DIR = Path(os.environ.get("APP_ROOT"))
             DATA_PATH = ROOT_DIR / "agents" / "crm_agent" / "prompts" / "brand_tone.yaml"
-            print(f"[INFO] os.environ 경로 사용")
-        else:        
+            logger.info("yaml_path_resolved", source="APP_ROOT")
+        else:
             ROOT_DIR = Path(__file__).resolve().parents[1]
             DATA_PATH = ROOT_DIR / "prompts" / "brand_tone.yaml"
-            print(f'[INFO] Path(__file__) 경로 사용')
-        
+            logger.info("yaml_path_resolved", source="__file__")
+
         self.brand_tones = self._load_yaml(DATA_PATH)
 
-        print(f"[INFO] 메시지 생성기 초기화 완료")
-        print(f"[INFO] 브랜드톤 데이터: {len(self.brand_tones.get('brand_ton_prompt', {}))}개 브랜드")
+        logger.info(
+            "message_generator_initialized",
+            model=chat_gpt_model_name,
+            brand_count=len(self.brand_tones.get("brand_ton_prompt", {})),
+        )
 
     def _load_yaml(self, file_path: str) -> Dict[str, Any]:
         """YAML 파일 로드"""
@@ -60,10 +67,10 @@ class ProductMessageGenerator:
                 data = yaml.safe_load(f)
                 return data
         except Exception as e:
-            print(f"[ERROR] YAML 파일 로드 실패: {file_path}")
-            print(f"[ERROR] {e}")
+            logger.error("yaml_load_failed", file_path=str(file_path), error=str(e), exc_info=True)
             return {}
 
+    @traced(name="get_product_document", run_type="retriever")
     def _get_product_document(self, product_id: str) -> Optional[str]:
         """
         오픈서치에서 product_id로 상품 문서 내용만 조회
@@ -90,17 +97,17 @@ class ProductMessageGenerator:
                 # '문서' 필드만 반환
                 document_text = document.get("문서", "")
                 if document_text:
-                    print(f"[INFO] 상품 문서 조회 성공: {product_id}")
+                    logger.info("product_document_fetched", product_id=product_id)
                     return document_text
                 else:
-                    print(f"[WARNING] 상품 문서에 '문서' 필드가 없음: {product_id}")
+                    logger.warning("product_document_empty", product_id=product_id)
                     return None
             else:
-                print(f"[WARNING] 상품 문서를 찾을 수 없음: {product_id}")
+                logger.warning("product_document_not_found", product_id=product_id)
                 return None
 
         except Exception as e:
-            print(f"[ERROR] 상품 문서 조회 실패: {e}")
+            logger.error("product_document_fetch_failed", product_id=product_id, error=str(e))
             return None
 
     def _get_brand_tone(self, brand_name: str) -> str:
@@ -117,7 +124,7 @@ class ProductMessageGenerator:
                 return value
 
         # 브랜드톤이 없으면 기본 톤 반환
-        print(f"[WARNING] '{brand_name}' 브랜드톤을 찾을 수 없습니다. 기본 톤 사용")
+        logger.warning("brand_tone_not_found", brand_name=brand_name)
         return "친근하면서도 전문적이고 신뢰감 있는 어조"
 
     def _format_persona_info(self, persona_info: Dict[str, Any]) -> str:
@@ -296,6 +303,7 @@ class ProductMessageGenerator:
 
         return "\n".join(sections)
 
+    @traced(name="generate_message", run_type="chain")
     def generate_message(
         self,
         product: Dict[str, Any],
@@ -313,22 +321,26 @@ class ProductMessageGenerator:
         Returns:
             생성된 메시지 딕셔너리
         """
-        print(f"\n[INFO] 메시지 생성 시작")
-        print(f"[INFO] 목적: {purpose}")
-        print(f"[INFO] 상품: {product.get('product_name', 'N/A')}")
-        print(f"[INFO] 브랜드: {product.get('brand', 'N/A')}")
+        product_name = product.get('product_name', 'N/A')
+        brand_name = product.get('brand', '')
+
+        logger.info(
+            "message_generation_started",
+            purpose=purpose,
+            product_name=product_name,
+            brand=brand_name,
+        )
 
         # 1. product_id로 상품 문서 가져오기
         product_id = product.get('product_id')
         product_document = None
         if product_id:
-            print(f"[INFO] product_id로 상품 문서 조회 중: {product_id}")
+            logger.info("fetching_product_document", product_id=product_id)
             product_document = self._get_product_document(product_id)
         else:
-            print(f"[WARNING] product_id가 없어 상품 문서를 가져올 수 없습니다.")
+            logger.warning("no_product_id")
 
         # 2. 브랜드톤 가져오기
-        brand_name = product.get('brand', '')
         brand_tone = self._get_brand_tone(brand_name)
 
         # 3. 페르소나 정보 포맷팅
@@ -354,7 +366,7 @@ class ProductMessageGenerator:
             response = self.llm.invoke(prompt)
             message_content = response.content
 
-            print(f"\n[INFO] 메시지 생성 완료")
+            logger.info("message_generation_completed", product_name=product_name, purpose=purpose)
 
             # 8. 결과 파싱 (제목/메시지 분리)
             result = self._parse_message(message_content)
@@ -367,7 +379,7 @@ class ProductMessageGenerator:
             return result
 
         except Exception as e:
-            print(f"[ERROR] LLM 호출 실패: {e}")
+            logger.error("llm_message_generation_failed", error=str(e), exc_info=True)
             return {
                 "success": False,
                 "error": f"메시지 생성 중 오류 발생: {str(e)}"

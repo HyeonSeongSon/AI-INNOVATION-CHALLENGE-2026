@@ -8,6 +8,7 @@ import json
 from typing import Dict, Any
 from ..state import CRMState
 from ..services.recommend_products import ProductRecommender
+from ....core.logging import AgentLogger
 
 
 # Recommender 싱글톤 인스턴스 (재사용)
@@ -44,13 +45,13 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
         - current_node: 다음 노드로 업데이트
     """
 
-    # 현재 step과 로그 초기화
-    current_step = state.get("step", 0)
-    logs = state.get("logs", [])
+    logger = AgentLogger(state, node_name="recommend_products_node")
     intermediate = state.get("intermediate", {})
 
-    # 로그 추가
-    logs.append(f"[Step {current_step}] recommend_products_node 시작")
+    logger.info(
+        "node_started",
+        user_message="recommend_products_node 시작",
+    )
 
     try:
         # 1. 파싱된 요청 가져오기 (Context 구조)
@@ -68,9 +69,13 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
         if not persona_id:
             raise ValueError("persona_id가 비어있습니다.")
 
-        logs.append(f"[Step {current_step}] 페르소나 ID: {persona_id}")
-        logs.append(f"[Step {current_step}] 브랜드: {brands}")
-        logs.append(f"[Step {current_step}] 카테고리: {product_categories}")
+        logger.info(
+            "request_parsed",
+            user_message=f"페르소나 ID: {persona_id}",
+            persona_id=persona_id,
+            brands=brands,
+            categories=product_categories,
+        )
 
         # 2. Recommender 가져오기
         recommender = get_recommender()
@@ -79,12 +84,20 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
         user_input = state.get("input", "")
 
         # 4. 페르소나 정보 조회
-        logs.append(f"[Step {current_step}] 페르소나 정보 조회 중...")
-        persona_info = recommender.get_persona_info(persona_id)
-        logs.append(f"[Step {current_step}] 페르소나 정보 조회 완료: {persona_info.get('이름')}")
+        with logger.track_duration("get_persona_info", user_message="페르소나 정보 조회 중..."):
+            persona_info = recommender.get_persona_info(persona_id)
+
+        logger.info(
+            "persona_info_fetched",
+            user_message=f"페르소나 정보 조회 완료: {persona_info.get('이름')}",
+            persona_name=persona_info.get("이름"),
+        )
 
         # 5. 기존 분석 결과 확인
-        logs.append(f"[Step {current_step}] 기존 분석 결과 확인 중...")
+        logger.info(
+            "checking_existing_analysis",
+            user_message="기존 분석 결과 확인 중...",
+        )
         existing_analysis = recommender.get_existing_analysis(persona_id)
 
         analysis_result = None
@@ -92,83 +105,109 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
 
         if existing_analysis:
             analysis_id = existing_analysis['analysis_id']
-            logs.append(f"[Step {current_step}] 기존 분석 발견 (ID: {analysis_id})")
+            logger.info(
+                "existing_analysis_found",
+                user_message=f"기존 분석 발견 (ID: {analysis_id})",
+                analysis_id=analysis_id,
+            )
             try:
                 analysis_result = json.loads(existing_analysis['analysis_result'])
             except json.JSONDecodeError:
-                logs.append(f"[Step {current_step}] 기존 분석 파싱 실패, 새로 생성")
+                logger.warning(
+                    "analysis_parse_failed",
+                    user_message="기존 분석 파싱 실패, 새로 생성",
+                )
                 analysis_result = None
         else:
-            logs.append(f"[Step {current_step}] 기존 분석 없음, 새로 생성")
+            logger.info(
+                "no_existing_analysis",
+                user_message="기존 분석 없음, 새로 생성",
+            )
 
         # 6. 분석 결과가 없으면 새로 생성
         if not analysis_result:
-            logs.append(f"[Step {current_step}] 페르소나 분석 수행 중...")
-            analysis_result = recommender.recommend_persona(
-                user_input=user_input,
-                persona_id=persona_id
-            )
-            logs.append(f"[Step {current_step}] 페르소나 분석 완료")
+            with logger.track_duration("persona_analysis", user_message="페르소나 분석 수행 중..."):
+                analysis_result = recommender.recommend_persona(
+                    user_input=user_input,
+                    persona_id=persona_id
+                )
 
             # DB에 저장
-            logs.append(f"[Step {current_step}] 분석 결과 DB 저장 중...")
-            analysis_id = recommender.save_analysis_result(
-                persona_id=persona_id,
-                analysis_result=analysis_result
+            with logger.track_duration("save_analysis", user_message="분석 결과 DB 저장 중..."):
+                analysis_id = recommender.save_analysis_result(
+                    persona_id=persona_id,
+                    analysis_result=analysis_result
+                )
+
+            logger.info(
+                "analysis_saved",
+                user_message=f"분석 저장 완료 (ID: {analysis_id})",
+                analysis_id=analysis_id,
             )
-            logs.append(f"[Step {current_step}] 분석 저장 완료 (ID: {analysis_id})")
 
         # 7. 멀티 쿼리 생성
-        logs.append(f"[Step {current_step}] 멀티 쿼리 생성 중...")
-        queries = recommender.generate_multi_queries(
-            user_input=user_input,
-            analysis_result=analysis_result,
-            product_categories=product_categories
+        with logger.track_duration("multi_query_generation", user_message="멀티 쿼리 생성 중..."):
+            queries = recommender.generate_multi_queries(
+                user_input=user_input,
+                analysis_result=analysis_result,
+                product_categories=product_categories
+            )
+
+        logger.info(
+            "queries_generated",
+            user_message=f"쿼리 생성 완료: {len(queries)}개",
+            query_count=len(queries),
         )
-        logs.append(f"[Step {current_step}] 쿼리 생성 완료: {len(queries)}개")
 
         # 8. 쿼리 DB 저장
-        logs.append(f"[Step {current_step}] 쿼리 DB 저장 중...")
-        recommender.save_search_queries(
-            analysis_id=analysis_id,
-            queries=queries
-        )
-        logs.append(f"[Step {current_step}] 쿼리 저장 완료")
+        with logger.track_duration("save_queries", user_message="쿼리 DB 저장 중..."):
+            recommender.save_search_queries(
+                analysis_id=analysis_id,
+                queries=queries
+            )
 
         # 9. 멀티 쿼리로 벡터 검색
-        logs.append(f"[Step {current_step}] 멀티 쿼리 검색 수행 중...")
-        search_results = recommender.search_with_multi_queries(
-            queries=queries,
-            brands=brands if brands else None,
-            product_categories=product_categories if product_categories else None,
-            exclusive_target=exclusive_target,
-            top_k=5
-        )
+        with logger.track_duration("vector_search", user_message="멀티 쿼리 검색 수행 중..."):
+            search_results = recommender.search_with_multi_queries(
+                queries=queries,
+                brands=brands if brands else None,
+                product_categories=product_categories if product_categories else None,
+                exclusive_target=exclusive_target,
+                top_k=5
+            )
 
         # Context 구조로 저장
         if "recommendation" not in intermediate:
             intermediate["recommendation"] = {}
 
         if not search_results:
-            logs.append(f"[Step {current_step}] 검색 결과 없음")
+            logger.info(
+                "no_search_results",
+                user_message="검색 결과 없음",
+            )
             intermediate["recommendation"]["recommended_products"] = []
         else:
             # 10. 상품 데이터 병합
-            logs.append(f"[Step {current_step}] 상품 데이터 병합 중...")
-            all_products = recommender.get_filtered_products(
-                brands=brands if brands else None,
-                product_categories=product_categories if product_categories else None,
-                exclusive_target=exclusive_target
-            )
+            with logger.track_duration("merge_products", user_message="상품 데이터 병합 중..."):
+                all_products = recommender.get_filtered_products(
+                    brands=brands if brands else None,
+                    product_categories=product_categories if product_categories else None,
+                    exclusive_target=exclusive_target
+                )
 
-            merged_products = recommender.merge_product_data(
-                search_results=search_results,
-                all_products=all_products
-            )
+                merged_products = recommender.merge_product_data(
+                    search_results=search_results,
+                    all_products=all_products
+                )
 
             # 상위 3개만 선택
             top_3_products = merged_products[:3]
-            logs.append(f"[Step {current_step}] 상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개)")
+            logger.info(
+                "products_recommended",
+                user_message=f"상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개)",
+                top_count=len(top_3_products),
+                total_count=len(merged_products),
+            )
 
             # Context 구조로 결과 저장
             intermediate["recommendation"]["recommended_products"] = top_3_products
@@ -181,21 +220,27 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
 
         # 상태 업데이트
         return {
-            "step": current_step + 1,
+            "step": state.get("step", 0) + 1,
             "last_node": "recommend_products_node",
             "current_node": "create_message_node",  # 다음 노드
             "intermediate": intermediate,
-            "logs": logs,
+            "logs": logger.get_user_logs(),
             "status": "running"
         }
 
     except Exception as e:
         # 에러 처리
         error_msg = f"상품 추천 중 오류 발생: {str(e)}"
-        logs.append(f"[Step {current_step}] ERROR: {error_msg}")
+        logger.error(
+            "node_failed",
+            user_message=f"ERROR: {error_msg}",
+            error_type=type(e).__name__,
+            error_message=str(e),
+            exc_info=True,
+        )
 
         return {
-            "step": current_step + 1,
+            "step": state.get("step", 0) + 1,
             "last_node": "recommend_products_node",
             "current_node": "error_handler",  # 에러 핸들러로 이동
             "error": error_msg,
@@ -204,7 +249,7 @@ def recommend_products_node(state: CRMState) -> Dict[str, Any]:
                 "exception_type": type(e).__name__,
                 "exception_message": str(e)
             },
-            "logs": logs,
+            "logs": logger.get_user_logs(),
             "status": "failed"
         }
 

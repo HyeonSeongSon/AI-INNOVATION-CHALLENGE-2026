@@ -7,6 +7,7 @@
 from typing import Dict, Any
 from ..state import CRMState
 from ..services.create_product_message import ProductMessageGenerator
+from ....core.logging import AgentLogger
 
 
 # Generator 싱글톤 인스턴스 (재사용)
@@ -41,13 +42,13 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
         - current_node: 다음 노드로 업데이트
     """
 
-    # 현재 step과 로그 초기화
-    current_step = state.get("step", 0)
-    logs = state.get("logs", [])
+    logger = AgentLogger(state, node_name="create_product_message_node")
     intermediate = state.get("intermediate", {})
 
-    # 로그 추가
-    logs.append(f"[Step {current_step}] create_product_message_node 시작")
+    logger.info(
+        "node_started",
+        user_message="create_product_message_node 시작",
+    )
 
     try:
         # 1. 필요한 데이터 가져오기 (Context 구조)
@@ -66,15 +67,18 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
             intermediate["message"] = {}
 
         if not recommended_products:
-            logs.append(f"[Step {current_step}] 추천된 상품이 없습니다.")
+            logger.info(
+                "no_products",
+                user_message="추천된 상품이 없습니다.",
+            )
             intermediate["message"]["messages"] = []
 
             return {
-                "step": current_step + 1,
+                "step": state.get("step", 0) + 1,
                 "last_node": "create_product_message_node",
                 "current_node": "end",  # 상품이 없으면 종료
                 "intermediate": intermediate,
-                "logs": logs,
+                "logs": logger.get_user_logs(),
                 "status": "completed"
             }
 
@@ -86,7 +90,10 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
 
         # 사용자 선택 확인 (필수)
         if selected_product_id is None:
-            logs.append(f"[Step {current_step}] ERROR: 사용자가 상품을 선택하지 않았습니다.")
+            logger.error(
+                "no_product_selected",
+                user_message="ERROR: 사용자가 상품을 선택하지 않았습니다.",
+            )
             raise ValueError("사용자가 상품을 선택하지 않았습니다. selected_product_id가 필요합니다.")
 
         # 선택된 상품 ID로 상품 찾기
@@ -97,14 +104,27 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
                 break
 
         if selected_product is None:
-            logs.append(f"[Step {current_step}] ERROR: 상품 ID '{selected_product_id}'를 찾을 수 없습니다.")
+            logger.error(
+                "product_not_found",
+                user_message=f"ERROR: 상품 ID '{selected_product_id}'를 찾을 수 없습니다.",
+                selected_product_id=selected_product_id,
+            )
             raise ValueError(f"상품 ID '{selected_product_id}'를 찾을 수 없습니다.")
 
-        logs.append(f"[Step {current_step}] 사용자 선택 상품: {selected_product_id} - {selected_product.get('product_name')}")
+        logger.info(
+            "product_selected",
+            user_message=f"사용자 선택 상품: {selected_product_id} - {selected_product.get('product_name')}",
+            selected_product_id=selected_product_id,
+            product_name=selected_product.get("product_name"),
+        )
 
         # 목적 가져오기
         purpose = parsed_request.get("purpose", "브랜드/제품 소개")
-        logs.append(f"[Step {current_step}] 메시지 생성 목적: {purpose}")
+        logger.info(
+            "message_purpose",
+            user_message=f"메시지 생성 목적: {purpose}",
+            purpose=purpose,
+        )
 
         # 2. MessageGenerator 가져오기
         generator = get_message_generator()
@@ -112,14 +132,13 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
         # 3. 선택된 상품에 대해 메시지 생성
         messages = []
         product_name = selected_product.get("product_name", "알 수 없음")
-        logs.append(f"[Step {current_step}] 메시지 생성 중: {product_name}")
 
-        # 메시지 생성
-        message_result = generator.generate_message(
-            product=selected_product,
-            persona_info=persona_info,
-            purpose=purpose
-        )
+        with logger.track_duration("message_generation", user_message=f"메시지 생성 중: {product_name}"):
+            message_result = generator.generate_message(
+                product=selected_product,
+                persona_info=persona_info,
+                purpose=purpose
+            )
 
         if message_result.get("success"):
             # 생성 성공
@@ -136,33 +155,51 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
                 "sale_price": selected_product.get("sale_price", 0)
             }
             messages.append(message_data)
-            logs.append(f"[Step {current_step}] 메시지 생성 완료")
+            logger.info(
+                "message_created",
+                user_message="메시지 생성 완료",
+                product_id=selected_product.get("product_id"),
+            )
         else:
             # 생성 실패
             error_msg = message_result.get("error", "알 수 없는 오류")
-            logs.append(f"[Step {current_step}] 메시지 생성 실패: {error_msg}")
+            logger.warning(
+                "message_generation_failed",
+                user_message=f"메시지 생성 실패: {error_msg}",
+                error=error_msg,
+            )
 
         # 4. Context 구조로 결과 저장
-        logs.append(f"[Step {current_step}] 전체 메시지 생성 완료: {len(messages)}개")
+        logger.info(
+            "node_completed",
+            user_message=f"전체 메시지 생성 완료: {len(messages)}개",
+            message_count=len(messages),
+        )
         intermediate["message"]["messages"] = messages
 
         # 상태 업데이트
         return {
-            "step": current_step + 1,
+            "step": state.get("step", 0) + 1,
             "last_node": "create_product_message_node",
             "current_node": "end",  # 메시지 생성 완료 후 종료
             "intermediate": intermediate,
-            "logs": logs,
+            "logs": logger.get_user_logs(),
             "status": "completed"
         }
 
     except Exception as e:
         # 에러 처리
         error_msg = f"메시지 생성 중 오류 발생: {str(e)}"
-        logs.append(f"[Step {current_step}] ERROR: {error_msg}")
+        logger.error(
+            "node_failed",
+            user_message=f"ERROR: {error_msg}",
+            error_type=type(e).__name__,
+            error_message=str(e),
+            exc_info=True,
+        )
 
         return {
-            "step": current_step + 1,
+            "step": state.get("step", 0) + 1,
             "last_node": "create_product_message_node",
             "current_node": "error_handler",  # 에러 핸들러로 이동
             "error": error_msg,
@@ -171,7 +208,7 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
                 "exception_type": type(e).__name__,
                 "exception_message": str(e)
             },
-            "logs": logs,
+            "logs": logger.get_user_logs(),
             "status": "failed"
         }
 
