@@ -78,7 +78,7 @@ class MultiValueParser:
         self.parser = self.llm.with_structured_output(MultiMessageRequest)
         logger.info("parser_initialized", model=chat_gpt_model_name)
 
-    def parse(self, user_input: str) -> str:
+    async def parse(self, user_input: str) -> str:
         """자연어 → 다중 값 파싱"""
 
         messages = [
@@ -86,15 +86,19 @@ class MultiValueParser:
             HumanMessage(content=user_input)
         ]
         try:
-            response = self.parser.invoke(messages)
+            response = await self.parser.ainvoke(messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
             return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
 
 if __name__ == "__main__":
-    parser = MultiValueParser()
+    import asyncio
 
-    user_input = "PERSONA_002로 설화수에 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘"
-    result = parser.parse(user_input=user_input)
-    print(result)
+    async def main():
+        parser = MultiValueParser()
+        user_input = "PERSONA_002로 설화수에 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘"
+        result = await parser.parse(user_input=user_input)
+        print(result)
+
+    asyncio.run(main())

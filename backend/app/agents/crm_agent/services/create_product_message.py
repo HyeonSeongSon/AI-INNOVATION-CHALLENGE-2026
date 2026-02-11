@@ -12,7 +12,7 @@ from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 import os
 import yaml
-import requests
+import httpx
 
 # .env 파일 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -54,11 +54,20 @@ class ProductMessageGenerator:
 
         self.brand_tones = self._load_yaml(DATA_PATH)
 
+        self._http_client: Optional[httpx.AsyncClient] = None
+
         logger.info(
             "message_generator_initialized",
             model=chat_gpt_model_name,
             brand_count=len(self.brand_tones.get("brand_ton_prompt", {})),
         )
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        return self._http_client
 
     def _load_yaml(self, file_path: str) -> Dict[str, Any]:
         """YAML 파일 로드"""
@@ -71,7 +80,7 @@ class ProductMessageGenerator:
             return {}
 
     @traced(name="get_product_document", run_type="retriever")
-    def _get_product_document(self, product_id: str) -> Optional[str]:
+    async def _get_product_document(self, product_id: str) -> Optional[str]:
         """
         오픈서치에서 product_id로 상품 문서 내용만 조회
 
@@ -82,11 +91,9 @@ class ProductMessageGenerator:
             상품 문서 내용 (텍스트) 또는 None
         """
         try:
-            # 오픈서치 API 호출 (GET 방식으로 단일 product_id 조회)
-            response = requests.get(
+            response = await self.http_client.get(
                 f"{self.vector_db_api_url}/api/product/{product_id}",
                 params={"index_name": "product_index"},
-                timeout=10
             )
             response.raise_for_status()
             api_response = response.json()
@@ -304,7 +311,7 @@ class ProductMessageGenerator:
         return "\n".join(sections)
 
     @traced(name="generate_message", run_type="chain")
-    def generate_message(
+    async def generate_message(
         self,
         product: Dict[str, Any],
         persona_info: Dict[str, Any],
@@ -336,7 +343,7 @@ class ProductMessageGenerator:
         product_document = None
         if product_id:
             logger.info("fetching_product_document", product_id=product_id)
-            product_document = self._get_product_document(product_id)
+            product_document = await self._get_product_document(product_id)
         else:
             logger.warning("no_product_id")
 
@@ -363,7 +370,7 @@ class ProductMessageGenerator:
         prompt = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)
 
         try:
-            response = self.llm.invoke(prompt)
+            response = await self.llm.ainvoke(prompt)
             message_content = response.content
 
             logger.info("message_generation_completed", product_name=product_name, purpose=purpose)

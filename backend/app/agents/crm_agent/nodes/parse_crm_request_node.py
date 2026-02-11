@@ -23,7 +23,7 @@ def get_parser() -> MultiValueParser:
     return _parser_instance
 
 
-def parse_crm_request_node(state: CRMState) -> Dict[str, Any]:
+async def parse_crm_request_node(state: CRMState) -> Dict[str, Any]:
     """
     사용자 입력을 파싱하여 구조화된 CRM 요청으로 변환하는 노드
 
@@ -67,7 +67,7 @@ def parse_crm_request_node(state: CRMState) -> Dict[str, Any]:
 
         # 파싱 수행 (JSON 문자열 반환)
         with logger.track_duration("llm_parse", user_message="LLM 파싱 수행 중..."):
-            parsed_json = parser.parse(user_input)
+            parsed_json = await parser.parse(user_input)
 
         # JSON 문자열을 딕셔너리로 변환
         parsed_data = json.loads(parsed_json)
@@ -125,37 +125,41 @@ if __name__ == "__main__":
     """
     노드 테스트
     """
+    import asyncio
     from pprint import pprint
 
-    # 테스트 state 생성
-    test_state: CRMState = {
-        "input": "PERSONA_002로 설화수 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘",
-        "step": 0,
-        "logs": [],
-        "intermediate": {},
-        "context": {
-            "user_id": "test_user",
-            "session_id": "test_session"
+    async def main():
+        # 테스트 state 생성
+        test_state: CRMState = {
+            "input": "PERSONA_002로 설화수 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘",
+            "step": 0,
+            "logs": [],
+            "intermediate": {},
+            "context": {
+                "user_id": "test_user",
+                "session_id": "test_session"
+            }
         }
-    }
 
-    print("=" * 60)
-    print("테스트 입력:")
-    print(f"  {test_state['input']}")
-    print("=" * 60)
+        print("=" * 60)
+        print("테스트 입력:")
+        print(f"  {test_state['input']}")
+        print("=" * 60)
 
-    # 노드 실행
-    result = parse_crm_request_node(test_state)
+        # 노드 실행
+        result = await parse_crm_request_node(test_state)
 
-    print("\n" + "=" * 60)
-    print("실행 결과:")
-    print("=" * 60)
-    pprint(result, width=80, indent=2)
+        print("\n" + "=" * 60)
+        print("실행 결과:")
+        print("=" * 60)
+        pprint(result, width=80, indent=2)
 
-    print("\n" + "=" * 60)
-    print("파싱된 데이터:")
-    print("=" * 60)
-    if "intermediate" in result and "request" in result["intermediate"]:
-        pprint(result["intermediate"]["request"]["parsed_request"], width=80, indent=2)
-    else:
-        print("파싱 실패")
+        print("\n" + "=" * 60)
+        print("파싱된 데이터:")
+        print("=" * 60)
+        if "intermediate" in result and "request" in result["intermediate"]:
+            pprint(result["intermediate"]["request"]["parsed_request"], width=80, indent=2)
+        else:
+            print("파싱 실패")
+
+    asyncio.run(main())

@@ -15,6 +15,7 @@ LangSmith 트레이싱은 환경 변수로 제어됩니다:
 """
 
 import os
+import asyncio
 import functools
 from typing import Any, Callable, Optional
 
@@ -94,14 +95,24 @@ def traced(
             trace_name = name or func.__name__
             trace_metadata = metadata or {}
 
-            @traceable(
-                name=trace_name, run_type=run_type, metadata=trace_metadata
-            )
-            @functools.wraps(func)
-            def wrapper(*args: Any, **kwargs: Any) -> Any:
-                return func(*args, **kwargs)
+            if asyncio.iscoroutinefunction(func):
+                @traceable(
+                    name=trace_name, run_type=run_type, metadata=trace_metadata
+                )
+                @functools.wraps(func)
+                async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                    return await func(*args, **kwargs)
 
-            return wrapper
+                return async_wrapper
+            else:
+                @traceable(
+                    name=trace_name, run_type=run_type, metadata=trace_metadata
+                )
+                @functools.wraps(func)
+                def wrapper(*args: Any, **kwargs: Any) -> Any:
+                    return func(*args, **kwargs)
+
+                return wrapper
         else:
             return func
 

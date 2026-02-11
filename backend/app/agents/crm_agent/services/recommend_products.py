@@ -6,7 +6,8 @@ from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 import os
 import json
-import requests
+import httpx
+import asyncio
 
 # .env 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
@@ -32,16 +33,24 @@ class ProductRecommender:
             request_timeout=30
         )
 
+        self._http_client: Optional[httpx.AsyncClient] = None
+
         logger.info("recommender_initialized", model=chat_gpt_model_name)
 
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        return self._http_client
+
     @traced(name="get_persona_info", run_type="tool")
-    def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
+    async def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
         """페르소나 정보 조회"""
         try:
-            response = requests.post(
+            response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas/get",
                 json={"persona_id": persona_id},
-                timeout=10
             )
             response.raise_for_status()
             api_data = response.json()
@@ -80,23 +89,21 @@ class ProductRecommender:
             raise
 
     @traced(name="get_existing_analysis", run_type="tool")
-    def get_existing_analysis(self, persona_id: str) -> Optional[Dict[str, Any]]:
+    async def get_existing_analysis(self, persona_id: str) -> Optional[Dict[str, Any]]:
         """DB에서 기존 분석 결과 조회 (가장 최신 결과 1개)"""
         try:
-            response = requests.post(
+            response = await self.http_client.post(
                 f"{self.db_api_url}/api/analysis-results/get",
                 json={"persona_id": persona_id},
-                timeout=10
             )
             response.raise_for_status()
             results = response.json()
 
             if results and len(results) > 0:
-                # 가장 최신 결과 반환 (이미 시간순 정렬되어 있음)
                 return results[0]
             return None
 
-        except requests.exceptions.HTTPException as e:
+        except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
             logger.error("analysis_fetch_failed", persona_id=persona_id, error=str(e))
@@ -106,24 +113,21 @@ class ProductRecommender:
             return None
 
     @traced(name="save_analysis_result", run_type="tool")
-    def save_analysis_result(self, persona_id: str, analysis_result: Dict[str, Any]) -> int:
+    async def save_analysis_result(self, persona_id: str, analysis_result: Dict[str, Any]) -> int:
         """분석 결과를 DB에 저장"""
         try:
-            # JSON을 문자열로 변환
             analysis_result_text = json.dumps(analysis_result, ensure_ascii=False)
 
-            response = requests.post(
+            response = await self.http_client.post(
                 f"{self.db_api_url}/api/analysis-results",
                 json={
                     "persona_id": persona_id,
                     "analysis_result": analysis_result_text
                 },
-                timeout=10
             )
             response.raise_for_status()
             result = response.json()
 
-            # analysis_id 반환
             return result.get("analysis_id")
 
         except Exception as e:
@@ -131,17 +135,16 @@ class ProductRecommender:
             raise
 
     @traced(name="save_search_queries", run_type="tool")
-    def save_search_queries(self, analysis_id: int, queries: List[str]) -> None:
+    async def save_search_queries(self, analysis_id: int, queries: List[str]) -> None:
         """검색 쿼리를 DB에 저장"""
         try:
             for query in queries:
-                response = requests.post(
+                response = await self.http_client.post(
                     f"{self.db_api_url}/api/search-queries",
                     json={
                         "analysis_id": analysis_id,
                         "search_query": query
                     },
-                    timeout=10
                 )
                 response.raise_for_status()
 
@@ -152,7 +155,7 @@ class ProductRecommender:
             raise
 
     @traced(name="get_filtered_products", run_type="tool")
-    def get_filtered_products(
+    async def get_filtered_products(
         self,
         brands: Optional[List[str]] = None,
         product_categories: Optional[List[str]] = None,
@@ -168,10 +171,9 @@ class ProductRecommender:
             filters["exclusive_target"] = exclusive_target
 
         try:
-            response = requests.post(
+            response = await self.http_client.post(
                 f"{self.db_api_url}/api/products/filter",
                 json=filters,
-                timeout=10
             )
             response.raise_for_status()
             products = response.json()
@@ -183,7 +185,7 @@ class ProductRecommender:
             raise
 
     @traced(name="recommend_persona", run_type="chain")
-    def recommend_persona(self, user_input: str, persona_id: str) -> Dict[str, Any]:
+    async def recommend_persona(self, user_input: str, persona_id: str) -> Dict[str, Any]:
         """
         페르소나 기반 다단계 × 다차원 분석
 
@@ -195,14 +197,14 @@ class ProductRecommender:
             Dict[str, Any]: 다단계 × 다차원 분석 결과
         """
         # 1. 페르소나 정보 가져오기
-        persona_info = self.get_persona_info(persona_id)
+        persona_info = await self.get_persona_info(persona_id)
 
         # 2. 프롬프트 생성
         prompt = self._build_analysis_prompt(user_input, persona_info)
 
         # 3. LLM 호출하여 분석 수행
         try:
-            response = self.llm.invoke(prompt)
+            response = await self.llm.ainvoke(prompt)
         except Exception as e:
             logger.error("llm_persona_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return {
@@ -236,7 +238,7 @@ class ProductRecommender:
         return prompt
 
     @traced(name="generate_multi_queries", run_type="chain")
-    def generate_multi_queries(
+    async def generate_multi_queries(
         self,
         user_input: str,
         analysis_result: Dict[str, Any],
@@ -258,7 +260,7 @@ class ProductRecommender:
 
         # LLM 호출하여 멀티 쿼리 생성
         try:
-            response = self.llm.invoke(prompt)
+            response = await self.llm.ainvoke(prompt)
         except Exception as e:
             logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
             return [user_input]
@@ -274,7 +276,7 @@ class ProductRecommender:
             return [user_input]
 
     @traced(name="search_opensearch", run_type="retriever")
-    def search_with_multi_queries(
+    async def search_with_multi_queries(
         self,
         queries: List[str],
         brands: Optional[List[str]] = None,
@@ -283,10 +285,10 @@ class ProductRecommender:
         top_k: int = 3
     ) -> List[Dict[str, Any]]:
         """
-        멀티 쿼리로 벡터 검색 수행 및 결과 병합
+        멀티 쿼리로 벡터 검색 수행 및 결과 병합 (asyncio.gather 병렬 실행)
         """
         # 1. 필터링된 상품 조회
-        filtered_products = self.get_filtered_products(
+        filtered_products = await self.get_filtered_products(
             brands=brands,
             product_categories=product_categories,
             exclusive_target=exclusive_target
@@ -297,13 +299,11 @@ class ProductRecommender:
             logger.warning("no_filtered_products")
             return []
 
-        all_results = []
-
-        # 2. 각 쿼리로 검색 수행
-        for i, query in enumerate(queries, 1):
-            logger.info("query_searching", query_index=i, total_queries=len(queries), query=query)
+        # 2. 단일 쿼리 실행 코루틴
+        async def search_single(query: str, query_index: int) -> List[Dict[str, Any]]:
+            logger.info("query_searching", query_index=query_index, total_queries=len(queries), query=query)
             try:
-                response = requests.post(
+                response = await self.http_client.post(
                     f"{self.vector_db_api_url}/api/search/product-ids",
                     json={
                         "index_name": "product_index",
@@ -312,7 +312,6 @@ class ProductRecommender:
                         "query": query,
                         "top_k": top_k
                     },
-                    timeout=15
                 )
                 response.raise_for_status()
                 api_response = response.json()
@@ -323,13 +322,22 @@ class ProductRecommender:
                 else:
                     results = api_response
 
-                # 결과를 전체 리스트에 추가
-                all_results.extend(results)
-                logger.info("query_results", query_index=i, result_count=len(results))
+                logger.info("query_results", query_index=query_index, result_count=len(results))
+                return results
 
             except Exception as e:
-                logger.error("query_search_failed", query_index=i, query=query, error=str(e))
-                continue
+                logger.error("query_search_failed", query_index=query_index, query=query, error=str(e))
+                return []
+
+        # 3. asyncio.gather로 모든 쿼리 동시 실행
+        all_query_results = await asyncio.gather(
+            *[search_single(q, i) for i, q in enumerate(queries, 1)]
+        )
+
+        # 4. 결과 병합
+        all_results = []
+        for results in all_query_results:
+            all_results.extend(results)
 
         # 중복 제거: product_id별로 최고 스코어만 유지
         product_score_map = {}

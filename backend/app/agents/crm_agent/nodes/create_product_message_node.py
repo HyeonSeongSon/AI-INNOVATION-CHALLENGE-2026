@@ -22,7 +22,7 @@ def get_message_generator() -> ProductMessageGenerator:
     return _generator_instance
 
 
-def create_product_message_node(state: CRMState) -> Dict[str, Any]:
+async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
     """
     추천된 상품들에 대해 메시지를 생성하는 노드
 
@@ -134,7 +134,7 @@ def create_product_message_node(state: CRMState) -> Dict[str, Any]:
         product_name = selected_product.get("product_name", "알 수 없음")
 
         with logger.track_duration("message_generation", user_message=f"메시지 생성 중: {product_name}"):
-            message_result = generator.generate_message(
+            message_result = await generator.generate_message(
                 product=selected_product,
                 persona_info=persona_info,
                 purpose=purpose

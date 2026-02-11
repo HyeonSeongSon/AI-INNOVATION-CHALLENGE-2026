@@ -98,7 +98,7 @@ async def generate_crm_message(request: CRMRequest):
             input_length=len(request.user_input),
         )
 
-        result = agent.run(
+        result = await agent.run(
             user_input=request.user_input,
             thread_id=request.thread_id
         )
@@ -150,7 +150,7 @@ async def select_product(request: ProductSelection):
             selected_product_id=request.selected_product_id,
         )
 
-        result = agent.resume_with_selection(
+        result = await agent.resume_with_selection(
             thread_id=request.thread_id,
             selected_product_id=request.selected_product_id
         )
