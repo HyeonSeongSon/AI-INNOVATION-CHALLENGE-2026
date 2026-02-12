@@ -80,6 +80,37 @@ class GeneratedMessage(TypedDict, total=False):
     sale_price: int                      # 판매 가격
 
 
+class QualityScore(TypedDict, total=False):
+    """LLM-as-a-Judge 평가 점수"""
+    accuracy: int                        # 정확성 (1-5)
+    tone: int                            # 톤 적합성 (1-5)
+    personalization: int                 # 개인화 (1-5)
+    naturalness: int                     # 자연스러움 (1-5)
+    safety: int                          # 안전성 (1-5)
+    overall: float                       # 가중 평균
+    feedback: str                        # LLM 피드백
+
+
+class GroundednessResult(TypedDict, total=False):
+    """Groundedness 검증 결과"""
+    is_grounded: bool                    # 전체 통과 여부
+    issues: List[str]                    # 발견된 문제 리스트
+    checked_fields: List[str]            # 검증한 필드 목록
+
+
+class QualityCheckResult(TypedDict, total=False):
+    """품질 검사 전체 결과"""
+    passed: bool                         # 전체 통과 여부
+    failed_stage: Optional[str]          # 실패 단계 ("rule_check" | "llm_judge" | "groundedness")
+    failure_reason: Optional[str]        # 실패 사유
+    rule_check_passed: bool              # Stage 1 통과 여부
+    rule_check_issues: List[str]         # Stage 1 발견 이슈
+    llm_judge_passed: bool               # Stage 2 통과 여부
+    llm_judge_scores: Optional[QualityScore]   # Stage 2 점수
+    groundedness_passed: bool            # Stage 3 통과 여부
+    groundedness_result: Optional[GroundednessResult]  # Stage 3 결과
+
+
 # ============================================================
 # Context 그룹 정의 (노드별 책임 범위 분리)
 # ============================================================
@@ -132,6 +163,22 @@ class MessageContext(TypedDict, total=False):
     messages: List[GeneratedMessage]                 # 생성된 메시지 리스트
 
 
+class QualityCheckContext(TypedDict, total=False):
+    """
+    품질 검사 컨텍스트
+
+    담당 노드: quality_check_node
+    READ:
+      - intermediate.message.messages
+      - intermediate.recommendation.recommended_products
+      - intermediate.recommendation.persona_info
+      - intermediate.request.parsed_request
+    WRITE:
+      - intermediate.quality_check.results
+    """
+    results: List[QualityCheckResult]                # 메시지별 품질 검사 결과
+
+
 class CRMIntermediate(TypedDict, total=False):
     """
     CRM Agent의 intermediate 데이터 구조
@@ -141,6 +188,7 @@ class CRMIntermediate(TypedDict, total=False):
     request: RequestContext                          # 요청 파싱 결과
     recommendation: RecommendationContext            # 상품 추천 결과
     message: MessageContext                          # 메시지 생성 결과
+    quality_check: QualityCheckContext               # 품질 검사 결과
 
 
 # ============================================================
@@ -183,6 +231,15 @@ class CRMState(BaseState, total=False):
     │           intermediate.recommendation.recommended_products│
     │           selected_product_id                            │
     │    WRITE: intermediate.message.messages                  │
+    └─────────────────────────────────────────────────────────┘
+                            ↓
+    ┌─────────────────────────────────────────────────────────┐
+    │ 5. quality_check_node                                    │
+    │    READ:  intermediate.message.messages                  │
+    │           intermediate.recommendation.recommended_products│
+    │           intermediate.recommendation.persona_info       │
+    │           intermediate.request.parsed_request            │
+    │    WRITE: intermediate.quality_check.results             │
     └─────────────────────────────────────────────────────────┘
 
     사용 예시:

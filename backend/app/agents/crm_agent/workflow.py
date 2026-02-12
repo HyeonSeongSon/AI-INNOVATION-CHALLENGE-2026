@@ -10,6 +10,7 @@ from .state import CRMState
 from .nodes.parse_crm_request_node import parse_crm_request_node
 from .nodes.recommend_products_node import recommend_products_node
 from .nodes.create_product_message_node import create_product_message_node
+from .nodes.quality_check_node import quality_check_node
 
 
 def should_continue_to_message(state: CRMState) -> str:
@@ -42,7 +43,8 @@ def build_crm_workflow(checkpointer=None):
     2. recommend_products_node: 상품 추천 (상위 3개)
     3. INTERRUPT: 사용자에게 상품 선택 요청 (Human-in-the-loop)
     4. create_product_message_node: 선택된 상품에 대한 메시지 생성
-    5. END: 종료
+    5. quality_check_node: 생성된 메시지 품질 검사 (3단계)
+    6. END: 종료
 
     Args:
         checkpointer: LangGraph checkpointer (기본값: MemorySaver)
@@ -62,6 +64,7 @@ def build_crm_workflow(checkpointer=None):
     workflow.add_node("parse_crm_request", parse_crm_request_node)
     workflow.add_node("recommend_products", recommend_products_node)
     workflow.add_node("create_product_message", create_product_message_node)
+    workflow.add_node("quality_check", quality_check_node)
 
     # 시작점 설정
     workflow.set_entry_point("parse_crm_request")
@@ -80,7 +83,8 @@ def build_crm_workflow(checkpointer=None):
             "human_input_required": END  # interrupt 후 대기
         }
     )
-    workflow.add_edge("create_product_message", END)
+    workflow.add_edge("create_product_message", "quality_check")
+    workflow.add_edge("quality_check", END)
     return workflow.compile(checkpointer=checkpointer)
 
 
@@ -97,9 +101,10 @@ if __name__ == "__main__":
     print("  1. parse_crm_request - 사용자 입력 파싱")
     print("  2. recommend_products - 상품 추천")
     print("  3. create_product_message - 메시지 생성")
+    print("  4. quality_check - 메시지 품질 검사")
 
     print("\n[워크플로우]")
-    print("  parse_crm_request → recommend_products → create_product_message → END")
+    print("  parse_crm_request → recommend_products → create_product_message → quality_check → END")
 
     print("\n=" * 80)
     print("워크플로우 구성 완료")

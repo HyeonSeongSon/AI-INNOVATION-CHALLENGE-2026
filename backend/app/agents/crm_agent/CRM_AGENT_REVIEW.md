@@ -299,7 +299,7 @@ def test_parse_introduction_request():
 - [O] 에러 핸들링: 모든 외부 API 호출에 timeout + try/except 추가
 - [O] 하드코딩 제거: API URL, 모델명 등을 환경변수로 분리
 - [ ] TODO 파일 정리: 빈 파일 삭제 또는 구현
-- [ ] `print()` → `logging` 교체
+- [O] `print()` → `logging` 교체
 
 ### Phase 2: 단기 개선 (1주)
 - [ ] 단위 테스트 작성 (각 서비스별 최소 3개)
