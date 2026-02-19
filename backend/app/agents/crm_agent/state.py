@@ -158,9 +158,13 @@ class MessageContext(TypedDict, total=False):
       - intermediate.recommendation.persona_info
       - intermediate.recommendation.recommended_products
     WRITE:
+      - intermediate.message.selected_product
       - intermediate.message.messages
+      - intermediate.message.product_document_summary
     """
+    selected_product: RecommendedProduct             # 사용자가 선택한 상품 (품질 검사에 활용)
     messages: List[GeneratedMessage]                 # 생성된 메시지 리스트
+    product_document_summary: Optional[str]          # 상품 문서 요약 (메시지 생성·품질 검토 활용)
 
 
 class QualityCheckContext(TypedDict, total=False):
@@ -230,13 +234,16 @@ class CRMState(BaseState, total=False):
     │           intermediate.recommendation.persona_info       │
     │           intermediate.recommendation.recommended_products│
     │           selected_product_id                            │
-    │    WRITE: intermediate.message.messages                  │
+    │    WRITE: intermediate.message.selected_product          │
+    │           intermediate.message.messages                  │
+    │           intermediate.message.product_document_summary  │
     └─────────────────────────────────────────────────────────┘
                             ↓
     ┌─────────────────────────────────────────────────────────┐
     │ 5. quality_check_node                                    │
     │    READ:  intermediate.message.messages                  │
-    │           intermediate.recommendation.recommended_products│
+    │           intermediate.message.selected_product          │
+    │           intermediate.message.product_document_summary  │
     │           intermediate.recommendation.persona_info       │
     │           intermediate.request.parsed_request            │
     │    WRITE: intermediate.quality_check.results             │

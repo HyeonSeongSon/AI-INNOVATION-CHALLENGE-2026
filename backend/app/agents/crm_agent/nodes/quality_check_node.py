@@ -39,7 +39,8 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
 
     State READ:
         - intermediate.message.messages
-        - intermediate.recommendation.recommended_products
+        - intermediate.message.selected_product
+        - intermediate.message.product_document_summary
         - intermediate.recommendation.persona_info
         - intermediate.request.parsed_request
 
@@ -59,12 +60,10 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
         # 1. 필요한 데이터 추출
         message_context = intermediate.get("message", {})
         messages = message_context.get("messages", [])
-        recommendation = intermediate.get("recommendation", {})
-        recommended_products = recommendation.get("recommended_products", [])
-        persona_info = recommendation.get("persona_info", {})
-        request_context = intermediate.get("request", {})
-        parsed_request = request_context.get("parsed_request", {})
-        purpose = parsed_request.get("purpose", "브랜드/제품 소개")
+        selected_product = message_context.get("selected_product", {})
+        product_document_summary = message_context.get("product_document_summary")
+        persona_info = intermediate.get("recommendation", {}).get("persona_info", {})
+        purpose = intermediate.get("request", {}).get("parsed_request", {}).get("purpose", "브랜드/제품 소개")
 
         # Context 구조 초기화
         if "quality_check" not in intermediate:
@@ -93,16 +92,11 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
         results = []
         all_passed = True
 
+        product_id = selected_product.get("product_id")
+
         for msg in messages:
-            product_id = msg.get("product_id")
             brand_name = msg.get("brand", "")
             product_name = msg.get("product_name", "")
-
-            # 매칭되는 상품 데이터 찾기
-            product = next(
-                (p for p in recommended_products if p.get("product_id") == product_id),
-                {},
-            )
 
             logger.info(
                 "checking_message",
@@ -116,10 +110,11 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
             ):
                 result = await checker.check_quality(
                     message=msg,
-                    product=product,
+                    product=selected_product,
                     persona_info=persona_info,
                     purpose=purpose,
                     brand_name=brand_name,
+                    product_document_summary=product_document_summary,
                 )
 
             results.append(result)

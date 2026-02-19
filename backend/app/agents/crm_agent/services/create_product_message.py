@@ -3,6 +3,7 @@
 선택된 상품, 페르소나 정보, 브랜드톤을 기반으로 목적별 맞춤 메시지 생성
 """
 
+import re
 from typing import Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ class ProductMessageGenerator:
             model=chat_gpt_model_name,
             temperature=0.7,
             api_key=api_key,
-            request_timeout=30
+            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
         )
 
         # YAML 데이터 로드
@@ -116,6 +117,24 @@ class ProductMessageGenerator:
         except Exception as e:
             logger.error("product_document_fetch_failed", product_id=product_id, error=str(e))
             return None
+
+    def _extract_normalized_summary(self, document: str) -> str:
+        """
+        문서에서 '9) 정규화 요약' 섹션만 추출 (LLM 없이)
+
+        문서 포맷:
+            9) 정규화 요약 (RAG/DB용)
+            - category: ...
+            - main_benefits: ...
+            ...
+
+        Returns:
+            정규화 요약 텍스트, 섹션이 없으면 전체 문서 반환
+        """
+        match = re.search(r'9\)[^\n]*\n([\s\S]+?)(?=\n\d+\)|$)', document)
+        if match:
+            return match.group(0).strip()
+        return document
 
     def _get_brand_tone(self, brand_name: str) -> str:
         """브랜드톤 가져오기"""
@@ -341,9 +360,14 @@ class ProductMessageGenerator:
         # 1. product_id로 상품 문서 가져오기
         product_id = product.get('product_id')
         product_document = None
+        product_document_summary = None
         if product_id:
             logger.info("fetching_product_document", product_id=product_id)
             product_document = await self._get_product_document(product_id)
+
+            if product_document:
+                product_document_summary = self._extract_normalized_summary(product_document)
+                logger.info("product_document_summary_extracted", product_id=product_id)
         else:
             logger.warning("no_product_id")
 
@@ -382,6 +406,7 @@ class ProductMessageGenerator:
             result['product_name'] = product.get('product_name', '')
             result['brand'] = brand_name
             result['purpose'] = purpose
+            result['product_document_summary'] = product_document_summary
 
             return result
 

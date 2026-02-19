@@ -12,6 +12,7 @@ def build_quality_check_prompt(
     brand_name: str,
     product_name: str,
     product_info: str,
+    product_document_summary: str,
     persona_info: str,
     purpose: str,
     brand_tone: str,
@@ -25,6 +26,7 @@ def build_quality_check_prompt(
         brand_name: 브랜드명
         product_name: 상품명
         product_info: 포맷팅된 상품 정보
+        product_document_summary: 포맷팅된 상품 문서 요약
         persona_info: 포맷팅된 페르소나 정보
         purpose: 메시지 목적
         brand_tone: 브랜드 톤 가이드
@@ -94,6 +96,9 @@ def build_quality_check_prompt(
 
 ### 상품 정보
 {product_info}
+
+### 상품 문서 요약
+{product_document_summary}
 
 ### 브랜드 톤 가이드
 {brand_tone}

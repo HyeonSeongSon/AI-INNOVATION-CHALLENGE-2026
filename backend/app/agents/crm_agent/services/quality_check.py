@@ -118,6 +118,7 @@ class QualityChecker:
         persona_info: Dict[str, Any],
         purpose: str,
         brand_name: str,
+        product_document_summary: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         메시지 품질 검사 (3단계 순차 실행, 실패 시 단락)
@@ -164,7 +165,7 @@ class QualityChecker:
         # Stage 3: LLM-as-a-Judge
         logger.info("stage3_llm_judge_started")
         passed, scores = await self._run_llm_judge(
-            message, product, persona_info, purpose, brand_name
+            message, product, persona_info, purpose, brand_name, product_document_summary
         )
         result["llm_judge_passed"] = passed
         result["llm_judge_scores"] = scores
@@ -324,6 +325,16 @@ class QualityChecker:
         for results in results_per_sentence:
             all_results.extend(results)
 
+        # score 내림차순 상위 3개 로깅 (통과/실패 공통)
+        top3 = sorted(all_results, key=lambda r: r["score"], reverse=True)[:3]
+        logger.info(
+            "semantic_check_top3",
+            top3=[
+                {"query": r["query_sentence"], "matched": r["matched_sentence"], "score": r["score"]}
+                for r in top3
+            ],
+        )
+
         # 임계값 초과 결과 필터
         triggered = [r for r in all_results if r["score"] > self._SEMANTIC_THRESHOLD]
 
@@ -351,6 +362,7 @@ class QualityChecker:
         persona_info: Dict[str, Any],
         purpose: str,
         brand_name: str,
+        product_document_summary: Optional[str] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
         LLM-as-a-Judge 평가
@@ -367,6 +379,7 @@ class QualityChecker:
                 brand_name=brand_name,
                 product_name=message.get("product_name", ""),
                 product_info=product_text,
+                product_document_summary=product_document_summary or "",
                 persona_info=persona_text,
                 purpose=purpose,
                 brand_tone=brand_tone,

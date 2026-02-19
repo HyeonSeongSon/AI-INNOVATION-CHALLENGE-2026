@@ -175,7 +175,9 @@ async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
             user_message=f"전체 메시지 생성 완료: {len(messages)}개",
             message_count=len(messages),
         )
+        intermediate["message"]["selected_product"] = selected_product
         intermediate["message"]["messages"] = messages
+        intermediate["message"]["product_document_summary"] = message_result.get("product_document_summary")
 
         # 상태 업데이트
         return {
