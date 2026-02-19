@@ -3,17 +3,20 @@
 
 3단계 품질 검증:
 1. Rule-based Check (동기, 비용 0)
-2. LLM-as-a-Judge (비동기, LLM 1회 호출)
-3. Groundedness Check (동기, 비용 0)
+2. Semantic Similarity Check (비동기, OpenSearch KNN, 비용 0)
+3. LLM-as-a-Judge (비동기, LLM 1회 호출)
 """
 
 import re
 import os
+import json
+import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+import httpx
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
@@ -73,6 +76,13 @@ class QualityChecker:
 
         self.brand_tones = self._load_yaml(data_path)
 
+        # forbidden_keyword.json 로드
+        if os.environ.get("APP_ROOT"):
+            forbidden_path = root_dir / "agents" / "crm_agent" / "data" / "forbidden_keyword.json"
+        else:
+            forbidden_path = root_dir / "data" / "forbidden_keyword.json"
+        self.forbidden_keywords = self._load_json(forbidden_path)
+
         logger.info(
             "quality_checker_initialized",
             model=chat_gpt_model_name,
@@ -87,9 +97,18 @@ class QualityChecker:
             logger.error("yaml_load_failed", file_path=str(file_path), error=str(e), exc_info=True)
             return {}
 
-    # ============================================================
-    # Public: 3단계 품질 검사 오케스트레이션
-    # ============================================================
+    def _load_json(self, file_path) -> Dict[str, Any]:
+        """JSON 파일 로드"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error("json_load_failed", file_path=str(file_path), error=str(e), exc_info=True)
+            return {}
+
+# ============================================================
+# Public: 3단계 품질 검사 오케스트레이션
+# ============================================================
 
     @traced(name="quality_check", run_type="chain")
     async def check_quality(
@@ -112,15 +131,15 @@ class QualityChecker:
             "failure_reason": None,
             "rule_check_passed": False,
             "rule_check_issues": [],
+            "semantic_check_passed": False,
+            "semantic_check_results": [],
             "llm_judge_passed": False,
             "llm_judge_scores": None,
-            "groundedness_passed": False,
-            "groundedness_result": None,
         }
 
         # Stage 1: Rule-based Check
         logger.info("stage1_rule_check_started")
-        passed, issues = self._run_rule_check(message, brand_name)
+        passed, issues = self._run_rule_check(message)
         result["rule_check_passed"] = passed
         result["rule_check_issues"] = issues
         if not passed:
@@ -130,8 +149,20 @@ class QualityChecker:
             return result
         logger.info("stage1_passed")
 
-        # Stage 2: LLM-as-a-Judge
-        logger.info("stage2_llm_judge_started")
+        # Stage 2: Semantic Similarity Check
+        logger.info("stage2_semantic_check_started")
+        passed, similar_results = await self._run_semantic_similarity_check(message)
+        result["semantic_check_passed"] = passed
+        result["semantic_check_results"] = similar_results
+        if not passed:
+            result["failed_stage"] = "semantic_check"
+            result["failure_reason"] = "유사도 검색에서 금지 표현과 유사한 문장이 감지되었습니다"
+            logger.warning("stage2_semantic_failed", triggered=similar_results)
+            return result
+        logger.info("stage2_semantic_passed")
+
+        # Stage 3: LLM-as-a-Judge
+        logger.info("stage3_llm_judge_started")
         passed, scores = await self._run_llm_judge(
             message, product, persona_info, purpose, brand_name
         )
@@ -140,35 +171,22 @@ class QualityChecker:
         if not passed:
             result["failed_stage"] = "llm_judge"
             result["failure_reason"] = f"LLM 평가 미통과: {scores.get('feedback', '') if scores else '평가 실패'}"
-            logger.warning("stage2_failed", scores=scores)
+            logger.warning("stage3_failed", scores=scores)
             return result
-        logger.info("stage2_passed", scores=scores)
-
-        # Stage 3: Groundedness Check
-        logger.info("stage3_groundedness_started")
-        passed, groundedness = self._run_groundedness_check(message, product)
-        result["groundedness_passed"] = passed
-        result["groundedness_result"] = groundedness
-        if not passed:
-            result["failed_stage"] = "groundedness"
-            result["failure_reason"] = f"사실 확인 실패: {'; '.join(groundedness.get('issues', []))}"
-            logger.warning("stage3_failed", issues=groundedness.get("issues", []))
-            return result
-        logger.info("stage3_passed")
+        logger.info("stage3_passed", scores=scores)
 
         # 전체 통과
         result["passed"] = True
         logger.info("quality_check_all_passed")
         return result
 
-    # ============================================================
-    # Stage 1: Rule-based Check (동기, 비용 0)
-    # ============================================================
+# ============================================================
+# Stage 1: Rule-based Check
+# ============================================================
 
     def _run_rule_check(
         self,
         message: Dict[str, Any],
-        brand_name: str,
     ) -> Tuple[bool, List[str]]:
         """
         규칙 기반 품질 검사
@@ -183,6 +201,8 @@ class QualityChecker:
         msg_body = message.get("message", "")
         product_name = message.get("product_name", "")
         brand = message.get("brand", "")
+
+        full_text = f"{title} {msg_body}"
 
         # 1. 포맷 검증
         if not title:
@@ -200,15 +220,8 @@ class QualityChecker:
         if msg_body and len(msg_body) > 350:
             issues.append(f"메시지가 너무 깁니다 ({len(msg_body)}자, 최대 350자)")
 
-        # 3. 필수 요소 포함 확인
-        full_text = f"{title} {msg_body}"
-        if product_name and product_name not in full_text:
-            issues.append(f"상품명 '{product_name}'이(가) 메시지에 포함되지 않았습니다")
-        if brand and brand not in full_text:
-            issues.append(f"브랜드명 '{brand}'이(가) 메시지에 포함되지 않았습니다")
-
-        # 4. 금지 표현 검사
-        forbidden = self._extract_forbidden_expressions(brand_name)
+        # 3. 금지 표현 검사
+        forbidden = self._extract_forbidden_expressions()
         for expr in forbidden:
             expr_stripped = expr.strip()
             if expr_stripped and expr_stripped in full_text:
@@ -217,51 +230,118 @@ class QualityChecker:
         passed = len(issues) == 0
         return passed, issues
 
-    def _extract_forbidden_expressions(self, brand_name: str) -> List[str]:
+    def _extract_forbidden_expressions(self) -> List[str]:
         """
-        brand_tone.yaml에서 해당 브랜드의 '7. 금지 표현' 항목 추출
+        forbidden_keyword.json에서 전체 금지 키워드 목록 추출
 
         Returns:
             금지 표현 키워드 리스트
         """
-        brand_tones = self.brand_tones.get("brand_ton_prompt", {})
+        categories = self.forbidden_keywords.get("categories", {})
+        keywords = []
+        for category in categories.values():
+            keywords.extend(category.get("keywords", []))
+        return keywords
 
-        # 브랜드 톤 텍스트 찾기 (대소문자 무시)
-        tone_text = brand_tones.get(brand_name)
-        if tone_text is None:
-            for key, value in brand_tones.items():
-                if key.lower() == brand_name.lower():
-                    tone_text = value
-                    break
+# ============================================================
+# Stage 2: Semantic Similarity Check
+# ============================================================
 
-        if not tone_text:
-            return []
+    _SEMANTIC_THRESHOLD = 0.85
+    _SEMANTIC_INDEX = "forbidden_sentences"
+    _SEMANTIC_TOP_K = 3
 
-        # "7. 금지 표현" 이후의 내용 추출
-        lines = tone_text.split('\n')
-        found_section = False
-        expressions = []
+    @traced(name="semantic_similarity_check", run_type="chain")
+    async def _run_semantic_similarity_check(
+        self,
+        message: Dict[str, Any],
+    ) -> Tuple[bool, List[Dict[str, Any]]]:
+        """
+        생성된 메시지를 문장 단위로 분리 후 각 문장을
+        /api/search/similar-sentences 엔드포인트로 유사도 검색.
 
-        for line in lines:
-            line_stripped = line.strip()
-            if "7. 금지 표현" in line_stripped or "7." in line_stripped and "금지" in line_stripped:
-                found_section = True
-                # 같은 줄에 내용이 있는 경우
-                after_label = line_stripped.split("금지 표현")[-1].strip()
-                if after_label:
-                    expressions.extend([e.strip() for e in after_label.split(",")])
-                continue
-            if found_section:
-                if line_stripped and not line_stripped.startswith("8."):
-                    expressions.extend([e.strip() for e in line_stripped.split(",")])
-                if line_stripped.startswith("8.") or (not line_stripped and expressions):
-                    break
+        모든 문장의 top-K 결과를 하나의 리스트에 누적하여
+        임계값(SEMANTIC_THRESHOLD) 초과 score가 하나라도 있으면 실패.
 
-        return [e for e in expressions if e]
+        Returns:
+            (passed: bool, triggered_results: List[dict])
+            - passed=True  → 금지 표현 없음
+            - passed=False → 임계값 초과 결과 목록 반환
+        """
+        opensearch_api_url = os.getenv("OPENSEARCH_API_URL")
+        if not opensearch_api_url:
+            raise ValueError("OPENSEARCH_API_URL이 .env 파일에 설정되어 있지 않습니다.")
+        endpoint = f"{opensearch_api_url}/api/search/similar-sentences"
 
-    # ============================================================
-    # Stage 2: LLM-as-a-Judge (비동기, LLM 호출)
-    # ============================================================
+        title = message.get("title", "")
+        msg_body = message.get("message", "")
+        full_text = f"{title} {msg_body}".strip()
+
+        # 문장 단위 분리: ., !, ? 기준 (빈 문장 제거)
+        sentences = [
+            s.strip()
+            for s in re.split(r"[.!?。！？]+", full_text)
+            if s.strip()
+        ]
+
+        if not sentences:
+            return True, []
+
+        # 각 문장을 병렬로 유사도 검색
+        async def search_sentence(sentence: str) -> List[Dict[str, Any]]:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        endpoint,
+                        json={
+                            "index_name": self._SEMANTIC_INDEX,
+                            "query": sentence,
+                            "top_k": self._SEMANTIC_TOP_K,
+                        },
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    return [
+                        {
+                            "query_sentence": sentence,
+                            "matched_sentence": r.get("sentence"),
+                            "score": r.get("score", 0.0),
+                            "source": r.get("source", {}),
+                        }
+                        for r in data.get("results", [])
+                    ]
+            except Exception as e:
+                logger.warning(
+                    "semantic_search_request_failed",
+                    sentence=sentence,
+                    error=str(e),
+                )
+                return []
+
+        all_results: List[Dict[str, Any]] = []
+        search_tasks = [search_sentence(s) for s in sentences]
+        results_per_sentence = await asyncio.gather(*search_tasks)
+        for results in results_per_sentence:
+            all_results.extend(results)
+
+        # 임계값 초과 결과 필터
+        triggered = [r for r in all_results if r["score"] > self._SEMANTIC_THRESHOLD]
+
+        if triggered:
+            logger.info(
+                "semantic_check_triggered",
+                threshold=self._SEMANTIC_THRESHOLD,
+                triggered_count=len(triggered),
+            )
+            return False, triggered
+
+        return True, []
+
+
+
+# ============================================================
+# Stage 3: LLM-as-a-Judge
+# ============================================================
 
     @traced(name="llm_judge", run_type="llm")
     async def _run_llm_judge(
@@ -388,61 +468,6 @@ class QualityChecker:
                 sections.append(f"가치관: {', '.join(values)}")
 
         return "\n".join(sections)
-
-    # ============================================================
-    # Stage 3: Groundedness Check (동기, 비용 0)
-    # ============================================================
-
-    def _run_groundedness_check(
-        self,
-        message: Dict[str, Any],
-        product: Dict[str, Any],
-    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        """
-        Groundedness 검증: 메시지 내 사실 정보가 상품 데이터와 일치하는지 확인
-
-        검사 항목:
-        - 가격 정보 일치 여부
-        - 피부타입 언급 시 실제 데이터와 일치 여부
-        """
-        issues = []
-        checked_fields = []
-        msg_text = f"{message.get('title', '')} {message.get('message', '')}"
-
-        # 1. 가격 검증
-        sale_price = product.get("sale_price")
-        if sale_price:
-            checked_fields.append("sale_price")
-            price_patterns = re.findall(r'[\d,]+원', msg_text)
-            for price_str in price_patterns:
-                try:
-                    mentioned_price = int(price_str.replace(",", "").replace("원", ""))
-                    if mentioned_price != sale_price:
-                        issues.append(
-                            f"가격 불일치: 메시지 '{price_str}' vs 실제 {sale_price:,}원"
-                        )
-                except ValueError:
-                    pass
-
-        # 2. 피부타입 검증
-        actual_skin_types = product.get("skin_type", [])
-        if actual_skin_types:
-            checked_fields.append("skin_type")
-            common_skin_types = ["건성", "지성", "복합성", "민감성", "중성", "수분부족"]
-            for skin_type in common_skin_types:
-                if skin_type in msg_text and skin_type not in actual_skin_types:
-                    issues.append(
-                        f"피부타입 불일치: '{skin_type}'이(가) 메시지에 언급되었으나 "
-                        f"실제 적합 피부타입은 {actual_skin_types}"
-                    )
-
-        is_grounded = len(issues) == 0
-        result = {
-            "is_grounded": is_grounded,
-            "issues": issues,
-            "checked_fields": checked_fields,
-        }
-        return is_grounded, result
 
 
 # ============================================================

@@ -56,6 +56,35 @@ class ProductIDSearchRequest(BaseModel):
         }
 
 
+class SimilarSentenceRequest(BaseModel):
+    index_name: str = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
+    query: str = Field(..., description="유사 문장을 찾을 검색 쿼리 텍스트", min_length=1)
+    top_k: int = Field(default=3, ge=1, le=100, description="반환할 유사 문장 개수 (기본값: 3)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "index_name": "forbidden_sentences",
+                "query": "이 제품은 피부 트러블을 완전히 치료합니다",
+                "top_k": 3
+            }
+        }
+
+
+class SimilarSentenceResult(BaseModel):
+    score: float
+    sentence: Optional[str] = None
+    source: Optional[dict] = None
+
+
+class SimilarSentenceResponse(BaseModel):
+    success: bool
+    total_results: int
+    query: str
+    index_name: str
+    results: List[SimilarSentenceResult]
+
+
 class ProductResult(BaseModel):
     score: float
     product_id: Optional[str] = None
@@ -108,6 +137,7 @@ async def root():
         "endpoints": {
             "get_product_by_id": "/api/product/{product_id}",
             "search_by_product_ids": "/api/search/product-ids",
+            "search_similar_sentences": "/api/search/similar-sentences",
             "docs": "/docs"
         }
     }
@@ -317,6 +347,72 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
 
     except Exception as e:
         logging.error(f"검색 중 오류 발생: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"검색 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.post("/api/search/similar-sentences", response_model=SimilarSentenceResponse)
+async def search_similar_sentences(request: SimilarSentenceRequest):
+    """
+    KNN 벡터 유사도 검색으로 유사한 문장 반환
+
+    - **index_name**: 검색할 인덱스 이름 (예: forbidden_sentences)
+    - **query**: 유사 문장을 찾을 검색 쿼리 텍스트 (필수)
+    - **top_k**: 반환할 결과 개수 (기본값: 3)
+    """
+    try:
+        logging.info(f"유사 문장 검색 요청 - 인덱스: '{request.index_name}', 쿼리: '{request.query}'")
+
+        client = get_opensearch_client()
+
+        # 쿼리 벡터 생성
+        query_vector = client.model.encode(request.query).tolist()
+
+        query_body = {
+            "size": request.top_k,
+            "query": {
+                "knn": {
+                    "sentence_vector": {
+                        "vector": query_vector,
+                        "k": request.top_k
+                    }
+                }
+            },
+            "_source": {
+                "excludes": ["sentence_vector"]
+            }
+        }
+
+        response = client.client.search(
+            index=request.index_name,
+            body=query_body
+        )
+
+        hits = response.get("hits", {}).get("hits", [])
+
+        results = []
+        for hit in hits:
+            source = hit.get("_source", {})
+            results.append(SimilarSentenceResult(
+                score=hit.get("_score", 0.0),
+                sentence=source.get("sentence") or source.get("문장") or source.get("text"),
+                source=source
+            ))
+
+        logging.info(f"유사 문장 검색 완료 - 결과: {len(results)}개")
+
+        return SimilarSentenceResponse(
+            success=True,
+            total_results=len(results),
+            query=request.query,
+            index_name=request.index_name,
+            results=results
+        )
+
+    except Exception as e:
+        logging.error(f"유사 문장 검색 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"검색 중 오류가 발생했습니다: {str(e)}"
