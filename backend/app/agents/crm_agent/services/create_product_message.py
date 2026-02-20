@@ -334,7 +334,9 @@ class ProductMessageGenerator:
         self,
         product: Dict[str, Any],
         persona_info: Dict[str, Any],
-        purpose: str = "브랜드/제품 소개"
+        purpose: str = "브랜드/제품 소개",
+        quality_feedback: Optional[str] = None,
+        previous_message: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         상품 메시지 생성
@@ -392,6 +394,19 @@ class ProductMessageGenerator:
         }
         build_func = PURPOSE_PROMPT_MAP.get(purpose)
         prompt = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)
+
+        # 품질 검사 피드백이 있으면 프롬프트 끝에 추가 (재시도 시)
+        if quality_feedback:
+            from langchain_core.messages import HumanMessage
+            previous_context = f"[이전에 생성한 메시지]\n{previous_message}\n\n" if previous_message else ""
+            prompt = list(prompt) + [
+                HumanMessage(content=(
+                    f"{previous_context}"
+                    f"[품질 검사 피드백]\n{quality_feedback}\n\n"
+                    "위 피드백을 반드시 반영하여 개선된 메시지를 다시 작성하세요."
+                ))
+            ]
+            logger.info("quality_feedback_injected", feedback_length=len(quality_feedback))
 
         try:
             response = await self.llm.ainvoke(prompt)

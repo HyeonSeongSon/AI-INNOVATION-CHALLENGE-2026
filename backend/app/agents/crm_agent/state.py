@@ -179,8 +179,12 @@ class QualityCheckContext(TypedDict, total=False):
       - intermediate.request.parsed_request
     WRITE:
       - intermediate.quality_check.results
+      - intermediate.quality_check.feedback
+      - intermediate.quality_check.retry_count
     """
     results: List[QualityCheckResult]                # 메시지별 품질 검사 결과
+    feedback: Optional[str]                          # 가장 최근 실패 피드백 (재생성 시 참조)
+    retry_count: int                                 # 재시도 횟수 (0이 초기값, 최대 2)
 
 
 class CRMIntermediate(TypedDict, total=False):

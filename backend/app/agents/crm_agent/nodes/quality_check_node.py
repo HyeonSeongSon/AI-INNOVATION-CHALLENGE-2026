@@ -158,11 +158,39 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
             }
         else:
             failed_count = sum(1 for r in results if not r.get("passed"))
+            failed_result = next((r for r in results if not r.get("passed")), {})
+
+            # 피드백 조합: failure_reason + LLM 피드백
+            failure_reason = failed_result.get("failure_reason", "")
+            llm_feedback = (failed_result.get("llm_judge_scores") or {}).get("feedback", "")
+            feedback = failure_reason
+            if llm_feedback:
+                feedback = f"{failure_reason}\nLLM 피드백: {llm_feedback}"
+
+            # 재시도 카운터 읽기 및 증가
+            retry_count = intermediate.get("quality_check", {}).get("retry_count", 0)
+            intermediate["quality_check"]["feedback"] = feedback
+            intermediate["quality_check"]["retry_count"] = retry_count + 1
+
+            # 실패한 메시지 원문 저장 (재생성 시 컨텍스트로 활용)
+            failed_index = next((i for i, r in enumerate(results) if not r.get("passed")), None)
+            if failed_index is not None and failed_index < len(messages):
+                intermediate["quality_check"]["previous_message"] = messages[failed_index].get("full_content", "")
+
+            # 최대 재시도(2회) 초과 여부에 따라 status 구분
+            if retry_count >= 2:
+                final_status = "failed"
+                log_message = f"품질 검사 최대 재시도 초과 ({retry_count + 1}/3회): {failed_count}/{len(results)}건 미통과"
+            else:
+                final_status = "quality_check_failed"
+                log_message = f"품질 검사 미통과 ({retry_count + 1}/3회): {failed_count}/{len(results)}건 미통과 — 재생성 예정"
+
             logger.warning(
                 "node_completed_with_failures",
-                user_message=f"품질 검사 완료: {failed_count}/{len(results)}건 미통과",
+                user_message=log_message,
                 total_messages=len(results),
                 failed_count=failed_count,
+                retry_count=retry_count + 1,
             )
             return {
                 "step": state.get("step", 0) + 1,
@@ -170,8 +198,8 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
                 "current_node": "end",
                 "intermediate": intermediate,
                 "logs": logger.get_user_logs(),
-                "status": "failed",
-                "error": f"품질 검사 미통과: {results[0].get('failure_reason', '')}",
+                "status": final_status,
+                "error": f"품질 검사 미통과: {failure_reason}",
                 "error_details": {
                     "node": "quality_check_node",
                     "failed_results": [r for r in results if not r.get("passed")],

@@ -13,6 +13,23 @@ from .nodes.create_product_message_node import create_product_message_node
 from .nodes.quality_check_node import quality_check_node
 
 
+def should_retry_after_quality_check(state: CRMState) -> str:
+    """
+    품질 검사 결과에 따라 다음 노드를 결정하는 조건부 엣지
+
+    - 통과(completed) → END
+    - 실패 + retry_count < 2 → create_product_message (피드백 반영 재생성)
+    - 실패 + retry_count >= 2 → END (최대 재시도 초과, failed)
+    """
+    if state.get("status") == "completed":
+        return "__end__"
+
+    retry_count = state.get("intermediate", {}).get("quality_check", {}).get("retry_count", 0)
+    if retry_count < 2:
+        return "create_product_message"
+    return "__end__"
+
+
 def should_continue_after_message(state: CRMState) -> str:
     """
     메시지 생성 결과에 따라 다음 노드를 결정하는 조건부 엣지
@@ -106,7 +123,14 @@ def build_crm_workflow(checkpointer=None):
             "__end__": END,
         }
     )
-    workflow.add_edge("quality_check", END)
+    workflow.add_conditional_edges(
+        "quality_check",
+        should_retry_after_quality_check,
+        {
+            "create_product_message": "create_product_message",
+            "__end__": END,
+        }
+    )
     return workflow.compile(checkpointer=checkpointer)
 
 

@@ -126,6 +126,19 @@ async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
             purpose=purpose,
         )
 
+        # 품질 검사 피드백 읽기 (재시도 시 활용)
+        quality_check_context = intermediate.get("quality_check", {})
+        quality_feedback = quality_check_context.get("feedback")
+        previous_message = quality_check_context.get("previous_message")
+        retry_count = quality_check_context.get("retry_count", 0)
+
+        if quality_feedback:
+            logger.info(
+                "retrying_with_feedback",
+                user_message=f"품질 검사 피드백 반영하여 메시지 재생성 (시도 {retry_count + 1}/3)",
+                retry_count=retry_count,
+            )
+
         # 2. MessageGenerator 가져오기
         generator = get_message_generator()
 
@@ -137,7 +150,9 @@ async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
             message_result = await generator.generate_message(
                 product=selected_product,
                 persona_info=persona_info,
-                purpose=purpose
+                purpose=purpose,
+                quality_feedback=quality_feedback,
+                previous_message=previous_message,
             )
 
         if message_result.get("success"):
