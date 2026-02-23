@@ -230,23 +230,39 @@ async def recommend_products_node(state: CRMState) -> Dict[str, Any]:
             intermediate["recommendation"]["queries"] = queries
 
         # HITL: 사용자에게 상품 선택 요청 (interrupt)
-        # 이미 selected_product_id가 있는 경우(재진입)에는 interrupt 생략
-        selected_product_id = state.get("selected_product_id")
-        if not selected_product_id:
+        #
+        # 다중 interrupt 대비 패턴:
+        #   - interrupt() 반환값을 최상위 state 필드가 아닌
+        #     intermediate["hitl"]["product_selection"]에 저장
+        #   - 재진입(resume) 시 LangGraph는 노드를 처음부터 재실행하므로
+        #     already_recommended 분기로 추천 로직은 건너뛰고
+        #     hitl 키 존재 여부로 이미 처리된 interrupt를 구분
+        #
+        # 추후 interrupt 추가 시:
+        #   - HitlContext에 새 키 추가 (state.py)
+        #   - 동일 패턴으로 interrupt() → intermediate["hitl"]["new_key"]에 저장
+        if "hitl" not in intermediate:
+            intermediate["hitl"] = {}
+
+        hitl = intermediate["hitl"]
+
+        if "product_selection" not in hitl:
             logger.info(
                 "waiting_for_product_selection",
                 user_message="추천 상품을 사용자에게 제시합니다. 상품을 선택해주세요.",
             )
             # interrupt() 반환값 = Command(resume=selected_product_id)로 전달된 값
-            selected_product_id = interrupt({
+            hitl["product_selection"] = interrupt({
                 "type": "product_selection",
                 "recommended_products": intermediate["recommendation"].get("recommended_products", []),
             })
-            logger.info(
-                "product_selected_by_user",
-                user_message=f"사용자 선택 완료: {selected_product_id}",
-                selected_product_id=selected_product_id,
-            )
+
+        selected_product_id = hitl["product_selection"]
+        logger.info(
+            "product_selected_by_user",
+            user_message=f"사용자 선택 완료: {selected_product_id}",
+            selected_product_id=selected_product_id,
+        )
 
         # 상태 업데이트
         return {
@@ -254,7 +270,6 @@ async def recommend_products_node(state: CRMState) -> Dict[str, Any]:
             "last_node": "recommend_products_node",
             "current_node": "create_message_node",  # 다음 노드
             "intermediate": intermediate,
-            "selected_product_id": selected_product_id,
             "logs": logger.get_user_logs(),
             "status": "running"
         }

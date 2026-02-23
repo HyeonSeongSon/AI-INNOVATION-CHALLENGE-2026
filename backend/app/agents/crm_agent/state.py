@@ -187,6 +187,24 @@ class QualityCheckContext(TypedDict, total=False):
     retry_count: int                                 # 재시도 횟수 (0이 초기값, 최대 2)
 
 
+class HitlContext(TypedDict, total=False):
+    """
+    Human-in-the-loop interrupt 결과 저장소
+
+    각 interrupt()의 반환값을 명확한 키로 저장하여
+    다중 interrupt 상황에서도 값 충돌 없이 관리합니다.
+
+    패턴:
+      1. interrupt() 호출 → GraphInterrupt (노드 중단)
+      2. Command(resume=value)로 재개 → interrupt() 반환값
+      3. 반환값을 해당 키에 저장 → 이후 노드에서 읽기
+
+    추후 interrupt 추가 시 이 클래스에 키를 추가합니다.
+    """
+    product_selection: Optional[str]     # 사용자가 선택한 상품 ID (recommend_products_node)
+    # message_approval: str              # (예시) 메시지 승인/거부 (미래 interrupt 추가 시)
+
+
 class CRMIntermediate(TypedDict, total=False):
     """
     CRM Agent의 intermediate 데이터 구조
@@ -197,6 +215,7 @@ class CRMIntermediate(TypedDict, total=False):
     recommendation: RecommendationContext            # 상품 추천 결과
     message: MessageContext                          # 메시지 생성 결과
     quality_check: QualityCheckContext               # 품질 검사 결과
+    hitl: HitlContext                                # Human-in-the-loop interrupt 결과
 
 
 # ============================================================
@@ -229,7 +248,7 @@ class CRMState(BaseState, total=False):
     │ 3. HUMAN-IN-THE-LOOP (interrupt)                         │
     │    - 사용자에게 추천 상품 3개 제시                       │
     │    - 사용자가 1개 선택                                   │
-    │    - selected_product_id 저장                            │
+    │    - 결과를 intermediate.hitl.product_selection에 저장   │
     └─────────────────────────────────────────────────────────┘
                             ↓
     ┌─────────────────────────────────────────────────────────┐
@@ -237,7 +256,7 @@ class CRMState(BaseState, total=False):
     │    READ:  intermediate.request.parsed_request            │
     │           intermediate.recommendation.persona_info       │
     │           intermediate.recommendation.recommended_products│
-    │           selected_product_id                            │
+    │           intermediate.hitl.product_selection            │
     │    WRITE: intermediate.message.selected_product          │
     │           intermediate.message.messages                  │
     │           intermediate.message.product_document_summary  │
@@ -266,7 +285,5 @@ class CRMState(BaseState, total=False):
 
     # CRM 전용 필드
     intermediate: CRMIntermediate       # 타입이 명시된 intermediate 데이터
-
-    # Human-in-the-loop 필드
-    # interrupt() 재개 시 Command(resume=product_id)로 주입됨
-    selected_product_id: Optional[str]      # 사용자가 선택한 상품 ID
+    # NOTE: interrupt() 결과는 최상위 state 필드가 아닌
+    #       intermediate.hitl.*에 저장합니다. (다중 interrupt 대비)

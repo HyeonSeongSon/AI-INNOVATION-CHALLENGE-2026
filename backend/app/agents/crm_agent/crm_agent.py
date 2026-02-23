@@ -72,7 +72,6 @@ class CRMAgent:
             "intermediate": {},
             "context": context or {},
             "status": "running",
-            "selected_product_id": None,
         }
 
         try:

@@ -59,8 +59,8 @@ async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
         persona_info = recommendation_context.get("persona_info")
         recommended_products = recommendation_context.get("recommended_products", [])
 
-        # 사용자가 선택한 상품 ID 가져오기
-        selected_product_id = state.get("selected_product_id")
+        # 사용자가 선택한 상품 ID 가져오기 (intermediate.hitl에 저장된 interrupt 결과)
+        selected_product_id = intermediate.get("hitl", {}).get("product_selection")
 
         # Context 구조 초기화
         if "message" not in intermediate:
@@ -291,13 +291,16 @@ if __name__ == "__main__":
                         "product_page_url": "https://example.com/product/001"
                     }
                 ]
+            },
+            # interrupt 결과는 intermediate.hitl에 저장 (state 최상위 필드 X)
+            "hitl": {
+                "product_selection": "PROD_001"  # 사용자가 선택한 상품 ID
             }
         },
         "context": {
             "user_id": "test_user",
             "session_id": "test_session"
         },
-        "selected_product_id": "PROD_001"  # 사용자가 선택한 상품 ID
     }
 
     print("=" * 80)
@@ -310,7 +313,7 @@ if __name__ == "__main__":
         print(f"   가격: {product.get('sale_price'):,}원")
         print(f"   스코어: {product.get('vector_search_score', 0):.3f}")
 
-    selected_id = test_state.get('selected_product_id')
+    selected_id = test_state.get('intermediate', {}).get('hitl', {}).get('product_selection')
     if selected_id is not None:
         print(f"\n사용자 선택: 상품 ID {selected_id}")
     else:
