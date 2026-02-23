@@ -6,6 +6,8 @@
 
 import json
 from typing import Dict, Any
+from langgraph.types import interrupt
+from langgraph.errors import GraphInterrupt
 from ..state import CRMState
 from ..services.recommend_products import ProductRecommender
 from ....core.logging import AgentLogger
@@ -54,169 +56,197 @@ async def recommend_products_node(state: CRMState) -> Dict[str, Any]:
     )
 
     try:
-        # 1. 파싱된 요청 가져오기 (Context 구조)
-        request_context = intermediate.get("request", {})
-        parsed_request = request_context.get("parsed_request")
-        if not parsed_request:
-            raise ValueError("파싱된 요청(parsed_request)이 없습니다.")
-
-        persona_id = parsed_request.get("persona_id")
-        brands = parsed_request.get("brands", [])
-        product_categories = parsed_request.get("product_categories", [])
-        exclusive_target = parsed_request.get("exclusive_target")
-        purpose = parsed_request.get("purpose")
-
-        if not persona_id:
-            raise ValueError("persona_id가 비어있습니다.")
-
-        logger.info(
-            "request_parsed",
-            user_message=f"페르소나 ID: {persona_id}",
-            persona_id=persona_id,
-            brands=brands,
-            categories=product_categories,
-        )
-
-        # 2. Recommender 가져오기
-        recommender = get_recommender()
-
-        # 3. 사용자 입력 가져오기
-        user_input = state.get("input", "")
-
-        # 4. 페르소나 정보 조회
-        with logger.track_duration("get_persona_info", user_message="페르소나 정보 조회 중..."):
-            persona_info = await recommender.get_persona_info(persona_id)
-
-        logger.info(
-            "persona_info_fetched",
-            user_message=f"페르소나 정보 조회 완료: {persona_info.get('이름')}",
-            persona_name=persona_info.get("이름"),
-        )
-
-        # 5. 기존 분석 결과 확인
-        logger.info(
-            "checking_existing_analysis",
-            user_message="기존 분석 결과 확인 중...",
-        )
-        existing_analysis = await recommender.get_existing_analysis(persona_id)
-
-        analysis_result = None
-        analysis_id = None
-
-        if existing_analysis:
-            analysis_id = existing_analysis['analysis_id']
-            logger.info(
-                "existing_analysis_found",
-                user_message=f"기존 분석 발견 (ID: {analysis_id})",
-                analysis_id=analysis_id,
-            )
-            try:
-                analysis_result = json.loads(existing_analysis['analysis_result'])
-            except json.JSONDecodeError:
-                logger.warning(
-                    "analysis_parse_failed",
-                    user_message="기존 분석 파싱 실패, 새로 생성",
-                )
-                analysis_result = None
-        else:
-            logger.info(
-                "no_existing_analysis",
-                user_message="기존 분석 없음, 새로 생성",
-            )
-
-        # 6. 분석 결과가 없으면 새로 생성
-        if not analysis_result:
-            with logger.track_duration("persona_analysis", user_message="페르소나 분석 수행 중..."):
-                analysis_result = await recommender.recommend_persona(
-                    user_input=user_input,
-                    persona_id=persona_id
-                )
-
-            # DB에 저장
-            with logger.track_duration("save_analysis", user_message="분석 결과 DB 저장 중..."):
-                analysis_id = await recommender.save_analysis_result(
-                    persona_id=persona_id,
-                    analysis_result=analysis_result
-                )
-
-            logger.info(
-                "analysis_saved",
-                user_message=f"분석 저장 완료 (ID: {analysis_id})",
-                analysis_id=analysis_id,
-            )
-
-        # 7. 멀티 쿼리 생성
-        with logger.track_duration("multi_query_generation", user_message="멀티 쿼리 생성 중..."):
-            queries = await recommender.generate_multi_queries(
-                user_input=user_input,
-                analysis_result=analysis_result,
-                product_categories=product_categories
-            )
-
-        logger.info(
-            "queries_generated",
-            user_message=f"쿼리 생성 완료: {len(queries)}개",
-            query_count=len(queries),
-        )
-
-        # 8. 쿼리 DB 저장
-        with logger.track_duration("save_queries", user_message="쿼리 DB 저장 중..."):
-            await recommender.save_search_queries(
-                analysis_id=analysis_id,
-                queries=queries
-            )
-
-        # 9. 멀티 쿼리로 벡터 검색
-        with logger.track_duration("vector_search", user_message="멀티 쿼리 검색 수행 중..."):
-            search_results = await recommender.search_with_multi_queries(
-                queries=queries,
-                brands=brands if brands else None,
-                product_categories=product_categories if product_categories else None,
-                exclusive_target=exclusive_target,
-                top_k=5
-            )
-
-        # Context 구조로 저장
+        # Context 구조 초기화
         if "recommendation" not in intermediate:
             intermediate["recommendation"] = {}
 
-        if not search_results:
+        # resume 시 이미 추천 결과가 체크포인트에 있으면 1~9단계 전체 재실행 생략
+        # (LangGraph 1.x: interrupt() 후 resume 시 노드를 처음부터 재실행함)
+        already_recommended = bool(intermediate.get("recommendation", {}).get("recommended_products"))
+
+        if already_recommended:
             logger.info(
-                "no_search_results",
-                user_message="검색 결과 없음",
+                "skipping_recommendation",
+                user_message="사용자 선택 재개: 기존 추천 결과를 사용합니다.",
             )
-            intermediate["recommendation"]["recommended_products"] = []
         else:
-            # 10. 상품 데이터 병합
-            with logger.track_duration("merge_products", user_message="상품 데이터 병합 중..."):
-                all_products = await recommender.get_filtered_products(
+            # 1. 파싱된 요청 가져오기 (Context 구조)
+            request_context = intermediate.get("request", {})
+            parsed_request = request_context.get("parsed_request")
+            if not parsed_request:
+                raise ValueError("파싱된 요청(parsed_request)이 없습니다.")
+
+            persona_id = parsed_request.get("persona_id")
+            brands = parsed_request.get("brands", [])
+            product_categories = parsed_request.get("product_categories", [])
+            exclusive_target = parsed_request.get("exclusive_target")
+
+            if not persona_id:
+                raise ValueError("persona_id가 비어있습니다.")
+
+            logger.info(
+                "request_parsed",
+                user_message=f"페르소나 ID: {persona_id}",
+                persona_id=persona_id,
+                brands=brands,
+                categories=product_categories,
+            )
+
+            # 2. Recommender 가져오기
+            recommender = get_recommender()
+
+            # 3. 사용자 입력 가져오기
+            user_input = state.get("input", "")
+
+            # 4. 페르소나 정보 조회
+            with logger.track_duration("get_persona_info", user_message="페르소나 정보 조회 중..."):
+                persona_info = await recommender.get_persona_info(persona_id)
+
+            logger.info(
+                "persona_info_fetched",
+                user_message=f"페르소나 정보 조회 완료: {persona_info.get('이름')}",
+                persona_name=persona_info.get("이름"),
+            )
+
+            # 5. 기존 분석 결과 확인
+            logger.info(
+                "checking_existing_analysis",
+                user_message="기존 분석 결과 확인 중...",
+            )
+            existing_analysis = await recommender.get_existing_analysis(persona_id)
+
+            analysis_result = None
+            analysis_id = None
+
+            if existing_analysis:
+                analysis_id = existing_analysis['analysis_id']
+                logger.info(
+                    "existing_analysis_found",
+                    user_message=f"기존 분석 발견 (ID: {analysis_id})",
+                    analysis_id=analysis_id,
+                )
+                try:
+                    analysis_result = json.loads(existing_analysis['analysis_result'])
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "analysis_parse_failed",
+                        user_message="기존 분석 파싱 실패, 새로 생성",
+                    )
+                    analysis_result = None
+            else:
+                logger.info(
+                    "no_existing_analysis",
+                    user_message="기존 분석 없음, 새로 생성",
+                )
+
+            # 6. 분석 결과가 없으면 새로 생성
+            if not analysis_result:
+                with logger.track_duration("persona_analysis", user_message="페르소나 분석 수행 중..."):
+                    analysis_result = await recommender.recommend_persona(
+                        user_input=user_input,
+                        persona_id=persona_id
+                    )
+
+                # DB에 저장
+                with logger.track_duration("save_analysis", user_message="분석 결과 DB 저장 중..."):
+                    analysis_id = await recommender.save_analysis_result(
+                        persona_id=persona_id,
+                        analysis_result=analysis_result
+                    )
+
+                logger.info(
+                    "analysis_saved",
+                    user_message=f"분석 저장 완료 (ID: {analysis_id})",
+                    analysis_id=analysis_id,
+                )
+
+            # 7. 멀티 쿼리 생성
+            with logger.track_duration("multi_query_generation", user_message="멀티 쿼리 생성 중..."):
+                queries = await recommender.generate_multi_queries(
+                    user_input=user_input,
+                    analysis_result=analysis_result,
+                    product_categories=product_categories
+                )
+
+            logger.info(
+                "queries_generated",
+                user_message=f"쿼리 생성 완료: {len(queries)}개",
+                query_count=len(queries),
+            )
+
+            # 8. 쿼리 DB 저장
+            with logger.track_duration("save_queries", user_message="쿼리 DB 저장 중..."):
+                await recommender.save_search_queries(
+                    analysis_id=analysis_id,
+                    queries=queries
+                )
+
+            # 9. 멀티 쿼리로 벡터 검색
+            with logger.track_duration("vector_search", user_message="멀티 쿼리 검색 수행 중..."):
+                search_results = await recommender.search_with_multi_queries(
+                    queries=queries,
                     brands=brands if brands else None,
                     product_categories=product_categories if product_categories else None,
-                    exclusive_target=exclusive_target
+                    exclusive_target=exclusive_target,
+                    top_k=5
                 )
 
-                merged_products = recommender.merge_product_data(
-                    search_results=search_results,
-                    all_products=all_products
+            if not search_results:
+                logger.info(
+                    "no_search_results",
+                    user_message="검색 결과 없음",
+                )
+                intermediate["recommendation"]["recommended_products"] = []
+            else:
+                # 10. 상품 데이터 병합
+                with logger.track_duration("merge_products", user_message="상품 데이터 병합 중..."):
+                    all_products = await recommender.get_filtered_products(
+                        brands=brands if brands else None,
+                        product_categories=product_categories if product_categories else None,
+                        exclusive_target=exclusive_target
+                    )
+
+                    merged_products = recommender.merge_product_data(
+                        search_results=search_results,
+                        all_products=all_products
+                    )
+
+                # 상위 3개만 선택
+                top_3_products = merged_products[:3]
+                logger.info(
+                    "products_recommended",
+                    user_message=f"상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개)",
+                    top_count=len(top_3_products),
+                    total_count=len(merged_products),
                 )
 
-            # 상위 3개만 선택
-            top_3_products = merged_products[:3]
+                # Context 구조로 결과 저장
+                intermediate["recommendation"]["recommended_products"] = top_3_products
+
+            # 분석 관련 정보도 Context 구조로 저장
+            intermediate["recommendation"]["persona_info"] = persona_info
+            intermediate["recommendation"]["analysis_result"] = analysis_result
+            intermediate["recommendation"]["analysis_id"] = analysis_id
+            intermediate["recommendation"]["queries"] = queries
+
+        # HITL: 사용자에게 상품 선택 요청 (interrupt)
+        # 이미 selected_product_id가 있는 경우(재진입)에는 interrupt 생략
+        selected_product_id = state.get("selected_product_id")
+        if not selected_product_id:
             logger.info(
-                "products_recommended",
-                user_message=f"상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개)",
-                top_count=len(top_3_products),
-                total_count=len(merged_products),
+                "waiting_for_product_selection",
+                user_message="추천 상품을 사용자에게 제시합니다. 상품을 선택해주세요.",
             )
-
-            # Context 구조로 결과 저장
-            intermediate["recommendation"]["recommended_products"] = top_3_products
-
-        # 분석 관련 정보도 Context 구조로 저장
-        intermediate["recommendation"]["persona_info"] = persona_info
-        intermediate["recommendation"]["analysis_result"] = analysis_result
-        intermediate["recommendation"]["analysis_id"] = analysis_id
-        intermediate["recommendation"]["queries"] = queries
+            # interrupt() 반환값 = Command(resume=selected_product_id)로 전달된 값
+            selected_product_id = interrupt({
+                "type": "product_selection",
+                "recommended_products": intermediate["recommendation"].get("recommended_products", []),
+            })
+            logger.info(
+                "product_selected_by_user",
+                user_message=f"사용자 선택 완료: {selected_product_id}",
+                selected_product_id=selected_product_id,
+            )
 
         # 상태 업데이트
         return {
@@ -224,9 +254,14 @@ async def recommend_products_node(state: CRMState) -> Dict[str, Any]:
             "last_node": "recommend_products_node",
             "current_node": "create_message_node",  # 다음 노드
             "intermediate": intermediate,
+            "selected_product_id": selected_product_id,
             "logs": logger.get_user_logs(),
             "status": "running"
         }
+
+    except GraphInterrupt:
+        # interrupt()는 내부적으로 GraphInterrupt를 raise함 — 반드시 re-raise
+        raise
 
     except Exception as e:
         # 에러 처리

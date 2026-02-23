@@ -6,6 +6,7 @@ CRM Agent
 
 from typing import Dict, Any, Optional
 import uuid
+from langgraph.types import Command
 from .state import CRMState
 from .workflow import build_crm_workflow
 from ...core.logging import get_logger
@@ -72,7 +73,6 @@ class CRMAgent:
             "context": context or {},
             "status": "running",
             "selected_product_id": None,
-            "waiting_for_user": False
         }
 
         try:
@@ -80,21 +80,19 @@ class CRMAgent:
             config = {"configurable": {"thread_id": thread_id}}
             final_state = await self.workflow.ainvoke(initial_state, config)
 
-            # 결과 추출
-            intermediate = final_state.get("intermediate", {})
-            request = intermediate.get("request", {})
-            recommendation = intermediate.get("recommendation", {})
-            message = intermediate.get("message", {})
-
-            # interrupt 상태 확인
-            recommended_products = recommendation.get("recommended_products", [])
-            if recommended_products and not message.get("messages"):
-                # 추천 상품은 있지만 메시지가 없으면 사용자 입력 대기
+            # interrupt 발생 여부 확인
+            # ainvoke()는 interrupt 시 __interrupt__ 키를 포함한 상태를 반환
+            interrupts = final_state.get("__interrupt__", [])
+            if interrupts:
+                interrupt_value = interrupts[0].value
+                intermediate = final_state.get("intermediate", {})
+                recommendation = intermediate.get("recommendation", {})
+                request = intermediate.get("request", {})
                 return {
                     "status": "waiting_for_user",
                     "thread_id": thread_id,
                     "messages": [],
-                    "recommended_products": recommended_products,
+                    "recommended_products": interrupt_value.get("recommended_products", []),
                     "persona_info": recommendation.get("persona_info"),
                     "parsed_request": request.get("parsed_request"),
                     "analysis_id": recommendation.get("analysis_id"),
@@ -104,11 +102,17 @@ class CRMAgent:
                     "step": final_state.get("step", 0)
                 }
 
+            # 정상 완료
+            intermediate = final_state.get("intermediate", {})
+            request = intermediate.get("request", {})
+            recommendation = intermediate.get("recommendation", {})
+            message = intermediate.get("message", {})
+
             return {
                 "status": final_state.get("status", "completed"),
                 "thread_id": thread_id,
                 "messages": message.get("messages", []),
-                "recommended_products": recommended_products,
+                "recommended_products": recommendation.get("recommended_products", []),
                 "persona_info": recommendation.get("persona_info"),
                 "parsed_request": request.get("parsed_request"),
                 "analysis_id": recommendation.get("analysis_id"),
@@ -152,18 +156,13 @@ class CRMAgent:
             # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
             set_thread_id(thread_id)
 
-            # 현재 상태 가져오기
+            # Command(resume=)로 interrupt 지점에서 재개
+            # selected_product_id가 interrupt() 반환값으로 recommend_products_node에 전달됨
             config = {"configurable": {"thread_id": thread_id}}
-            current_state = await self.workflow.aget_state(config)
-
-            # 상태 업데이트 (선택된 상품 ID 추가)
-            updated_state = current_state.values.copy()
-            updated_state["selected_product_id"] = selected_product_id
-            updated_state["waiting_for_user"] = False
-
-            # 워크플로우 재개 (None 입력으로 상태만 업데이트하고 계속 진행)
-            await self.workflow.aupdate_state(config, updated_state)
-            final_state = await self.workflow.ainvoke(None, config)
+            final_state = await self.workflow.ainvoke(
+                Command(resume=selected_product_id),
+                config
+            )
 
             # 결과 추출
             intermediate = final_state.get("intermediate", {})

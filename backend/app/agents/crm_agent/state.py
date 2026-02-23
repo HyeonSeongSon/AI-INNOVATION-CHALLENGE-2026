@@ -268,5 +268,5 @@ class CRMState(BaseState, total=False):
     intermediate: CRMIntermediate       # 타입이 명시된 intermediate 데이터
 
     # Human-in-the-loop 필드
+    # interrupt() 재개 시 Command(resume=product_id)로 주입됨
     selected_product_id: Optional[str]      # 사용자가 선택한 상품 ID
-    waiting_for_user: bool                  # 사용자 입력 대기 중 여부
