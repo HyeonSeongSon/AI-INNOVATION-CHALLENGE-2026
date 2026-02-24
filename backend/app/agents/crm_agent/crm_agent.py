@@ -35,7 +35,8 @@ class CRMAgent:
         self,
         user_input: str,
         context: Optional[Dict[str, Any]] = None,
-        thread_id: Optional[str] = None
+        thread_id: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         CRM Agent 실행 (초기 실행 또는 재개)
@@ -76,7 +77,10 @@ class CRMAgent:
 
         try:
             # 워크플로우 비동기 실행 (thread_id 포함)
-            config = {"configurable": {"thread_id": thread_id}}
+            configurable = {"thread_id": thread_id}
+            if model:
+                configurable["model"] = model
+            config = {"configurable": configurable}
             final_state = await self.workflow.ainvoke(initial_state, config)
 
             # interrupt 발생 여부 확인
@@ -139,7 +143,8 @@ class CRMAgent:
     async def resume_with_selection(
         self,
         thread_id: str,
-        selected_product_id: str
+        selected_product_id: str,
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         사용자 상품 선택 후 워크플로우 재개
@@ -157,7 +162,10 @@ class CRMAgent:
 
             # Command(resume=)로 interrupt 지점에서 재개
             # selected_product_id가 interrupt() 반환값으로 recommend_products_node에 전달됨
-            config = {"configurable": {"thread_id": thread_id}}
+            configurable = {"thread_id": thread_id}
+            if model:
+                configurable["model"] = model
+            config = {"configurable": configurable}
             final_state = await self.workflow.ainvoke(
                 Command(resume=selected_product_id),
                 config

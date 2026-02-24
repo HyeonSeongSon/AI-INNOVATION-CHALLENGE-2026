@@ -4,25 +4,20 @@
 추천된 상품들에 대해 목적별 맞춤 메시지를 생성하는 노드
 """
 
+import os
 from typing import Dict, Any
+from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
+from ....core.llm_factory import create_llm
 from ..services.create_product_message import ProductMessageGenerator
 from ....core.logging import AgentLogger
 
 
-# Generator 싱글톤 인스턴스 (재사용)
-_generator_instance = None
+# Generator 인스턴스 
+_generator = ProductMessageGenerator()
 
 
-def get_message_generator() -> ProductMessageGenerator:
-    """MessageGenerator 인스턴스를 가져오거나 생성 (싱글톤 패턴)"""
-    global _generator_instance
-    if _generator_instance is None:
-        _generator_instance = ProductMessageGenerator()
-    return _generator_instance
-
-
-async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
+async def create_product_message_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
     """
     추천된 상품들에 대해 메시지를 생성하는 노드
 
@@ -139,20 +134,22 @@ async def create_product_message_node(state: CRMState) -> Dict[str, Any]:
                 retry_count=retry_count,
             )
 
-        # 2. MessageGenerator 가져오기
-        generator = get_message_generator()
+        # 2. config에서 모델명 읽기 후 LLM 생성
+        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        llm = create_llm(model_name, temperature=0.7)
 
         # 3. 선택된 상품에 대해 메시지 생성
         messages = []
         product_name = selected_product.get("product_name", "알 수 없음")
 
         with logger.track_duration("message_generation", user_message=f"메시지 생성 중: {product_name}"):
-            message_result = await generator.generate_message(
+            message_result = await _generator.generate_message(
                 product=selected_product,
                 persona_info=persona_info,
                 purpose=purpose,
                 quality_feedback=quality_feedback,
                 previous_message=previous_message,
+                llm=llm,
             )
 
         if message_result.get("success"):

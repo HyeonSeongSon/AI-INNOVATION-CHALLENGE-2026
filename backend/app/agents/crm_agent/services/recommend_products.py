@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
 from ..prompts.crm_recommend_products import build_persona_info_analysis_prompt, build_multil_query_generate_prompt
 from ....core.logging import get_logger
@@ -18,24 +18,10 @@ logger = get_logger("recommend_products")
 class ProductRecommender:
     """상품 추천 로직"""
     def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
-        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
         self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
         self.db_api_url = os.getenv("DATABASE_API_URL")
-
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
-
-        self.llm = ChatOpenAI(
-            model=chat_gpt_model_name,
-            temperature=0.7,
-            api_key=api_key,
-            request_timeout=30
-        )
-
         self._http_client: Optional[httpx.AsyncClient] = None
-
-        logger.info("recommender_initialized", model=chat_gpt_model_name)
+        logger.info("recommender_initialized")
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -185,7 +171,7 @@ class ProductRecommender:
             raise
 
     @traced(name="recommend_persona", run_type="chain")
-    async def recommend_persona(self, user_input: str, persona_id: str) -> Dict[str, Any]:
+    async def recommend_persona(self, user_input: str, persona_id: str, llm: BaseChatModel) -> Dict[str, Any]:
         """
         페르소나 기반 다단계 × 다차원 분석
 
@@ -204,7 +190,7 @@ class ProductRecommender:
 
         # 3. LLM 호출하여 분석 수행
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await llm.ainvoke(prompt)
         except Exception as e:
             logger.error("llm_persona_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return {
@@ -242,7 +228,8 @@ class ProductRecommender:
         self,
         user_input: str,
         analysis_result: Dict[str, Any],
-        product_categories: Optional[List[str]] = None
+        product_categories: Optional[List[str]] = None,
+        llm: Optional[BaseChatModel] = None,
     ) -> List[str]:
         """
         분석 결과를 기반으로 멀티 쿼리 생성
@@ -260,7 +247,7 @@ class ProductRecommender:
 
         # LLM 호출하여 멀티 쿼리 생성
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await llm.ainvoke(prompt)
         except Exception as e:
             logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
             return [user_input]

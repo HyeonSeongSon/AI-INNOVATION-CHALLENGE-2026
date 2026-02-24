@@ -5,7 +5,7 @@
 
 import re
 from typing import Dict, Any, Optional
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
 from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
@@ -28,20 +28,8 @@ logger = get_logger("create_product_message")
 class ProductMessageGenerator:
     def __init__(self):
         """메시지 생성기 초기화"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
         self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
         self.db_api_url = os.getenv("DATABASE_API_URL")
-
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
-
-        self.llm = ChatOpenAI(
-            model=chat_gpt_model_name,
-            temperature=0.7,
-            api_key=api_key,
-            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
-        )
 
         # YAML 데이터 로드
         if os.environ.get("APP_ROOT"):
@@ -59,7 +47,6 @@ class ProductMessageGenerator:
 
         logger.info(
             "message_generator_initialized",
-            model=chat_gpt_model_name,
             brand_count=len(self.brand_tones.get("brand_ton_prompt", {})),
         )
 
@@ -337,6 +324,7 @@ class ProductMessageGenerator:
         purpose: str = "브랜드/제품 소개",
         quality_feedback: Optional[str] = None,
         previous_message: Optional[str] = None,
+        llm: Optional[BaseChatModel] = None,
     ) -> Dict[str, Any]:
         """
         상품 메시지 생성
@@ -392,24 +380,32 @@ class ProductMessageGenerator:
             "피부타입/고민 강조 소개": build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": build_purpose_lifestyle_and_age_point_prompt
         }
-        build_func = PURPOSE_PROMPT_MAP.get(purpose)
-        prompt = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)
+        from langchain_core.messages import HumanMessage, AIMessage
 
-        # 품질 검사 피드백이 있으면 프롬프트 끝에 추가 (재시도 시)
+        build_func = PURPOSE_PROMPT_MAP.get(purpose)
+        prompt_text = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)
+
+        # 품질 검사 피드백이 있으면 멀티턴 메시지로 구성 (재시도 시)
         if quality_feedback:
-            from langchain_core.messages import HumanMessage
             previous_context = f"[이전에 생성한 메시지]\n{previous_message}\n\n" if previous_message else ""
-            prompt = list(prompt) + [
+            prompt = [
+                HumanMessage(content=prompt_text),
+                AIMessage(content=previous_message or ""),
                 HumanMessage(content=(
                     f"{previous_context}"
                     f"[품질 검사 피드백]\n{quality_feedback}\n\n"
-                    "위 피드백을 반드시 반영하여 개선된 메시지를 다시 작성하세요."
+                    "위 피드백을 반드시 반영하여 개선된 메시지를 다시 작성하세요.\n\n"
+                    "**반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.**\n\n"
+                    "제목: [제목 내용]\n"
+                    "메시지: [메시지 본문]"
                 ))
             ]
             logger.info("quality_feedback_injected", feedback_length=len(quality_feedback))
+        else:
+            prompt = prompt_text
 
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await llm.ainvoke(prompt)
             message_content = response.content
 
             logger.info("message_generation_completed", product_name=product_name, purpose=purpose)

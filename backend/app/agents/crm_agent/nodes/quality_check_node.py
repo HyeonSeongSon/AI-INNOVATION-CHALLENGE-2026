@@ -7,25 +7,20 @@
 3. Groundedness Check (비용 0)
 """
 
+import os
 from typing import Dict, Any
+from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
+from ....core.llm_factory import create_llm
 from ..services.quality_check import QualityChecker
 from ....core.logging import AgentLogger
 
 
-# QualityChecker 싱글톤 인스턴스 (재사용)
-_checker_instance = None
+# QualityChecker 인스턴스 
+_checker = QualityChecker()
 
 
-def get_quality_checker() -> QualityChecker:
-    """QualityChecker 인스턴스를 가져오거나 생성 (싱글톤 패턴)"""
-    global _checker_instance
-    if _checker_instance is None:
-        _checker_instance = QualityChecker()
-    return _checker_instance
-
-
-async def quality_check_node(state: CRMState) -> Dict[str, Any]:
+async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
     """
     생성된 메시지의 품질을 검증하는 노드
 
@@ -85,8 +80,9 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
                 "status": "completed",
             }
 
-        # 2. QualityChecker 가져오기
-        checker = get_quality_checker()
+        # 2. config에서 모델명 읽기 후 LLM 생성
+        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        llm = create_llm(model_name, temperature=0)
 
         # 3. 각 메시지에 대해 품질 검사 실행
         results = []
@@ -108,13 +104,14 @@ async def quality_check_node(state: CRMState) -> Dict[str, Any]:
                 "quality_check",
                 user_message=f"품질 검사 진행 중: {product_name}",
             ):
-                result = await checker.check_quality(
+                result = await _checker.check_quality(
                     message=msg,
                     product=selected_product,
                     persona_info=persona_info,
                     purpose=purpose,
                     brand_name=brand_name,
                     product_document_summary=product_document_summary,
+                    llm=llm,
                 )
 
             results.append(result)

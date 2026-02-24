@@ -39,11 +39,13 @@ class CRMRequest(BaseModel):
     """CRM 메시지 생성 요청"""
     user_input: str  # JSON 또는 자연어
     thread_id: Optional[str] = None
+    model: Optional[str] = None  # OpenAI 모델명 (예: "gpt-4o", "gpt-4o-mini"). None이면 환경변수 CHATGPT_MODEL_NAME 사용
 
     class Config:
         schema_extra = {
             "example": {
-                "user_input": '{"persona_id": "PERSONA_002", "purpose": "신상품홍보", "product_categories": ["립스틱"]}'
+                "user_input": '{"persona_id": "PERSONA_002", "purpose": "신상품홍보", "product_categories": ["립스틱"]}',
+                "model": "gpt-4o-mini"
             }
         }
 
@@ -52,12 +54,14 @@ class ProductSelection(BaseModel):
     """제품 선택 요청"""
     thread_id: str
     selected_product_id: str
+    model: Optional[str] = None  # /generate 호출 시 사용한 모델과 동일한 값을 전달
 
     class Config:
         schema_extra = {
             "example": {
                 "thread_id": "thread-abc123",
-                "selected_product_id": "PROD001"
+                "selected_product_id": "PROD001",
+                "model": "gpt-4o-mini"
             }
         }
 
@@ -100,7 +104,8 @@ async def generate_crm_message(request: CRMRequest):
 
         result = await agent.run(
             user_input=request.user_input,
-            thread_id=request.thread_id
+            thread_id=request.thread_id,
+            model=request.model,
         )
 
         # CRMAgent의 응답을 CRMResponse 형식으로 변환
@@ -152,7 +157,8 @@ async def select_product(request: ProductSelection):
 
         result = await agent.resume_with_selection(
             thread_id=request.thread_id,
-            selected_product_id=request.selected_product_id
+            selected_product_id=request.selected_product_id,
+            model=request.model,
         )
 
         # CRMAgent의 응답을 CRMResponse 형식으로 변환

@@ -4,26 +4,21 @@ CRM 요청 파싱 노드
 사용자 입력을 구조화된 CRM 요청으로 파싱하는 노드
 """
 
+import os
 import json
 from typing import Dict, Any
+from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ..services.parse_crm_request import MultiValueParser
 from ....core.logging import AgentLogger
+from ....core.llm_factory import create_llm
 
 
-# Parser 싱글톤 인스턴스 (재사용)
-_parser_instance = None
+# Parser 인스턴스 
+_parser = MultiValueParser()
 
 
-def get_parser() -> MultiValueParser:
-    """Parser 인스턴스를 가져오거나 생성 (싱글톤 패턴)"""
-    global _parser_instance
-    if _parser_instance is None:
-        _parser_instance = MultiValueParser()
-    return _parser_instance
-
-
-async def parse_crm_request_node(state: CRMState) -> Dict[str, Any]:
+async def parse_crm_request_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
     """
     사용자 입력을 파싱하여 구조화된 CRM 요청으로 변환하는 노드
 
@@ -62,12 +57,13 @@ async def parse_crm_request_node(state: CRMState) -> Dict[str, Any]:
             input_length=len(user_input),
         )
 
-        # Parser 가져오기
-        parser = get_parser()
+        # config에서 모델명 읽기 (없으면 환경변수 기본값)
+        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        llm = create_llm(model_name, temperature=0)
 
         # 파싱 수행 (JSON 문자열 반환)
         with logger.track_duration("llm_parse", user_message="LLM 파싱 수행 중..."):
-            parsed_json = await parser.parse(user_input)
+            parsed_json = await _parser.parse(user_input, llm=llm)
 
         # JSON 문자열을 딕셔너리로 변환
         parsed_data = json.loads(parsed_json)

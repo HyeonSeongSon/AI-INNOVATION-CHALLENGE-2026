@@ -1,8 +1,7 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import tool
 from ..prompts.crm_parse_prompt import build_crm_parse_prompt
 from ....core.logging import get_logger
 from dotenv import load_dotenv
@@ -65,28 +64,22 @@ class MultiMessageRequest(BaseModel):
 
 class MultiValueParser:
     def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
-        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
+        logger.info("parser_initialized")
 
-        if not api_key:
-            raise ValueError(
-                "OPENAI_API_KEY가 설정되지 않았습니다. "
-                "backend/app/.env 파일에 OPENAI_API_KEY를 설정해주세요."
-            )
+    async def parse(self, user_input: str, llm: BaseChatModel) -> str:
+        """자연어 → 다중 값 파싱
 
-        self.llm = ChatOpenAI(model=chat_gpt_model_name, temperature=0, request_timeout=30)
-        self.parser = self.llm.with_structured_output(MultiMessageRequest)
-        logger.info("parser_initialized", model=chat_gpt_model_name)
-
-    async def parse(self, user_input: str) -> str:
-        """자연어 → 다중 값 파싱"""
-
+        Args:
+            user_input: 사용자 입력 (자연어 또는 JSON)
+            llm: 노드에서 생성된 LLM 인스턴스 (BaseChatModel)
+        """
+        parser = llm.with_structured_output(MultiMessageRequest)
         messages = [
             SystemMessage(content=build_crm_parse_prompt(load_categories())),
             HumanMessage(content=user_input)
         ]
         try:
-            response = await self.parser.ainvoke(messages)
+            response = await parser.ainvoke(messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)

@@ -9,6 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .state import CRMState
 from .nodes.parse_crm_request_node import parse_crm_request_node
 from .nodes.recommend_products_node import recommend_products_node
+from .nodes.wait_for_product_selection_node import wait_for_product_selection_node
 from .nodes.create_product_message_node import create_product_message_node
 from .nodes.quality_check_node import quality_check_node
 
@@ -35,11 +36,11 @@ def should_continue_after_recommendation(state: CRMState) -> str:
     상품 추천 결과에 따라 다음 노드를 결정하는 조건부 엣지
 
     - 실패(failed) → END (에러 상태로 종료)
-    - 정상 → create_product_message
+    - 정상 → wait_for_product_selection
     """
     if state.get("status") == "failed":
         return "__end__"
-    return "create_product_message"
+    return "wait_for_product_selection"
 
 
 def should_continue_after_message(state: CRMState) -> str:
@@ -63,12 +64,12 @@ def build_crm_workflow(checkpointer=None):
 
     워크플로우:
     1. parse_crm_request_node: 사용자 입력 파싱
-    2. recommend_products_node: 상품 추천 (상위 3개)
-       → interrupt()로 일시 중단, 사용자 상품 선택 대기
+    2. recommend_products_node: 상품 추천 (상위 3개) → 결과를 state에 저장 후 정상 return
+    3. wait_for_product_selection_node: interrupt()로 일시 중단, 사용자 상품 선택 대기
        → Command(resume=product_id)로 재개
-    3. create_product_message_node: 선택된 상품에 대한 메시지 생성
-    4. quality_check_node: 생성된 메시지 품질 검사 (3단계)
-    5. END: 종료
+    4. create_product_message_node: 선택된 상품에 대한 메시지 생성
+    5. quality_check_node: 생성된 메시지 품질 검사 (3단계)
+    6. END: 종료
 
     Args:
         checkpointer: LangGraph checkpointer (기본값: MemorySaver)
@@ -87,6 +88,7 @@ def build_crm_workflow(checkpointer=None):
     # 노드 추가
     workflow.add_node("parse_crm_request", parse_crm_request_node)
     workflow.add_node("recommend_products", recommend_products_node)
+    workflow.add_node("wait_for_product_selection", wait_for_product_selection_node)
     workflow.add_node("create_product_message", create_product_message_node)
     workflow.add_node("quality_check", quality_check_node)
 
@@ -96,16 +98,18 @@ def build_crm_workflow(checkpointer=None):
     # 엣지 추가
     workflow.add_edge("parse_crm_request", "recommend_products")
 
-    # 사용자 선택 대기는 recommend_products_node 내부의 interrupt()가 처리
-    # 에러 발생 시 create_product_message로 넘어가지 않도록 조건부 엣지 사용
+    # 추천 완료 후 사용자 선택 대기 노드로 이동 (에러 시 종료)
     workflow.add_conditional_edges(
         "recommend_products",
         should_continue_after_recommendation,
         {
-            "create_product_message": "create_product_message",
+            "wait_for_product_selection": "wait_for_product_selection",
             "__end__": END,
         }
     )
+
+    # 사용자 선택 완료 후 메시지 생성 노드로 이동
+    workflow.add_edge("wait_for_product_selection", "create_product_message")
 
     workflow.add_conditional_edges(
         "create_product_message",
@@ -137,12 +141,13 @@ if __name__ == "__main__":
 
     print("\n[노드]")
     print("  1. parse_crm_request - 사용자 입력 파싱")
-    print("  2. recommend_products - 상품 추천")
-    print("  3. create_product_message - 메시지 생성")
-    print("  4. quality_check - 메시지 품질 검사")
+    print("  2. recommend_products - 상품 추천 (결과 저장 후 return)")
+    print("  3. wait_for_product_selection - interrupt() 호출, 사용자 선택 대기")
+    print("  4. create_product_message - 메시지 생성")
+    print("  5. quality_check - 메시지 품질 검사")
 
     print("\n[워크플로우]")
-    print("  parse_crm_request → recommend_products → create_product_message → quality_check → END")
+    print("  parse_crm_request → recommend_products → wait_for_product_selection → create_product_message → quality_check → END")
 
     print("\n=" * 80)
     print("워크플로우 구성 완료")

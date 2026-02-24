@@ -14,7 +14,7 @@ import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
 import httpx
 from ..prompts.quality_check_prompt import build_quality_check_prompt
@@ -51,21 +51,7 @@ class QualityChecker:
     """마케팅 메시지 품질 검사 서비스"""
 
     def __init__(self):
-        """초기화: LLM 클라이언트, brand_tone YAML 로드"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        chat_gpt_model_name = os.getenv("CHATGPT_MODEL_NAME")
-
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY가 .env 파일에 설정되어 있지 않습니다.")
-
-        self.llm = ChatOpenAI(
-            model=chat_gpt_model_name,
-            temperature=0,
-            api_key=api_key,
-            request_timeout=30,
-        )
-        self.judge = self.llm.with_structured_output(LLMJudgeOutput)
-
+        """초기화: brand_tone YAML, forbidden_keyword JSON 로드"""
         # brand_tone YAML 로드
         if os.environ.get("APP_ROOT"):
             root_dir = Path(os.environ.get("APP_ROOT"))
@@ -83,10 +69,7 @@ class QualityChecker:
             forbidden_path = root_dir / "data" / "forbidden_keyword.json"
         self.forbidden_keywords = self._load_json(forbidden_path)
 
-        logger.info(
-            "quality_checker_initialized",
-            model=chat_gpt_model_name,
-        )
+        logger.info("quality_checker_initialized")
 
     def _load_yaml(self, file_path) -> Dict[str, Any]:
         """YAML 파일 로드"""
@@ -119,6 +102,7 @@ class QualityChecker:
         purpose: str,
         brand_name: str,
         product_document_summary: Optional[str] = None,
+        llm: Optional[BaseChatModel] = None,
     ) -> Dict[str, Any]:
         """
         메시지 품질 검사 (3단계 순차 실행, 실패 시 단락)
@@ -165,7 +149,7 @@ class QualityChecker:
         # Stage 3: LLM-as-a-Judge
         logger.info("stage3_llm_judge_started")
         passed, scores = await self._run_llm_judge(
-            message, product, persona_info, purpose, brand_name, product_document_summary
+            message, product, persona_info, purpose, brand_name, product_document_summary, llm
         )
         result["llm_judge_passed"] = passed
         result["llm_judge_scores"] = scores
@@ -363,6 +347,7 @@ class QualityChecker:
         purpose: str,
         brand_name: str,
         product_document_summary: Optional[str] = None,
+        llm: Optional[BaseChatModel] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
         LLM-as-a-Judge 평가
@@ -387,7 +372,8 @@ class QualityChecker:
                 message=message.get("message", ""),
             )
 
-            result: LLMJudgeOutput = await self.judge.ainvoke(prompt_messages)
+            judge = llm.with_structured_output(LLMJudgeOutput)
+            result: LLMJudgeOutput = await judge.ainvoke(prompt_messages)
 
             scores = {
                 "accuracy": result.accuracy,
