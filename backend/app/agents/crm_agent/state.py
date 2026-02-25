@@ -73,7 +73,6 @@ class GeneratedMessage(TypedDict, total=False):
     brand: str                           # 브랜드
     title: str                           # 메시지 제목
     message: str                         # 메시지 본문
-    full_content: str                    # 전체 메시지 내용
     purpose: str                         # 메시지 목적
     vector_search_score: float           # 벡터 검색 스코어
     product_url: str                     # 상품 URL
@@ -89,6 +88,20 @@ class QualityScore(TypedDict, total=False):
     safety: int                          # 안전성 (1-5)
     overall: float                       # 가중 평균
     feedback: str                        # LLM 피드백
+
+
+class RegenerationAttempt(TypedDict, total=False):
+    """
+    재생성 이력 항목
+
+    품질 검사 실패 시 해당 시도의 메시지와 피드백을 보존합니다.
+    최대 retry_count(3회)만큼 항목이 쌓입니다.
+    """
+    attempt: int                         # 시도 번호 (1부터 시작)
+    failed_message: GeneratedMessage     # 실패한 메시지 전체 (title, message 등)
+    failed_stage: str                    # 실패 단계 ("rule_check" | "llm_judge" | "groundedness")
+    feedback: str                        # 실패 피드백 (재생성 프롬프트에 활용)
+    scores: Optional[QualityScore]       # LLM 평가 점수 (llm_judge 실패 시에만 존재)
 
 
 class GroundednessResult(TypedDict, total=False):
@@ -179,12 +192,12 @@ class QualityCheckContext(TypedDict, total=False):
       - intermediate.request.parsed_request
     WRITE:
       - intermediate.quality_check.results
-      - intermediate.quality_check.feedback
+      - intermediate.quality_check.regeneration_history
       - intermediate.quality_check.retry_count
     """
-    results: List[QualityCheckResult]                # 메시지별 품질 검사 결과
-    feedback: Optional[str]                          # 가장 최근 실패 피드백 (재생성 시 참조)
-    retry_count: int                                 # 재시도 횟수 (0이 초기값, 최대 2)
+    results: List[QualityCheckResult]                # 메시지별 품질 검사 결과 (최신 시도)
+    regeneration_history: List[RegenerationAttempt]  # 실패 이력 (append 방식, 최대 retry_count개)
+    retry_count: int                                 # 재시도 횟수 (0이 초기값, 최대 3)
 
 
 class HitlContext(TypedDict, total=False):

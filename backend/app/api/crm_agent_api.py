@@ -76,6 +76,7 @@ class CRMResponse(BaseModel):
     count: Optional[int] = None
     final_message: Optional[Any] = None
     selected_product: Optional[Dict[str, Any]] = None
+    regeneration_history: Optional[List[Dict[str, Any]]] = None
     error: Optional[str] = None
 
 
@@ -128,6 +129,7 @@ async def generate_crm_message(request: CRMRequest):
             count=len(result.get("recommended_products", [])) if result.get("recommended_products") else None,
             final_message=result.get("messages"),
             selected_product=None,
+            regeneration_history=result.get("regeneration_history"),
             error=result.get("error")
         )
 
@@ -192,6 +194,7 @@ async def select_product(request: ProductSelection):
             count=len(result.get("recommended_products", [])) if result.get("recommended_products") else None,
             final_message=messages,
             selected_product=selected_product,
+            regeneration_history=result.get("regeneration_history"),
             error=result.get("error")
         )
 

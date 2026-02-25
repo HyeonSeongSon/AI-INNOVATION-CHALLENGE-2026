@@ -19,14 +19,15 @@ def should_retry_after_quality_check(state: CRMState) -> str:
     품질 검사 결과에 따라 다음 노드를 결정하는 조건부 엣지
 
     - 통과(completed) → END
-    - 실패 + retry_count < 2 → create_product_message (피드백 반영 재생성)
-    - 실패 + retry_count >= 2 → END (최대 재시도 초과, failed)
+    - 실패 + retry_count < 3 → create_product_message (피드백 반영 재생성, 최대 2회)
+    - 실패 + retry_count >= 3 → END (최대 재시도 초과, failed)
     """
-    if state.get("status") == "completed":
+    status = state.get("status")
+    if status in ("completed", "failed"):
         return "__end__"
 
     retry_count = state.get("intermediate", {}).get("quality_check", {}).get("retry_count", 0)
-    if retry_count < 2:
+    if retry_count < 3:
         return "create_product_message"
     return "__end__"
 

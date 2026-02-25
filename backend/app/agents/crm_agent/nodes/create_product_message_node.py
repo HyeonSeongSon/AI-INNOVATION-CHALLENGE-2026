@@ -121,11 +121,18 @@ async def create_product_message_node(state: CRMState, config: RunnableConfig) -
             purpose=purpose,
         )
 
-        # 품질 검사 피드백 읽기 (재시도 시 활용)
+        # 품질 검사 피드백 읽기 (재시도 시 활용 — 가장 최근 실패 이력에서 읽음)
         quality_check_context = intermediate.get("quality_check", {})
-        quality_feedback = quality_check_context.get("feedback")
-        previous_message = quality_check_context.get("previous_message")
+        regeneration_history = quality_check_context.get("regeneration_history", [])
         retry_count = quality_check_context.get("retry_count", 0)
+        if regeneration_history:
+            last_attempt = regeneration_history[-1]
+            quality_feedback = last_attempt.get("feedback")
+            failed_msg = last_attempt.get("failed_message", {})
+            previous_message = f"제목: {failed_msg.get('title', '')}\n메시지: {failed_msg.get('message', '')}"
+        else:
+            quality_feedback = None
+            previous_message = None
 
         if quality_feedback:
             logger.info(
@@ -160,7 +167,6 @@ async def create_product_message_node(state: CRMState, config: RunnableConfig) -
                 "brand": selected_product.get("brand"),
                 "title": message_result.get("title", ""),
                 "message": message_result.get("message", ""),
-                "full_content": message_result.get("full_content", ""),
                 "purpose": purpose,
                 "vector_search_score": selected_product.get("vector_search_score", 0),
                 "product_url": selected_product.get("product_page_url", ""),

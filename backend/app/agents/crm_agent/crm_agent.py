@@ -110,6 +110,7 @@ class CRMAgent:
             request = intermediate.get("request", {})
             recommendation = intermediate.get("recommendation", {})
             message = intermediate.get("message", {})
+            quality_check = intermediate.get("quality_check", {})
 
             return {
                 "status": final_state.get("status", "completed"),
@@ -120,6 +121,7 @@ class CRMAgent:
                 "parsed_request": request.get("parsed_request"),
                 "analysis_id": recommendation.get("analysis_id"),
                 "queries": recommendation.get("queries", []),
+                "regeneration_history": quality_check.get("regeneration_history", []),
                 "logs": final_state.get("logs", []),
                 "error": final_state.get("error"),
                 "step": final_state.get("step", 0)
@@ -176,6 +178,7 @@ class CRMAgent:
             request = intermediate.get("request", {})
             recommendation = intermediate.get("recommendation", {})
             message = intermediate.get("message", {})
+            quality_check = intermediate.get("quality_check", {})
 
             return {
                 "status": final_state.get("status", "completed"),
@@ -186,6 +189,7 @@ class CRMAgent:
                 "parsed_request": request.get("parsed_request"),
                 "analysis_id": recommendation.get("analysis_id"),
                 "queries": recommendation.get("queries", []),
+                "regeneration_history": quality_check.get("regeneration_history", []),
                 "logs": final_state.get("logs", []),
                 "error": final_state.get("error"),
                 "step": final_state.get("step", 0)

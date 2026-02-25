@@ -413,7 +413,6 @@ class ProductMessageGenerator:
             # 8. 결과 파싱 (제목/메시지 분리)
             result = self._parse_message(message_content)
             result['success'] = True
-            result['full_content'] = message_content
             result['product_name'] = product.get('product_name', '')
             result['brand'] = brand_name
             result['purpose'] = purpose

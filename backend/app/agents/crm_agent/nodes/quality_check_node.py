@@ -140,9 +140,11 @@ async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[st
 
         # 5. 최종 상태 결정
         if all_passed:
+            regeneration_history = intermediate.get("quality_check", {}).get("regeneration_history", [])
             logger.info(
                 "node_completed",
-                user_message=f"품질 검사 완료: 모든 메시지 통과 ({len(results)}건)",
+                user_message=f"품질 검사 완료: 모든 메시지 통과 ({len(results)}건)"
+                + (f" — {len(regeneration_history)}회 재생성 후 통과" if regeneration_history else ""),
                 total_messages=len(results),
             )
             return {
@@ -152,10 +154,13 @@ async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[st
                 "intermediate": intermediate,
                 "logs": logger.get_user_logs(),
                 "status": "completed",
+                "error": None,
+                "error_details": None,
             }
         else:
             failed_count = sum(1 for r in results if not r.get("passed"))
             failed_result = next((r for r in results if not r.get("passed")), {})
+            failed_index = next((i for i, r in enumerate(results) if not r.get("passed")), None)
 
             # 피드백 조합: failure_reason + LLM 피드백
             failure_reason = failed_result.get("failure_reason", "")
@@ -166,21 +171,28 @@ async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[st
 
             # 재시도 카운터 읽기 및 증가
             retry_count = intermediate.get("quality_check", {}).get("retry_count", 0)
-            intermediate["quality_check"]["feedback"] = feedback
             intermediate["quality_check"]["retry_count"] = retry_count + 1
 
-            # 실패한 메시지 원문 저장 (재생성 시 컨텍스트로 활용)
-            failed_index = next((i for i, r in enumerate(results) if not r.get("passed")), None)
-            if failed_index is not None and failed_index < len(messages):
-                intermediate["quality_check"]["previous_message"] = messages[failed_index].get("full_content", "")
+            # 재생성 이력에 append (덮어쓰기 X)
+            if "regeneration_history" not in intermediate["quality_check"]:
+                intermediate["quality_check"]["regeneration_history"] = []
 
-            # 최대 재시도(2회) 초과 여부에 따라 status 구분
-            if retry_count >= 2:
+            failed_message = messages[failed_index] if failed_index is not None and failed_index < len(messages) else {}
+            intermediate["quality_check"]["regeneration_history"].append({
+                "attempt": retry_count + 1,
+                "failed_message": failed_message,
+                "failed_stage": failed_result.get("failed_stage", "unknown"),
+                "feedback": feedback,
+                "scores": failed_result.get("llm_judge_scores"),
+            })
+
+            # 최대 재시도(총 3번 시도) 초과 여부에 따라 status 구분
+            if retry_count >= 3:
                 final_status = "failed"
-                log_message = f"품질 검사 최대 재시도 초과 ({retry_count + 1}/3회): {failed_count}/{len(results)}건 미통과"
+                log_message = f"품질 검사 최대 재시도 초과 ({retry_count}/3회): {failed_count}/{len(results)}건 미통과"
             else:
                 final_status = "quality_check_failed"
-                log_message = f"품질 검사 미통과 ({retry_count + 1}/3회): {failed_count}/{len(results)}건 미통과 — 재생성 예정"
+                log_message = f"품질 검사 미통과 ({retry_count}/3회): {failed_count}/{len(results)}건 미통과 — 재생성 예정"
 
             logger.warning(
                 "node_completed_with_failures",
