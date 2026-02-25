@@ -130,6 +130,17 @@ async def create_product_message_node(state: CRMState, config: RunnableConfig) -
             quality_feedback = last_attempt.get("feedback")
             failed_msg = last_attempt.get("failed_message", {})
             previous_message = f"제목: {failed_msg.get('title', '')}\n메시지: {failed_msg.get('message', '')}"
+
+            # 마지막 시도가 semantic/rule 실패(LLM judge 미도달)인 경우,
+            # 이전 시도의 LLM judge 피드백을 함께 전달
+            if not last_attempt.get("scores"):
+                for prev in reversed(regeneration_history[:-1]):
+                    if prev.get("scores", {}).get("feedback"):
+                        quality_feedback = (
+                            f"{quality_feedback}\n\n"
+                            f"[이전 LLM 평가 피드백]\n{prev['scores']['feedback']}"
+                        )
+                        break
         else:
             quality_feedback = None
             previous_message = None

@@ -141,7 +141,11 @@ class QualityChecker:
         result["semantic_check_results"] = similar_results
         if not passed:
             result["failed_stage"] = "semantic_check"
-            result["failure_reason"] = "유사도 검색에서 금지 표현과 유사한 문장이 감지되었습니다"
+            triggered_details = "; ".join([
+                f"'{r['query_sentence'][:40]}' → {r['source'].get('label', '금지표현')} (유사도 {r['score']:.2f})"
+                for r in similar_results[:2]
+            ])
+            result["failure_reason"] = f"금지 표현 유사 문장 감지: {triggered_details}"
             logger.warning("stage2_semantic_failed", triggered=similar_results)
             return result
         logger.info("stage2_semantic_passed")
