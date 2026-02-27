@@ -11,12 +11,15 @@ class BaseState(TypedDict, total=False):
     - graph 재진입 안전
     - node 간 공유 데이터 명확
     - 상태 추적 및 디버깅 용이
+
+    NOTE: input / messages 는 에이전트마다 형태가 다르므로 각 State에서 정의
+    - 단발성 에이전트: input: str (원본 텍스트)
+    - 대화형 에이전트: messages: Annotated[list[AnyMessage], add_messages]
     """
 
     # -------------------------
-    # 입력 / 기본 정보
+    # 기본 정보
     # -------------------------
-    input: Any                      # 사용자 원본 입력
     context: Dict[str, Any]         # 실행 컨텍스트 (session, user, meta)
 
     # -------------------------
@@ -41,11 +44,6 @@ class BaseState(TypedDict, total=False):
     # -------------------------
     tool_results: Dict[str, Any]    # tool 실행 결과
     tool_calls: List[Dict[str, Any]]  # tool 호출 이력
-
-    # -------------------------
-    # 메시지 / 대화 관리
-    # -------------------------
-    messages: List[Dict[str, Any]]  # LLM 메시지 히스토리
 
     # -------------------------
     # 최종 결과

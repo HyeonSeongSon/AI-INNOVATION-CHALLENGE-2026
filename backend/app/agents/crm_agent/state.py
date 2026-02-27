@@ -237,7 +237,9 @@ class CRMIntermediate(TypedDict, total=False):
 
 class CRMState(BaseState, total=False):
     """
-    CRM Agent용 커스텀 스테이트
+    CRM Agent용 커스텀 스테이트 (단발성)
+
+    입력: input: str (원본 CRM 요청 텍스트)
 
     워크플로우:
     ┌─────────────────────────────────────────────────────────┐
@@ -295,6 +297,9 @@ class CRMState(BaseState, total=False):
         # 생성된 메시지 조회
         messages = state["intermediate"]["message"]["messages"]
     """
+
+    # 입력
+    input: str                          # 사용자 원본 CRM 요청 텍스트
 
     # CRM 전용 필드
     intermediate: CRMIntermediate       # 타입이 명시된 intermediate 데이터
