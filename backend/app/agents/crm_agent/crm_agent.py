@@ -34,33 +34,38 @@ class CRMAgent:
     async def run(
         self,
         user_input: str,
-        context: Optional[Dict[str, Any]] = None,
-        thread_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        CRM Agent 실행 (초기 실행 또는 재개)
+        CRM Agent 실행 (초기 실행)
 
         Args:
             user_input: 사용자 입력 (예: "PERSONA_001로 설화수 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘")
-            context: 실행 컨텍스트 (user_id, session_id 등)
-            thread_id: 스레드 ID (재개 시 필요, None이면 새로운 스레드 생성)
+            session_id: 비즈니스 레벨 채팅 세션 ID (클라이언트/DB에서 생성, None이면 자동 생성)
+            user_id: 인증된 사용자 ID (JWT 등에서 추출)
+            model: OpenAI 모델명 (None이면 환경변수 사용)
 
         Returns:
             Dict[str, Any]: 실행 결과
             {
                 "status": "waiting_for_user" | "completed" | "failed",
-                "thread_id": str,  # 스레드 ID (재개 시 필요)
-                "messages": [...],  # 생성된 메시지 리스트
-                "recommended_products": [...],  # 추천된 상품 리스트 (사용자 선택 필요 시)
-                "persona_info": {...},  # 페르소나 정보
-                "logs": [...],  # 실행 로그
-                "error": str | None  # 에러 메시지 (실패 시)
+                "thread_id": str,  # LangGraph 내부 ID (select-product 재개용)
+                "session_id": str, # 비즈니스 레벨 세션 ID
+                "messages": [...],
+                "recommended_products": [...],
+                "persona_info": {...},
+                "logs": [...],
+                "error": str | None
             }
         """
-        # 스레드 ID 생성 (없으면)
-        if thread_id is None:
-            thread_id = str(uuid.uuid4())
+        # session_id 미전달 시 자동 생성
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
+        # thread_id는 매 실행마다 새로 생성 (LangGraph 내부용)
+        thread_id = str(uuid.uuid4())
 
         # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
         set_thread_id(thread_id)
@@ -71,13 +76,16 @@ class CRMAgent:
             "step": 0,
             "logs": [],
             "intermediate": {},
-            "context": context or {},
             "status": "running",
         }
 
         try:
-            # 워크플로우 비동기 실행 (thread_id 포함)
-            configurable = {"thread_id": thread_id}
+            # 워크플로우 비동기 실행
+            configurable = {
+                "thread_id": thread_id,    # LangGraph 체크포인터 키
+                "session_id": session_id,  # 비즈니스 레벨 세션 ID
+                "user_id": user_id,        # 인증된 사용자 ID
+            }
             if model:
                 configurable["model"] = model
             config = {"configurable": configurable}
@@ -94,6 +102,7 @@ class CRMAgent:
                 return {
                     "status": "waiting_for_user",
                     "thread_id": thread_id,
+                    "session_id": session_id,
                     "messages": [],
                     "recommended_products": interrupt_value.get("recommended_products", []),
                     "persona_info": recommendation.get("persona_info"),
@@ -115,6 +124,7 @@ class CRMAgent:
             return {
                 "status": final_state.get("status", "completed"),
                 "thread_id": thread_id,
+                "session_id": session_id,
                 "messages": message.get("messages", []),
                 "recommended_products": recommendation.get("recommended_products", []),
                 "persona_info": recommendation.get("persona_info"),
@@ -131,6 +141,7 @@ class CRMAgent:
             return {
                 "status": "failed",
                 "thread_id": thread_id,
+                "session_id": session_id,
                 "messages": [],
                 "recommended_products": [],
                 "persona_info": None,
@@ -146,14 +157,19 @@ class CRMAgent:
         self,
         thread_id: str,
         selected_product_id: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         사용자 상품 선택 후 워크플로우 재개
 
         Args:
-            thread_id: 스레드 ID (run() 메서드에서 반환된 값)
+            thread_id: LangGraph 내부 thread ID (run() 응답에서 받은 값)
             selected_product_id: 사용자가 선택한 상품 ID
+            session_id: 비즈니스 레벨 세션 ID (로깅/추적용)
+            user_id: 인증된 사용자 ID (로깅/추적용)
+            model: OpenAI 모델명
 
         Returns:
             Dict[str, Any]: 실행 결과 (메시지 생성 완료)
@@ -163,8 +179,11 @@ class CRMAgent:
             set_thread_id(thread_id)
 
             # Command(resume=)로 interrupt 지점에서 재개
-            # selected_product_id가 interrupt() 반환값으로 recommend_products_node에 전달됨
-            configurable = {"thread_id": thread_id}
+            configurable = {
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "user_id": user_id,
+            }
             if model:
                 configurable["model"] = model
             config = {"configurable": configurable}
@@ -183,6 +202,7 @@ class CRMAgent:
             return {
                 "status": final_state.get("status", "completed"),
                 "thread_id": thread_id,
+                "session_id": session_id,
                 "messages": message.get("messages", []),
                 "recommended_products": recommendation.get("recommended_products", []),
                 "persona_info": recommendation.get("persona_info"),
@@ -199,6 +219,7 @@ class CRMAgent:
             return {
                 "status": "failed",
                 "thread_id": thread_id,
+                "session_id": session_id,
                 "messages": [],
                 "recommended_products": [],
                 "persona_info": None,
@@ -244,10 +265,8 @@ if __name__ == "__main__":
 
         result = await agent.run(
             user_input=test_input,
-            context={
-                "user_id": "test_user",
-                "session_id": "test_session"
-            }
+            session_id="test_session",
+            user_id="test_user",
         )
 
         print(f"\nStatus: {result.get('status')}")

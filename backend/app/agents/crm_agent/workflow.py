@@ -96,7 +96,6 @@ def build_crm_workflow(checkpointer=None):
     # 시작점 설정
     workflow.set_entry_point("parse_crm_request")
 
-    # 엣지 추가
     workflow.add_edge("parse_crm_request", "recommend_products")
 
     # 추천 완료 후 사용자 선택 대기 노드로 이동 (에러 시 종료)
@@ -120,6 +119,7 @@ def build_crm_workflow(checkpointer=None):
             "__end__": END,
         }
     )
+    
     workflow.add_conditional_edges(
         "quality_check",
         should_retry_after_quality_check,

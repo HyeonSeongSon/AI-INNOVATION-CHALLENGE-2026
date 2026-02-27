@@ -37,14 +37,17 @@ def get_agent() -> CRMAgent:
 
 class CRMRequest(BaseModel):
     """CRM 메시지 생성 요청"""
-    user_input: str  # JSON 또는 자연어
-    thread_id: Optional[str] = None
-    model: Optional[str] = None  # OpenAI 모델명 (예: "gpt-4o", "gpt-4o-mini"). None이면 환경변수 CHATGPT_MODEL_NAME 사용
+    user_input: str                     # JSON 또는 자연어
+    session_id: Optional[str] = None   # 비즈니스 레벨 채팅 세션 ID (클라이언트/DB에서 생성)
+    user_id: Optional[str] = None      # 인증된 사용자 ID (JWT 등에서 추출)
+    model: Optional[str] = None        # OpenAI 모델명 (예: "gpt-4o", "gpt-4o-mini"). None이면 환경변수 CHATGPT_MODEL_NAME 사용
 
     class Config:
         schema_extra = {
             "example": {
                 "user_input": '{"persona_id": "PERSONA_002", "purpose": "신상품홍보", "product_categories": ["립스틱"]}',
+                "session_id": "sess_abc123",
+                "user_id": "user_001",
                 "model": "gpt-4o-mini"
             }
         }
@@ -52,15 +55,19 @@ class CRMRequest(BaseModel):
 
 class ProductSelection(BaseModel):
     """제품 선택 요청"""
-    thread_id: str
+    thread_id: str                      # LangGraph 내부 thread ID (/generate 응답에서 받은 값)
     selected_product_id: str
-    model: Optional[str] = None  # /generate 호출 시 사용한 모델과 동일한 값을 전달
+    session_id: Optional[str] = None   # 비즈니스 레벨 세션 ID (로깅/추적용)
+    user_id: Optional[str] = None      # 인증된 사용자 ID (로깅/추적용)
+    model: Optional[str] = None        # /generate 호출 시 사용한 모델과 동일한 값을 전달
 
     class Config:
         schema_extra = {
             "example": {
-                "thread_id": "thread-abc123",
+                "thread_id": "uuid-aaa-bbb-ccc",
                 "selected_product_id": "PROD001",
+                "session_id": "sess_abc123",
+                "user_id": "user_001",
                 "model": "gpt-4o-mini"
             }
         }
@@ -69,7 +76,8 @@ class ProductSelection(BaseModel):
 class CRMResponse(BaseModel):
     """CRM 메시지 생성 응답"""
     status: Literal["needs_selection", "completed", "error"]
-    thread_id: str
+    thread_id: str                                          # LangGraph 내부 ID (select-product 재개용)
+    session_id: Optional[str] = None                       # 비즈니스 레벨 세션 ID
     recommended_products: Optional[List[Dict[str, Any]]] = None
     persona_info: Optional[Dict[str, Any]] = None
     search_query: Optional[str] = None
@@ -105,7 +113,8 @@ async def generate_crm_message(request: CRMRequest):
 
         result = await agent.run(
             user_input=request.user_input,
-            thread_id=request.thread_id,
+            session_id=request.session_id,
+            user_id=request.user_id,
             model=request.model,
         )
 
@@ -123,6 +132,7 @@ async def generate_crm_message(request: CRMRequest):
         return CRMResponse(
             status=status,
             thread_id=result.get("thread_id"),
+            session_id=result.get("session_id"),
             recommended_products=result.get("recommended_products"),
             persona_info=result.get("persona_info"),
             search_query=None,
@@ -160,6 +170,8 @@ async def select_product(request: ProductSelection):
         result = await agent.resume_with_selection(
             thread_id=request.thread_id,
             selected_product_id=request.selected_product_id,
+            session_id=request.session_id,
+            user_id=request.user_id,
             model=request.model,
         )
 
@@ -188,6 +200,7 @@ async def select_product(request: ProductSelection):
         return CRMResponse(
             status=status,
             thread_id=result.get("thread_id"),
+            session_id=result.get("session_id"),
             recommended_products=result.get("recommended_products"),
             persona_info=result.get("persona_info"),
             search_query=None,
