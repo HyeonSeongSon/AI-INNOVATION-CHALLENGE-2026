@@ -11,7 +11,7 @@ import os
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
-from ....core.llm_factory import create_llm
+from ....core.llm_factory import get_llm
 from ..services.quality_check import QualityChecker
 from ....core.logging import AgentLogger
 
@@ -82,7 +82,7 @@ async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[st
 
         # 2. config에서 모델명 읽기 후 LLM 생성
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
-        llm = create_llm(model_name, temperature=0)
+        llm = get_llm(model_name, temperature=0)
 
         # 3. 각 메시지에 대해 품질 검사 실행
         results = []

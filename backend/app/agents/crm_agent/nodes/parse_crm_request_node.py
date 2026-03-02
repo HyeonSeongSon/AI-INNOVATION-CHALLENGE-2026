@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ..services.parse_crm_request import MultiValueParser
 from ....core.logging import AgentLogger
-from ....core.llm_factory import create_llm
+from ....core.llm_factory import get_llm
 
 
 # Parser 인스턴스 
@@ -59,7 +59,7 @@ async def parse_crm_request_node(state: CRMState, config: RunnableConfig) -> Dic
 
         # config에서 모델명 읽기 (없으면 환경변수 기본값)
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
-        llm = create_llm(model_name, temperature=0)
+        llm = get_llm(model_name, temperature=0)
 
         # 파싱 수행 (JSON 문자열 반환)
         with logger.track_duration("llm_parse", user_message="LLM 파싱 수행 중..."):

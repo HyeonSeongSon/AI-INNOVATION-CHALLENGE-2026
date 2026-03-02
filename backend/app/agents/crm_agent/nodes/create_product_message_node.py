@@ -8,7 +8,7 @@ import os
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
-from ....core.llm_factory import create_llm
+from ....core.llm_factory import get_llm
 from ..services.create_product_message import ProductMessageGenerator
 from ....core.logging import AgentLogger
 
@@ -154,7 +154,7 @@ async def create_product_message_node(state: CRMState, config: RunnableConfig) -
 
         # 2. config에서 모델명 읽기 후 LLM 생성
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
-        llm = create_llm(model_name, temperature=0.7)
+        llm = get_llm(model_name, temperature=0.7)
 
         # 3. 선택된 상품에 대해 메시지 생성
         messages = []

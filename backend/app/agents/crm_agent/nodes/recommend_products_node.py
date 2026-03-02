@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ..services.recommend_products import ProductRecommender
 from ....core.logging import AgentLogger
-from ....core.llm_factory import create_llm
+from ....core.llm_factory import get_llm
 
 
 # Recommender 인스턴스 
@@ -77,7 +77,7 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
 
         # 2. config에서 모델명 읽기 후 LLM 생성
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
-        llm = create_llm(model_name, temperature=0.7)
+        llm = get_llm(model_name, temperature=0.7)
 
         # 3. 사용자 입력 가져오기
         user_input = state.get("input", "")

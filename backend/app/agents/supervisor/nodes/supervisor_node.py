@@ -1,6 +1,6 @@
 
 from ..state import SupervisorState
-from ....core.llm_factory import create_llm
+from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
 from ..services.supervisor import Supervisor
 from langchain_core.runnables import RunnableConfig
@@ -16,7 +16,7 @@ async def supervisor_node(state: SupervisorState, config: RunnableConfig):
     try:
         messages = state.get("messages")
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
-        llm = create_llm(model_name, temperature=0)
+        llm = get_llm(model_name, temperature=0)
         decision = await _supervisor.supervisor(messages, llm)
 
         logger.info(
