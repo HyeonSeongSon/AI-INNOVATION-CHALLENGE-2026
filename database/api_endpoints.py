@@ -301,6 +301,51 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
     )
 
 
+@router.post("/personas/list", response_model=List[PersonaDetailResponse], summary="전체 페르소나 목록 조회")
+async def list_personas(db: Session = Depends(get_db)):
+    """
+    DB에 저장된 모든 페르소나의 상세 정보 조회
+
+    **테이블:** personas
+
+    **반환:**
+    - 모든 페르소나의 상세 정보 (생성일 기준 오름차순)
+    """
+    from models import Persona
+
+    personas = db.query(Persona).order_by(Persona.persona_created_at.asc()).all()
+
+    return [
+        PersonaDetailResponse(
+            persona_id=p.persona_id,
+            name=p.name,
+            gender=p.gender,
+            age=p.age,
+            occupation=p.occupation,
+            skin_type=p.skin_type,
+            skin_concerns=p.skin_concerns,
+            personal_color=p.personal_color,
+            shade_number=p.shade_number,
+            preferred_colors=p.preferred_colors,
+            preferred_ingredients=p.preferred_ingredients,
+            avoided_ingredients=p.avoided_ingredients,
+            preferred_scents=p.preferred_scents,
+            values=p.values,
+            skincare_routine=p.skincare_routine,
+            main_environment=p.main_environment,
+            preferred_texture=p.preferred_texture,
+            pets=p.pets,
+            avg_sleep_hours=p.avg_sleep_hours,
+            stress_level=p.stress_level,
+            digital_device_usage_time=p.digital_device_usage_time,
+            shopping_style=p.shopping_style,
+            purchase_decision_factors=p.purchase_decision_factors,
+            persona_created_at=p.persona_created_at
+        )
+        for p in personas
+    ]
+
+
 @router.post("/analysis-results", response_model=AnalysisResultResponse, summary="분석 결과 생성")
 async def create_analysis_result(request: AnalysisResultCreate, db: Session = Depends(get_db)):
     """

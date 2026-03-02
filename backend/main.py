@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import crm_agent_api
+from app.api import marketing_api
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
@@ -45,7 +45,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(crm_agent_api.router)
+app.include_router(marketing_api.router)
 
 
 @app.get("/")

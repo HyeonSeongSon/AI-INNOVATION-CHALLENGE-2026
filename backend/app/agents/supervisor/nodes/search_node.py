@@ -1,0 +1,52 @@
+from ..state import SupervisorState
+from ....core.llm_factory import create_llm
+from ....core.logging import get_logger
+from ...tools.search_tools import get_all_personas
+from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
+import os
+
+_logger = get_logger("search_node")
+
+_TOOLS = [get_all_personas]
+_TOOL_MAP = {t.name: t for t in _TOOLS}
+
+
+async def search_node(state: SupervisorState, config: RunnableConfig):
+    try:
+        messages = state.get("messages", [])
+        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        llm = create_llm(model_name, temperature=0)
+        llm_with_tools = llm.bind_tools(_TOOLS)
+
+        # LLM이 tool call 여부 결정
+        response = await llm_with_tools.ainvoke(messages)
+
+        _logger.info(
+            "search_node_llm_response",
+            has_tool_calls=bool(response.tool_calls),
+            tool_calls=[tc["name"] for tc in response.tool_calls] if response.tool_calls else [],
+        )
+
+        # tool call이 있으면 실행 후 최종 응답 생성
+        if response.tool_calls:
+            tool_messages = []
+            for tc in response.tool_calls:
+                tool = _TOOL_MAP.get(tc["name"])
+                if tool:
+                    result = await tool.ainvoke(tc["args"])
+                    tool_messages.append(
+                        ToolMessage(content=str(result), tool_call_id=tc["id"])
+                    )
+
+            final_response = await llm.ainvoke(messages + [response] + tool_messages)
+            final_response.name = "search_node"
+            return Command(goto="supervisor", update={"messages": [response] + tool_messages + [final_response]})
+
+        response.name = "search_node"
+        return Command(goto="supervisor", update={"messages": [response]})
+
+    except Exception as e:
+        _logger.error("search_node_failed", error_type=type(e).__name__, error_message=str(e), exc_info=True)
+        raise

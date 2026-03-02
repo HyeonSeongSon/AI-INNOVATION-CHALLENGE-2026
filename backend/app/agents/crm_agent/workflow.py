@@ -79,9 +79,9 @@ def build_crm_workflow(checkpointer=None):
     Returns:
         CompiledGraph: 컴파일된 LangGraph (interrupt 지원)
     """
-    # Checkpointer 설정 (기본값: MemorySaver)
-    if checkpointer is None:
-        checkpointer = MemorySaver()
+    # # Checkpointer 설정 (기본값: MemorySaver)
+    # if checkpointer is None:
+    #     checkpointer = MemorySaver()
 
     # StateGraph 생성
     workflow = StateGraph(CRMState)
@@ -128,7 +128,8 @@ def build_crm_workflow(checkpointer=None):
             "__end__": END,
         }
     )
-    return workflow.compile(checkpointer=checkpointer)
+    return workflow.compile()
+    # return workflow.compile(checkpointer=checkpointer)
 
 
 if __name__ == "__main__":

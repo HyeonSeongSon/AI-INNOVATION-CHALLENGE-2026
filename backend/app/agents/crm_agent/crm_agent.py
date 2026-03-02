@@ -92,7 +92,7 @@ class CRMAgent:
             final_state = await self.workflow.ainvoke(initial_state, config)
 
             # interrupt 발생 여부 확인
-            # ainvoke()는 interrupt 시 __interrupt__ 키를 포함한 상태를 반환
+            # ainvoke()는 interrupt 시 __interrupt__ yg를 포함한 상태를 반환
             interrupts = final_state.get("__interrupt__", [])
             if interrupts:
                 interrupt_value = interrupts[0].value
