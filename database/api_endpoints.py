@@ -3,11 +3,14 @@ PostgreSQL 데이터베이스 API 엔드포인트
 새로운 테이블 스키마에 맞춰 재구성 (POST 전용)
 """
 
+import re
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import text as sa_text
 from database import get_db
 
 # 라우터 생성
@@ -82,6 +85,16 @@ class ProductCreate(BaseModel):
     product_image_url: Optional[List[str]] = Field(default=[], description="상품 이미지 URL")
     product_page_url: Optional[str] = Field(None, description="상품 페이지 URL")
     product_comment: Optional[str] = Field(None, description="상품 한줄소개")
+
+
+class ProductByTagRequest(BaseModel):
+    """상품종류(태그)로 상품 조회 요청"""
+    tag: str = Field(..., description="상품 태그(종류)", examples=["에센스&세럼&오일"])
+
+
+class ProductByBrandRequest(BaseModel):
+    """브랜드명으로 상품 조회 요청"""
+    brand: str = Field(..., description="브랜드명", examples=["설화수"])
 
 
 class ProductFilterRequest(BaseModel):
@@ -222,6 +235,15 @@ class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
 
 
+class PersonaQueryRequest(BaseModel):
+    """Text2SQL 페르소나 쿼리 요청"""
+    sql_query: str = Field(
+        ...,
+        description="실행할 SELECT SQL 쿼리",
+        examples=["SELECT persona_id, name, skin_type FROM personas WHERE '지성' = ANY(skin_type) LIMIT 10"]
+    )
+
+
 @router.post("/personas", response_model=PersonaResponse, summary="페르소나 생성")
 async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
     """
@@ -344,6 +366,69 @@ async def list_personas(db: Session = Depends(get_db)):
         )
         for p in personas
     ]
+
+
+@router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")
+async def query_personas_by_sql(request: PersonaQueryRequest, db: Session = Depends(get_db)) -> List[Any]:
+    """
+    LLM이 생성한 SQL로 페르소나 검색
+
+    **보안 제약:**
+    - SELECT 쿼리만 허용 (INSERT/UPDATE/DELETE/DROP 등 차단)
+    - 결과 최대 50행 (LIMIT 없으면 자동 추가)
+
+    **Array 컬럼 조회 예시:**
+    - 단일 값 포함: `'지성' = ANY(skin_type)`
+    - OR 조건: `skin_type && ARRAY['지성', '복합성']`
+    - AND 조건: `skin_type @> ARRAY['비건', '친환경']`
+    """
+    raw_sql = request.sql_query.strip()
+
+    # 보안 1차: SELECT로 시작하는지 검증
+    if not raw_sql.upper().lstrip().startswith("SELECT"):
+        raise HTTPException(
+            status_code=400,
+            detail="SELECT 쿼리만 허용됩니다. INSERT/UPDATE/DELETE/DROP 등은 사용할 수 없습니다."
+        )
+
+    # 보안 2차: 위험 키워드 검증 (단어 경계 기준)
+    sql_upper = raw_sql.upper()
+    dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE"]
+    for keyword in dangerous_keywords:
+        if re.search(rf'\b{keyword}\b', sql_upper):
+            raise HTTPException(
+                status_code=400,
+                detail=f"허용되지 않는 SQL 키워드가 포함되어 있습니다: {keyword}"
+            )
+
+    # 보안 3차: LIMIT 없으면 50 자동 추가
+    if "LIMIT" not in sql_upper:
+        final_sql = f"{raw_sql.rstrip(';')} LIMIT 50"
+    else:
+        final_sql = raw_sql.rstrip(';')
+
+    # SQL 실행
+    try:
+        result = db.execute(sa_text(final_sql))
+        columns = list(result.keys())
+        rows = []
+        for row in result.fetchall():
+            row_dict = {}
+            for col, val in zip(columns, row):
+                if hasattr(val, 'isoformat'):
+                    row_dict[col] = val.isoformat()
+                else:
+                    row_dict[col] = val
+            rows.append(row_dict)
+        return rows
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"SQL 실행 중 오류가 발생했습니다: {str(e)}"
+        )
 
 
 @router.post("/analysis-results", response_model=AnalysisResultResponse, summary="분석 결과 생성")
@@ -515,6 +600,69 @@ async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
     )
 
 
+def _to_product_detail(p) -> ProductDetailResponse:
+    return ProductDetailResponse(
+        product_id=p.product_id,
+        vectordb_id=p.vectordb_id,
+        product_name=p.product_name,
+        brand=p.brand,
+        product_tag=p.product_tag,
+        rating=float(p.rating) if p.rating is not None else None,
+        review_count=p.review_count,
+        original_price=p.original_price,
+        discount_rate=p.discount_rate,
+        sale_price=p.sale_price,
+        skin_type=p.skin_type,
+        skin_concerns=p.skin_concerns,
+        preferred_colors=p.preferred_colors,
+        preferred_ingredients=p.preferred_ingredients,
+        avoided_ingredients=p.avoided_ingredients,
+        preferred_scents=p.preferred_scents,
+        values=p.values,
+        exclusive_product=p.exclusive_product,
+        personal_color=p.personal_color,
+        skin_shades=p.skin_shades,
+        product_image_url=p.product_image_url,
+        product_page_url=p.product_page_url,
+        product_comment=p.product_comment,
+        product_created_at=p.product_created_at,
+    )
+
+
+@router.post("/products/by-tag", response_model=List[ProductDetailResponse], summary="상품종류(태그)로 상품 조회")
+async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depends(get_db)):
+    """
+    태그(상품종류)에 해당하는 모든 상품 반환.
+    순위 계산은 호출 측에서 수행합니다.
+
+    **테이블:** products
+
+    **필수 필드:**
+    - tag: 상품 태그 (product_tag 컬럼 일치)
+    """
+    from models import Product
+
+    products = db.query(Product).filter(Product.product_tag == request.tag).all()
+    return [_to_product_detail(p) for p in products]
+
+
+@router.post("/products/by-brand", response_model=List[ProductDetailResponse], summary="브랜드명으로 상품 조회")
+async def get_products_by_brand(request: ProductByBrandRequest, db: Session = Depends(get_db)):
+    """
+    브랜드명에 해당하는 모든 상품 반환.
+    순위 계산은 호출 측에서 수행합니다.
+
+    **테이블:** products
+
+    **필수 필드:**
+    - brand: 브랜드명 (brand 컬럼 일치)
+    """
+    from models import Product
+
+    products = db.query(Product).filter(Product.brand == request.brand).all()
+    return [_to_product_detail(p) for p in products]
+
+
 @router.post("/products/filter", response_model=List[ProductDetailResponse], summary="상품 필터링 조회")
 async def filter_products(request: ProductFilterRequest, db: Session = Depends(get_db)):
     """
@@ -610,36 +758,7 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
         query = query.filter(~Product.avoided_ingredients.op('&&')(cast(request.avoided_ingredients, ARRAY(Text))))
 
     products = query.all()
-
-    return [
-        ProductDetailResponse(
-            product_id=p.product_id,
-            vectordb_id=p.vectordb_id,
-            product_name=p.product_name,
-            brand=p.brand,
-            product_tag=p.product_tag,
-            rating=float(p.rating) if p.rating else None,
-            review_count=p.review_count,
-            original_price=p.original_price,
-            discount_rate=p.discount_rate,
-            sale_price=p.sale_price,
-            skin_type=p.skin_type,
-            skin_concerns=p.skin_concerns,
-            preferred_colors=p.preferred_colors,
-            preferred_ingredients=p.preferred_ingredients,
-            avoided_ingredients=p.avoided_ingredients,
-            preferred_scents=p.preferred_scents,
-            values=p.values,
-            exclusive_product=p.exclusive_product,
-            personal_color=p.personal_color,
-            skin_shades=p.skin_shades,
-            product_image_url=p.product_image_url,
-            product_page_url=p.product_page_url,
-            product_comment=p.product_comment,
-            product_created_at=p.product_created_at
-        )
-        for p in products
-    ]
+    return [_to_product_detail(p) for p in products]
 
 
 # ============================================================

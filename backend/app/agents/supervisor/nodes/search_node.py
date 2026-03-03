@@ -1,7 +1,17 @@
 from ..state import SupervisorState
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
-from ...tools.search_tools import get_all_personas
+from ...tools.search_tools import (
+    get_all_personas,
+    search_personas_by_text,
+    get_persona_by_id,
+    get_products_by_tag,
+    get_products_by_brand,
+    get_all_brands,
+    get_all_categories,
+    get_all_message_types,
+)
+from ...tools.prompts.search_tools_prompt import build_search_node_prompt
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
@@ -9,7 +19,7 @@ import os
 
 _logger = get_logger("search_node")
 
-_TOOLS = [get_all_personas]
+_TOOLS = [get_all_personas, search_personas_by_text, get_persona_by_id, get_products_by_tag, get_products_by_brand, get_all_brands, get_all_categories, get_all_message_types]
 _TOOL_MAP = {t.name: t for t in _TOOLS}
 
 
@@ -21,7 +31,7 @@ async def search_node(state: SupervisorState, config: RunnableConfig):
         llm_with_tools = llm.bind_tools(_TOOLS)
 
         # LLM이 tool call 여부 결정
-        response = await llm_with_tools.ainvoke(messages)
+        response = await llm_with_tools.ainvoke(build_search_node_prompt(messages))
 
         _logger.info(
             "search_node_llm_response",

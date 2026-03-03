@@ -1,0 +1,35 @@
+schemas:
+  persona_table_schema: |  
+    테이블명: personas
+
+    컬럼 목록:
+      persona_id                TEXT PRIMARY KEY  -- 페르소나 고유 ID (예: 'PERSONA_001')
+      name                      TEXT NOT NULL     -- 이름
+      gender                    TEXT              -- '남성' 또는 '여성'
+      age                       INTEGER           -- 나이 (정수)
+      occupation                TEXT              -- 직업 (예: '마케터', '학생', '직장인')
+      skin_type                 TEXT[]            -- 피부 타입 배열 (예: '건조함', '지성', '트러블성', '민감성', '복합성' 등 데이터에 저장된 표현 그대로 사용)
+      skin_concerns             TEXT[]            -- 피부 고민 배열 (예: '모공', '주름', '탄력', '미백', '수분', '트러블' 등 데이터에 저장된 표현 그대로 사용)
+      personal_color            TEXT              -- 퍼스널 컬러 ('웜톤', '쿨톤', '웜스프링', '웜오텀', '쿨썸머', '쿨윈터')
+      shade_number              INTEGER           -- 파운데이션 셰이드 번호 (예: 21, 23)
+      preferred_colors          TEXT[]            -- 선호 색상 배열 (예: ['코랄', '핑크', '레드'])
+      preferred_ingredients     TEXT[]            -- 선호 성분 배열 (예: ['히알루론산', '나이아신아마이드', '레티놀'])
+      avoided_ingredients       TEXT[]            -- 기피 성분 배열 (예: ['알코올', '파라벤', '향료'])
+      preferred_scents          TEXT[]            -- 선호 향 배열 (예: ['플로럴', '시트러스', '머스크'])
+      values                    TEXT[]            -- 가치관/라이프스타일 배열 ['비건', '친환경', '가성비', '럭셔리']
+      skincare_routine          TEXT              -- 스킨케어 루틴 ('간단한 루틴', '복잡한 루틴', '기초만')
+      main_environment          TEXT              -- 주 활동 환경 ('실내', '실외', '혼합')
+      preferred_texture         TEXT[]            -- 선호 제형 배열 ['에센스', '세럼', '크림', '젤', '오일']
+      pets                      TEXT              -- 반려동물 유무 ('있음', '없음')
+      avg_sleep_hours           INTEGER           -- 평균 수면 시간 (시간, 정수)
+      stress_level              TEXT              -- 스트레스 수준 ('낮음', '보통', '높음')
+      digital_device_usage_time INTEGER          -- 디지털 기기 사용 시간 (시간, 정수)
+      shopping_style            TEXT              -- 쇼핑 스타일 ('충동구매형', '신중형', '비교형', '브랜드충성형')
+      purchase_decision_factors TEXT[]            -- 구매 결정 요인 배열 ['리뷰', '성분', '가격', '브랜드', '추천']
+      persona_created_at        TIMESTAMPTZ       -- 생성 시각
+
+    PostgreSQL Array 컬럼 조회 방법:
+      - 단일 값 포함 여부:  '지성' = ANY(skin_type)
+      - 여러 값 중 하나라도 포함 (OR):  skin_type && ARRAY['지성', '복합성']
+      - 모든 값 포함 (AND):  skin_type @> ARRAY['비건', '친환경']
+      - 특정 값 제외:  NOT ('알코올' = ANY(avoided_ingredients))
