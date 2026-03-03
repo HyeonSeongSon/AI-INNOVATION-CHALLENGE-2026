@@ -1,0 +1,167 @@
+---
+name: final-project # Docker 프로젝트 이름을 명시적으로 지정
+
+x-opensearch-common-env: &opensearch-common-env
+  cluster.name: opensearch-cluster
+  discovery.seed_hosts: opensearch-node1,opensearch-node2,opensearch-node3
+  cluster.initial_cluster_manager_nodes: opensearch-node1,opensearch-node2,opensearch-node3
+  # bootstrap.memory_lock: true  # along with the memlock settings below, disables swapping
+  OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m  # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+  OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD}
+  plugins.security.disabled: true  # 보안 비활성화
+
+x-opensearch-healthcheck: &opensearch-healthcheck
+  test: ["CMD-SHELL", "curl -f http://localhost:9200 || exit 1"]
+  interval: 10s
+  timeout: 5s
+  retries: 10
+
+x-opensearch-resources: &opensearch-resources
+  deploy:
+    resources:
+      limits:
+        memory: 1g # 컨테이너 메모리 사용량을 1GB로 제한 (Java 힙 메모리보다 커야 함)
+
+services:
+  opensearch-node1:
+    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    container_name: opensearch-node1
+    environment:
+      <<: *opensearch-common-env
+      node.name: opensearch-node1
+    <<: *opensearch-resources
+    # ulimits:
+    #   memlock:
+    #     soft: -1
+    #     hard: -1
+    #   nofile:
+    #     soft: 65536  # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+    #     hard: 65536
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      - 9600:9600  # required for Performance Analyzer
+    healthcheck: *opensearch-healthcheck
+    networks:
+      - opensearch-net
+  opensearch-node2:
+    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    container_name: opensearch-node2
+    environment:
+      <<: *opensearch-common-env
+      node.name: opensearch-node2
+    <<: *opensearch-resources
+    # ulimits:
+    #   memlock:
+    #     soft: -1
+    #     hard: -1
+    #   nofile:
+    #     soft: 65536
+    #     hard: 65536
+    volumes:
+      - opensearch-data2:/usr/share/opensearch/data
+    ports:
+      - 9201:9200
+      - 9601:9600
+    healthcheck: *opensearch-healthcheck
+    networks:
+      - opensearch-net
+  opensearch-node3:
+    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    container_name: opensearch-node3
+    environment:
+      <<: *opensearch-common-env
+      node.name: opensearch-node3
+    <<: *opensearch-resources
+    # ulimits:
+    #   memlock:
+    #     soft: -1
+    #     hard: -1
+    #   nofile:
+    #     soft: 65536
+    #     hard: 65536
+    volumes:
+      - opensearch-data3:/usr/share/opensearch/data
+    ports:
+      - 9202:9200
+      - 9602:9600
+    healthcheck: *opensearch-healthcheck
+    networks:
+      - opensearch-net
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.1.0
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch-node1:9200","http://opensearch-node2:9200","http://opensearch-node3:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true' # 보안 비활성화
+    networks:
+      - opensearch-net
+    depends_on:
+      opensearch-node1:
+        condition: service_healthy
+      opensearch-node2:
+        condition: service_healthy
+      opensearch-node3:
+        condition: service_healthy
+  fastapi-search:
+    image: python:3.11-slim
+    container_name: fastapi-search
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r requirements.txt &&
+        python opensearch_api.py
+      "
+    volumes:
+      - .:/app  # 현재 디렉토리를 /app으로 마운트
+    ports:
+      - 8010:8010
+    environment:
+      - OPENSEARCH_HOST=opensearch-node1  # docker-compose 내부에서는 서비스명 사용
+      - OPENSEARCH_PORT=9200
+      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
+    networks:
+      - opensearch-net
+    depends_on:
+      opensearch-node1:
+        condition: service_healthy
+      opensearch-node2:
+        condition: service_healthy
+      opensearch-node3:
+        condition: service_healthy
+
+  fastapi-backend:
+    image: python:3.11-slim
+    container_name: fastapi-backend
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r /requirements.txt &&
+        python main.py
+      "
+    volumes:
+      - ../backend:/app  # backend 디렉토리를 /app으로 마운트
+      - ../requirements.txt:/requirements.txt  # 프로젝트 루트의 requirements.txt 공유
+      - ../data:/data  # data 디렉토리를 /data로 마운트 (프롬프트 YAML 파일 접근용)
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8005
+      APP_ROOT: /app
+      DATA_ROOT: /data
+    env_file:
+      - ../backend/app/.env  # backend 환경 변수 로드
+    ports:
+      - 8005:8005
+    networks:
+      - opensearch-net
+
+volumes:
+  opensearch-data1:
+  opensearch-data2:
+  opensearch-data3:
+
+networks:
+  opensearch-net:

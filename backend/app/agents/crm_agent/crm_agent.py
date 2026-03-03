@@ -1,0 +1,369 @@
+"""
+CRM Agent
+
+상품 추천 및 메시지 생성을 위한 CRM Agent
+"""
+
+from typing import Dict, Any, Optional
+import uuid
+from langgraph.types import Command
+from .state import CRMState
+from .workflow import build_crm_workflow
+from ...core.logging import get_logger
+from ...core.context import set_thread_id
+
+_logger = get_logger("crm_agent")
+
+
+class CRMAgent:
+    """
+    CRM Agent 클래스
+
+    기능:
+    - 사용자 요청 파싱 (페르소나, 브랜드, 카테고리, 목적 등)
+    - 페르소나 기반 상품 추천 (상위 3개)
+    - Human-in-the-loop: 사용자가 상품 선택
+    - 선택된 상품에 대한 목적별 맞춤 메시지 생성
+    """
+
+    def __init__(self):
+        """CRM Agent 초기화 (checkpointer 포함)"""
+        self.workflow = build_crm_workflow()  # checkpointer 자동 설정됨
+        _logger.info("agent_initialized", features=["human_in_the_loop"])
+
+    async def run(
+        self,
+        user_input: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        CRM Agent 실행 (초기 실행)
+
+        Args:
+            user_input: 사용자 입력 (예: "PERSONA_001로 설화수 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘")
+            session_id: 비즈니스 레벨 채팅 세션 ID (클라이언트/DB에서 생성, None이면 자동 생성)
+            user_id: 인증된 사용자 ID (JWT 등에서 추출)
+            model: OpenAI 모델명 (None이면 환경변수 사용)
+
+        Returns:
+            Dict[str, Any]: 실행 결과
+            {
+                "status": "waiting_for_user" | "completed" | "failed",
+                "thread_id": str,  # LangGraph 내부 ID (select-product 재개용)
+                "session_id": str, # 비즈니스 레벨 세션 ID
+                "messages": [...],
+                "recommended_products": [...],
+                "persona_info": {...},
+                "logs": [...],
+                "error": str | None
+            }
+        """
+        # session_id 미전달 시 자동 생성
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
+        # thread_id는 매 실행마다 새로 생성 (LangGraph 내부용)
+        thread_id = str(uuid.uuid4())
+
+        # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
+        set_thread_id(thread_id)
+
+        # 초기 상태 생성
+        initial_state: CRMState = {
+            "input": user_input,
+            "step": 0,
+            "logs": [],
+            "intermediate": {},
+            "status": "running",
+        }
+
+        try:
+            # 워크플로우 비동기 실행
+            configurable = {
+                "thread_id": thread_id,    # LangGraph 체크포인터 키
+                "session_id": session_id,  # 비즈니스 레벨 세션 ID
+                "user_id": user_id,        # 인증된 사용자 ID
+            }
+            if model:
+                configurable["model"] = model
+            config = {"configurable": configurable}
+            final_state = await self.workflow.ainvoke(initial_state, config)
+
+            # interrupt 발생 여부 확인
+            # ainvoke()는 interrupt 시 __interrupt__ yg를 포함한 상태를 반환
+            interrupts = final_state.get("__interrupt__", [])
+            if interrupts:
+                interrupt_value = interrupts[0].value
+                intermediate = final_state.get("intermediate", {})
+                recommendation = intermediate.get("recommendation", {})
+                request = intermediate.get("request", {})
+                return {
+                    "status": "waiting_for_user",
+                    "thread_id": thread_id,
+                    "session_id": session_id,
+                    "messages": [],
+                    "recommended_products": interrupt_value.get("recommended_products", []),
+                    "persona_info": recommendation.get("persona_info"),
+                    "parsed_request": request.get("parsed_request"),
+                    "analysis_id": recommendation.get("analysis_id"),
+                    "queries": recommendation.get("queries", []),
+                    "logs": final_state.get("logs", []),
+                    "error": None,
+                    "step": final_state.get("step", 0)
+                }
+
+            # 정상 완료
+            intermediate = final_state.get("intermediate", {})
+            request = intermediate.get("request", {})
+            recommendation = intermediate.get("recommendation", {})
+            message = intermediate.get("message", {})
+            quality_check = intermediate.get("quality_check", {})
+
+            return {
+                "status": final_state.get("status", "completed"),
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "messages": message.get("messages", []),
+                "recommended_products": recommendation.get("recommended_products", []),
+                "persona_info": recommendation.get("persona_info"),
+                "parsed_request": request.get("parsed_request"),
+                "analysis_id": recommendation.get("analysis_id"),
+                "queries": recommendation.get("queries", []),
+                "regeneration_history": quality_check.get("regeneration_history", []),
+                "logs": final_state.get("logs", []),
+                "error": final_state.get("error"),
+                "step": final_state.get("step", 0)
+            }
+
+        except Exception as e:
+            return {
+                "status": "failed",
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "messages": [],
+                "recommended_products": [],
+                "persona_info": None,
+                "parsed_request": None,
+                "analysis_id": None,
+                "queries": [],
+                "logs": [f"[ERROR] Agent 실행 실패: {str(e)}"],
+                "error": str(e),
+                "step": 0
+            }
+
+    async def resume_with_selection(
+        self,
+        thread_id: str,
+        selected_product_id: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        사용자 상품 선택 후 워크플로우 재개
+
+        Args:
+            thread_id: LangGraph 내부 thread ID (run() 응답에서 받은 값)
+            selected_product_id: 사용자가 선택한 상품 ID
+            session_id: 비즈니스 레벨 세션 ID (로깅/추적용)
+            user_id: 인증된 사용자 ID (로깅/추적용)
+            model: OpenAI 모델명
+
+        Returns:
+            Dict[str, Any]: 실행 결과 (메시지 생성 완료)
+        """
+        try:
+            # contextvars에 thread_id 설정 (하위 노드/서비스 로그에 자동 전파)
+            set_thread_id(thread_id)
+
+            # Command(resume=)로 interrupt 지점에서 재개
+            configurable = {
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "user_id": user_id,
+            }
+            if model:
+                configurable["model"] = model
+            config = {"configurable": configurable}
+            final_state = await self.workflow.ainvoke(
+                Command(resume=selected_product_id),
+                config
+            )
+
+            # 결과 추출
+            intermediate = final_state.get("intermediate", {})
+            request = intermediate.get("request", {})
+            recommendation = intermediate.get("recommendation", {})
+            message = intermediate.get("message", {})
+            quality_check = intermediate.get("quality_check", {})
+
+            return {
+                "status": final_state.get("status", "completed"),
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "messages": message.get("messages", []),
+                "recommended_products": recommendation.get("recommended_products", []),
+                "persona_info": recommendation.get("persona_info"),
+                "parsed_request": request.get("parsed_request"),
+                "analysis_id": recommendation.get("analysis_id"),
+                "queries": recommendation.get("queries", []),
+                "regeneration_history": quality_check.get("regeneration_history", []),
+                "logs": final_state.get("logs", []),
+                "error": final_state.get("error"),
+                "step": final_state.get("step", 0)
+            }
+
+        except Exception as e:
+            return {
+                "status": "failed",
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "messages": [],
+                "recommended_products": [],
+                "persona_info": None,
+                "parsed_request": None,
+                "analysis_id": None,
+                "queries": [],
+                "logs": [f"[ERROR] Agent 재개 실패: {str(e)}"],
+                "error": str(e),
+                "step": 0
+            }
+
+if __name__ == "__main__":
+    """CRM Agent 테스트 (Human-in-the-loop)"""
+    import sys
+    import io
+    import asyncio
+    from pprint import pprint
+
+    # Windows 인코딩 문제 해결
+    if sys.platform == 'win32':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+    async def main():
+        print("=" * 80)
+        print("CRM Agent 테스트 (Human-in-the-loop)")
+        print("=" * 80)
+
+        # Agent 생성
+        agent = CRMAgent()
+
+        # 테스트 입력
+        test_input = "PERSONA_001로 설화수 크림 제품 중 하나를 신상품 홍보 목적으로 광고메세지를 생성해줘"
+
+        print(f"\n[입력]")
+        print(f"  {test_input}")
+
+        # ========================================
+        # 1단계: 초기 실행 (상품 추천까지)
+        # ========================================
+        print("\n" + "=" * 80)
+        print("1단계: Agent 실행 (상품 추천까지)")
+        print("=" * 80)
+
+        result = await agent.run(
+            user_input=test_input,
+            session_id="test_session",
+            user_id="test_user",
+        )
+
+        print(f"\nStatus: {result.get('status')}")
+        print(f"Thread ID: {result.get('thread_id')}")
+
+        if result.get('status') == 'waiting_for_user':
+            # 사용자 입력 대기 상태
+            print("\n" + "=" * 80)
+            print("상품 추천 완료 - 사용자 선택 대기 중")
+            print("=" * 80)
+
+            print(f"\n[파싱 결과]")
+            pprint(result.get('parsed_request'), indent=2)
+
+            recommended_products = result.get('recommended_products', [])
+
+            # ========================================
+            # 2단계: 사용자에게 상품 리스트 표시 및 선택
+            # ========================================
+            print("\n" + "=" * 80)
+            print("추천 상품 목록")
+            print("=" * 80)
+
+            for i, product in enumerate(recommended_products, 1):
+                print(f"\n  [{i}] {product.get('product_name')}")
+                print(f"      상품ID: {product.get('product_id')}")
+                print(f"      브랜드: {product.get('brand')}")
+                print(f"      가격: {product.get('sale_price'):,}원")
+                print(f"      적합도: {product.get('vector_search_score', 0):.2f}")
+
+            print(f"\n총 {len(recommended_products)}개의 상품이 추천되었습니다.")
+            print("-" * 80)
+
+            # 사용자가 상품 선택 (입력 받기)
+            while True:
+                try:
+                    user_input = input(f"\n상품 번호를 선택하세요 (1-{len(recommended_products)}): ")
+                    selected_index = int(user_input) - 1
+                    if 0 <= selected_index < len(recommended_products):
+                        break
+                    else:
+                        print(f"1부터 {len(recommended_products)} 사이의 숫자를 입력하세요.")
+                except ValueError:
+                    print("숫자를 입력하세요.")
+
+            selected_product = recommended_products[selected_index]
+            selected_product_id = selected_product.get('product_id')
+            print(f"\n선택된 상품: [{selected_index + 1}] {selected_product.get('product_name')} ({selected_product.get('brand')}) - {selected_product.get('sale_price'):,}원")
+
+            print("\n" + "=" * 80)
+            print("3단계: 워크플로우 재개 (메시지 생성)")
+            print("=" * 80)
+
+            # 워크플로우 재개
+            thread_id = result.get('thread_id')
+            final_result = await agent.resume_with_selection(
+                thread_id=thread_id,
+                selected_product_id=selected_product_id
+            )
+
+            print(f"\nStatus: {final_result.get('status')}")
+
+            if final_result.get('status') == 'completed':
+                print("\n" + "=" * 80)
+                print("메시지 생성 완료")
+                print("=" * 80)
+
+                print(f"\n[생성된 메시지] {len(final_result.get('messages', []))}개")
+                for i, msg in enumerate(final_result.get('messages', []), 1):
+                    print(f"\n  [메시지 {i}]")
+                    print(f"  상품: {msg.get('product_name')} ({msg.get('brand')})")
+                    print(f"  제목: {msg.get('title')}")
+                    print(f"  가격: {msg.get('sale_price'):,}원")
+                    print(f"\n  메시지 내용:")
+                    print("  " + "-" * 76)
+                    print(f"  {msg.get('message')}")
+                    print("  " + "-" * 76)
+                    print(f"  URL: {msg.get('product_url')}")
+                    print(f"  Vector Score: {msg.get('vector_search_score', 0):.3f}")
+
+                print("\n" + "=" * 80)
+                print("전체 실행 로그")
+                print("=" * 80)
+                for log in final_result.get('logs', []):
+                    print(f"  {log}")
+
+            else:
+                print(f"\n[ERROR] 메시지 생성 실패: {final_result.get('error')}")
+
+        elif result.get('status') == 'completed':
+            print("\n[경고] 바로 완료됨 - Human-in-the-loop가 작동하지 않았습니다")
+            print(f"\n[생성된 메시지] {len(result.get('messages', []))}개")
+
+        else:
+            print(f"\n[ERROR] {result.get('error')}")
+            print("\n실행 로그:")
+            for log in result.get('logs', []):
+                print(f"  {log}")
+
+    asyncio.run(main())

@@ -1,0 +1,113 @@
+{
+  "timestamp": "2025-12-08 17:03:11",
+  "models": {
+    "e5-small": {
+      "load_time": 11.049572467803955,
+      "embed_time": 20.732081174850464,
+      "total": 724,
+      "speed": 34.92172319285847,
+      "dimension": 768,
+      "avg_search": 0.03271479606628418,
+      "search_results": [
+        {
+          "query": "주름 개선 안티에이징 크림",
+          "top1_product": "[저자극 피부결 관리] 안티스트레스 바디워시 500ml",
+          "brand": "보타닉센스"
+        },
+        {
+          "query": "보습 수분 크림",
+          "top1_product": "[수분보습 피부장벽] 스킨배리어 운데칸 바디오일",
+          "brand": "보타닉센스"
+        },
+        {
+          "query": "민감성 피부 진정",
+          "top1_product": "[고보습 진정탄력] 안티스트레스 바디크림 500ml",
+          "brand": "보타닉센스"
+        },
+        {
+          "query": "메이크업 베이스",
+          "top1_product": "[피카소] FB11 밀착 베이스 메이크업 세트",
+          "brand": "피카소"
+        },
+        {
+          "query": "아이섀도우 팔레트",
+          "top1_product": "[디즈니에디션] 아이 코어 팔레트 기획세트",
+          "brand": "에스쁘아"
+        }
+      ],
+      "ad_generation": null
+    },
+    "jina-v2": {
+      "load_time": 3.350627899169922,
+      "embed_time": 102.61701202392578,
+      "total": 724,
+      "speed": 7.055360370765765,
+      "dimension": 768,
+      "avg_search": 0.053434896469116214,
+      "search_results": [
+        {
+          "query": "주름 개선 안티에이징 크림",
+          "top1_product": "팡팡 헤어 섀도우 3.5g",
+          "brand": "에뛰드"
+        },
+        {
+          "query": "보습 수분 크림",
+          "top1_product": "인리치 본딩 케어 마스크 200ml",
+          "brand": "아윤채"
+        },
+        {
+          "query": "민감성 피부 진정",
+          "top1_product": "프라임 리저브 리트리니 메쉬 파운데이션 케이스",
+          "brand": "에이피뷰티"
+        },
+        {
+          "query": "메이크업 베이스",
+          "top1_product": "[피카소꼴레지오니] 퍼플 아이래쉬 컬러(뷰러)",
+          "brand": "피카소 꼴레지오니"
+        },
+        {
+          "query": "아이섀도우 팔레트",
+          "top1_product": "[리필/케이스 택] 프라임 리저브 리트리니티 메쉬 파운데이션 12g",
+          "brand": "에이피뷰티"
+        }
+      ],
+      "ad_generation": null
+    },
+    "e5-large": {
+      "load_time": 4.443901777267456,
+      "embed_time": 205.66113924980164,
+      "total": 724,
+      "speed": 3.5203539309417606,
+      "dimension": 768,
+      "avg_search": 0.16739673614501954,
+      "search_results": [
+        {
+          "query": "주름 개선 안티에이징 크림",
+          "top1_product": "[주름탄력 집중케어] 이오논 퍼밍크림",
+          "brand": "보타닉센스"
+        },
+        {
+          "query": "보습 수분 크림",
+          "top1_product": "[풋네스] 풋 테라피 발 뒤꿈치 초보습 크림 50ml",
+          "brand": "라 리베라"
+        },
+        {
+          "query": "민감성 피부 진정",
+          "top1_product": "탈모증상완화 샴푸 민감더마 400ml",
+          "brand": "라보에이치"
+        },
+        {
+          "query": "메이크업 베이스",
+          "top1_product": "[세잔느] 아이 메이크베이스",
+          "brand": "세잔느"
+        },
+        {
+          "query": "아이섀도우 팔레트",
+          "top1_product": "아이 코어 팔레트 9g",
+          "brand": "에스쁘아"
+        }
+      ],
+      "ad_generation": null
+    }
+  }
+}
