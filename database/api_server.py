@@ -11,6 +11,7 @@ from sqlalchemy import text
 from database import get_db
 from models import Persona, Product, AnalysisResult, SearchQuery
 from api_endpoints import router as db_router
+from pipeline_router import router as pipeline_router
 
 app = FastAPI(
     title="AI Innovation Challenge 2026 API",
@@ -20,6 +21,7 @@ app = FastAPI(
 
 # 라우터 등록
 app.include_router(db_router)
+app.include_router(pipeline_router)
 
 # CORS 설정
 app.add_middleware(

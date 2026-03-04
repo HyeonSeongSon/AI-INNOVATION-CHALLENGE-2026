@@ -12,7 +12,13 @@ import { useNavigate } from 'react-router-dom';
 
 // ✅ Toast 및 API 모듈 불러오기
 import { useToast } from '../components/Toast';
-import api from '../api'; 
+import api from '../api';
+import axios from 'axios';
+
+const pipelineApi = axios.create({
+  baseURL: 'http://localhost:8020/api',
+  headers: { 'Content-Type': 'application/json' },
+});
 
 /* --- [1] 데이터 및 옵션 설정 --- */
 const OPTIONS = {
@@ -318,7 +324,7 @@ export default function PersonaManager() {
       await new Promise(r => setTimeout(r, 1500));
 
       // 2. 파이프라인 API 호출
-      const response = await api.post('/pipeline/personas/create-analyze', payload);
+      const response = await pipelineApi.post('/pipeline/personas/create-analyze', payload);
       const result = response.data;
       
       // ✅ [핵심 수정] 백엔드 응답에서 analysis 객체를 바로 꺼냅니다.

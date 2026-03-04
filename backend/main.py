@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from app.api import marketing_api, pipeline_api
+from app.api import marketing_api
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
@@ -61,7 +61,6 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(marketing_api.router)
-app.include_router(pipeline_api.router)
 
 
 @app.get("/")
