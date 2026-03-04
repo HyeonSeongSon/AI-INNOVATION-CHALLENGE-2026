@@ -1,14 +1,10 @@
 from langgraph.graph import StateGraph, START
-from langgraph.checkpoint.memory import InMemorySaver
 from .state import SupervisorState
 from .nodes.supervisor_node import supervisor_node
 from .nodes.search_node import search_node
 from ..crm_agent.workflow import build_crm_workflow
 
 def build_marketing_workflow(checkpointer=None):
-
-    if checkpointer == None:
-        checkpointer = InMemorySaver()
 
     crm_subgraph = build_crm_workflow()
 

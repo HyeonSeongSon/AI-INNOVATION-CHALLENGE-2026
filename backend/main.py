@@ -4,10 +4,13 @@ CRM Agent API 서버
 """
 
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api import marketing_api
+from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
@@ -27,11 +30,23 @@ logger = get_logger("main")
 # Configure LangSmith tracing
 configure_langsmith()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    postgres_url = os.getenv("POSTGRES_URL")
+    async with AsyncPostgresSaver.from_conn_string(postgres_url) as checkpointer:
+        await checkpointer.setup()
+        app.state.agent = MarketingAgent(checkpointer=checkpointer)
+        logger.info("postgres_checkpointer_ready")
+        yield
+
+
 # FastAPI 앱 생성
 app = FastAPI(
     title="CRM Agent API",
     description="AI 기반 CRM 메시지 생성 API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Middleware (order matters: outermost first)
@@ -69,14 +84,6 @@ def health_check():
         }
     }
 
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info(
-        "application_started",
-        port=8005,
-        environment=os.getenv("ENVIRONMENT", "production"),
-    )
 
 
 if __name__ == "__main__":
