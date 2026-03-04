@@ -16,8 +16,8 @@ INTERRUPT_TYPES = {
 
 
 class MarketingAgent:
-    def __init__(self):
-        self.workflow = build_marketing_workflow()
+    def __init__(self, checkpointer=None):
+        self.workflow = build_marketing_workflow(checkpointer=checkpointer)
 
     # ============================================================
     # 내부 헬퍼

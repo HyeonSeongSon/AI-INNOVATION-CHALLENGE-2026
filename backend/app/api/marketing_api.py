@@ -3,7 +3,7 @@ Marketing Agent API 엔드포인트
 Supervisor + CRM subgraph 기반
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, Literal, List, Dict, Any
 
@@ -14,14 +14,9 @@ logger = get_logger("marketing_api")
 
 router = APIRouter(prefix="/api/marketing", tags=["Marketing"])
 
-_agent_instance = None
 
-
-def get_agent() -> MarketingAgent:
-    global _agent_instance
-    if _agent_instance is None:
-        _agent_instance = MarketingAgent()
-    return _agent_instance
+def get_agent(request: Request) -> MarketingAgent:
+    return request.app.state.agent
 
 
 # ============================================================
@@ -112,6 +107,7 @@ class MarketingResponse(BaseModel):
 @router.post("/chat", response_model=MarketingResponse)
 async def chat(
     request: ChatRequest,
+    req: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     """
@@ -122,7 +118,7 @@ async def chat(
     - thread_id가 interrupt 대기 상태이면 waiting_for_user 반환 → /resume 사용 안내
     """
     try:
-        agent = get_agent()
+        agent = get_agent(req)
         result = await agent.chat(
             user_input=request.user_input,
             session_id=request.session_id,
@@ -150,6 +146,7 @@ async def chat(
 @router.post("/resume", response_model=MarketingResponse)
 async def resume_interrupt(
     request: ResumeRequest,
+    req: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     """
@@ -163,7 +160,7 @@ async def resume_interrupt(
         payload: {"selected_product_id": "PROD001"}
     """
     try:
-        agent = get_agent()
+        agent = get_agent(req)
         result = await agent.resume_interrupt(
             thread_id=request.thread_id,
             interrupt_type=request.interrupt_type,

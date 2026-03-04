@@ -5,7 +5,6 @@ LangGraph를 사용한 CRM Agent 워크플로우 정의
 """
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 from .state import CRMState
 from .nodes.parse_crm_request_node import parse_crm_request_node
 from .nodes.recommend_products_node import recommend_products_node
@@ -128,8 +127,7 @@ def build_crm_workflow(checkpointer=None):
             "__end__": END,
         }
     )
-    return workflow.compile()
-    # return workflow.compile(checkpointer=checkpointer)
+    return workflow.compile(checkpointer=checkpointer)
 
 
 if __name__ == "__main__":
