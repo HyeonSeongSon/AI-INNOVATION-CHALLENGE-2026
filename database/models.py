@@ -58,6 +58,9 @@ class Persona(Base):
     shopping_style = Column(String(100))
     purchase_decision_factors = Column(ARRAY(Text), default=[])
 
+    # AI 요약
+    persona_summary = Column(Text)
+
     # 타임스탬프
     persona_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

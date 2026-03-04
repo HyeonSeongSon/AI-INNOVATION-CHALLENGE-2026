@@ -46,6 +46,7 @@ class PersonaCreate(BaseModel):
     digital_device_usage_time: Optional[int] = Field(None, description="디지털 기기 사용 시간", examples=[8])
     shopping_style: Optional[str] = Field(None, description="쇼핑 스타일", examples=["신중형"])
     purchase_decision_factors: Optional[List[str]] = Field(default=[], description="구매 결정 요인", examples=[["리뷰", "성분"]])
+    persona_summary: Optional[str] = Field(None, description="AI 생성 페르소나 요약")
 
 
 class AnalysisResultCreate(BaseModel):

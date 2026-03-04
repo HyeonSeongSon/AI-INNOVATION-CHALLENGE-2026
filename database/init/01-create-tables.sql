@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS personas (
     digital_device_usage_time INTEGER,
     shopping_style VARCHAR(100),
     purchase_decision_factors TEXT[] DEFAULT ARRAY[]::TEXT[],
+    persona_summary TEXT,
     persona_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -1,0 +1,15 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-innovation-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    networks:
+      - ai-innovation-network
+
+networks:
+  ai-innovation-network:
+    driver: bridge
