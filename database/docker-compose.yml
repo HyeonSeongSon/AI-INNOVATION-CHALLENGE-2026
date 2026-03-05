@@ -43,41 +43,6 @@ services:
       -c min_wal_size=1GB
       -c max_wal_size=4GB
 
-  fastapi:
-    build:
-      context: ..
-      dockerfile: database/Dockerfile
-    container_name: ai-innovation-fastapi
-    restart: always
-    env_file:
-      - .env
-    environment:
-      # PostgreSQL 연결 설정 (도커 네트워크 내부에서는 서비스명 사용)
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      TZ: Asia/Seoul
-    ports:
-      - "8020:8020"
-    volumes:
-      # 코드 변경 시 자동 리로드를 위한 볼륨 마운트
-      - .:/app
-      # data 폴더 마운트 (categories.json 등 데이터 파일)
-      - ../data:/app/data
-    networks:
-      - ai-innovation-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: ai-innovation-pgadmin

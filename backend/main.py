@@ -10,7 +10,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api import marketing_api
+from app.api import personas as personas_api
+from app.api import pipeline as pipeline_api
 from app.agents.supervisor.marketing_agent import MarketingAgent
+from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
@@ -33,6 +36,7 @@ configure_langsmith()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     postgres_url = os.getenv("POSTGRES_URL")
     async with AsyncPostgresSaver.from_conn_string(postgres_url) as checkpointer:
         await checkpointer.setup()
@@ -61,6 +65,8 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(marketing_api.router)
+app.include_router(personas_api.router)
+app.include_router(pipeline_api.router)
 
 
 @app.get("/")

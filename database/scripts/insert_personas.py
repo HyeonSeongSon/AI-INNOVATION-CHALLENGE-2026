@@ -4,12 +4,12 @@ JSON 파일에서 페르소나 데이터를 읽어서 PostgreSQL에 삽입
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
 import json
-from pathlib import Path
-from core.database import get_db
-from core.models import Persona
+from app.core.database import get_db
+from app.core.models import Persona
 from sqlalchemy.exc import IntegrityError
 
 

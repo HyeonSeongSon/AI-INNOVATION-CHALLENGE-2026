@@ -1,16 +1,19 @@
 """
 Pipeline API Router
-프론트엔드 요청을 받아 LLM 분석 + DB 저장까지 처리 (port 8020)
+프론트엔드 요청을 받아 LLM 분석 + DB 저장까지 처리
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+import json
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
-from core.database import get_db
-from core.models import Persona
-from services.persona_analyzer import generate_persona_summary
+from app.core.database import get_db, SessionLocal
+from app.core.models import AnalysisResult, Persona
+from app.services.persona_analyzer import generate_persona_summary
+from app.services.persona_analysis import run_persona_analysis
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
 
@@ -50,6 +53,44 @@ class PersonaCreateResponse(BaseModel):
     analysis: Dict[str, Any]
 
 
+class PreAnalyzeRequest(BaseModel):
+    persona_id: str
+    persona_data: Dict[str, Any]
+    model: Optional[str] = None
+
+
+# ============================================================
+# 내부 함수
+# ============================================================
+
+async def _run_pre_analysis_bg(persona_id: str, persona_data: dict, model: Optional[str]) -> None:
+    """
+    별도 DB 세션으로 background에서 페르소나 분석 실행 및 저장
+    분석 실패 시 로그 없이 종료 (페르소나 생성은 이미 완료됨)
+    """
+    db = SessionLocal()
+    try:
+        # 중복 분석 방지
+        existing = db.query(AnalysisResult).filter(
+            AnalysisResult.persona_id == persona_id
+        ).first()
+        if existing:
+            return
+
+        analysis_result = await run_persona_analysis(persona_data, model)
+
+        record = AnalysisResult(
+            persona_id=persona_id,
+            analysis_result=json.dumps(analysis_result, ensure_ascii=False),
+        )
+        db.add(record)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 # ============================================================
 # 엔드포인트
 # ============================================================
@@ -57,6 +98,7 @@ class PersonaCreateResponse(BaseModel):
 @router.post("/personas/create-analyze", response_model=PersonaCreateResponse)
 async def create_and_analyze_persona(
     request: PersonaCreateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
@@ -65,6 +107,7 @@ async def create_and_analyze_persona(
     1. LLM으로 페르소나 요약 생성
     2. DB에 직접 저장
     3. persona_id + 분석 결과 반환
+    4. 백그라운드에서 다단계×다차원 분석 사전 실행 (CRM agent 속도 향상용)
     """
     try:
         persona_data = request.model_dump(exclude={"model"})
@@ -114,6 +157,10 @@ async def create_and_analyze_persona(
         db.add(persona)
         db.commit()
 
+        # 4. 다단계×다차원 분석 사전 실행 (background)
+        persona_data_normalized = {**persona_data, "preferred_texture": preferred_texture, "purchase_decision_factors": purchase_decision_factors}
+        background_tasks.add_task(_run_pre_analysis_bg, persona_id, persona_data_normalized, request.model)
+
         return PersonaCreateResponse(
             persona_id=persona_id,
             analysis={
@@ -121,6 +168,38 @@ async def create_and_analyze_persona(
                 "ai_analysis_text": persona_summary,
             },
         )
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/personas/pre-analyze")
+async def pre_analyze_persona(request: PreAnalyzeRequest, db: Session = Depends(get_db)):
+    """
+    페르소나 분석 사전 실행 (analysis_results 테이블 저장)
+
+    페르소나 생성 후 수동으로 분석을 트리거하거나 재실행할 때 사용.
+    이미 분석이 존재하면 skip.
+    """
+    try:
+        existing = db.query(AnalysisResult).filter(
+            AnalysisResult.persona_id == request.persona_id
+        ).first()
+        if existing:
+            return {"status": "already_exists", "analysis_id": existing.analysis_id}
+
+        analysis_result = await run_persona_analysis(request.persona_data, request.model)
+
+        record = AnalysisResult(
+            persona_id=request.persona_id,
+            analysis_result=json.dumps(analysis_result, ensure_ascii=False),
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+
+        return {"status": "created", "analysis_id": record.analysis_id}
 
     except Exception as e:
         db.rollback()

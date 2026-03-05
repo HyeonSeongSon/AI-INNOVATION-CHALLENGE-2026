@@ -52,7 +52,6 @@ async def generate_persona_summary(persona_data: Dict[str, Any], model: str = No
     description = _build_persona_description(persona_data)
     response = await client.chat.completions.create(
         model=model_name,
-        temperature=0.3,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"다음 고객 정보를 요약해주세요:\n\n{description}"},

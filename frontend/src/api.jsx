@@ -9,9 +9,9 @@ const api = axios.create({
   },
 });
 
-// 데이터베이스/파이프라인 서버 (port 8020)
+// 데이터베이스/파이프라인 서버 (port 8005로 통합)
 export const pipelineApi = axios.create({
-  baseURL: 'http://localhost:8020/api',
+  baseURL: 'http://localhost:8005/api',
   headers: {
     'Content-Type': 'application/json',
   },
