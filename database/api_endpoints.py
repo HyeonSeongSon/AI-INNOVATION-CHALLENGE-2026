@@ -369,6 +369,28 @@ async def list_personas(db: Session = Depends(get_db)):
     ]
 
 
+@router.delete("/personas/{persona_id}", summary="페르소나 삭제")
+async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
+    """
+    페르소나 ID로 페르소나 삭제 (CASCADE로 연관 분석 결과도 함께 삭제)
+
+    **테이블:** personas
+
+    **Path 파라미터:**
+    - persona_id: 삭제할 페르소나 ID
+    """
+    from models import Persona
+
+    persona = db.query(Persona).filter(Persona.persona_id == persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail=f"Persona with ID '{persona_id}' not found")
+
+    db.delete(persona)
+    db.commit()
+
+    return {"message": f"Persona '{persona_id}' deleted successfully"}
+
+
 @router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")
 async def query_personas_by_sql(request: PersonaQueryRequest, db: Session = Depends(get_db)) -> List[Any]:
     """

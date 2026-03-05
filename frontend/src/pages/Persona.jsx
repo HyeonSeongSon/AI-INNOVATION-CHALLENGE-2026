@@ -12,13 +12,7 @@ import { useNavigate } from 'react-router-dom';
 
 // ✅ Toast 및 API 모듈 불러오기
 import { useToast } from '../components/Toast';
-import api from '../api';
-import axios from 'axios';
-
-const pipelineApi = axios.create({
-  baseURL: 'http://localhost:8020/api',
-  headers: { 'Content-Type': 'application/json' },
-});
+import api, { pipelineApi } from '../api';
 
 /* --- [1] 데이터 및 옵션 설정 --- */
 const OPTIONS = {
@@ -203,7 +197,7 @@ export default function PersonaManager() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const response = await api.get('/pipeline/personas');
+        const response = await pipelineApi.post('/personas/list');
         const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
         
         // 백엔드 응답(snake_case) -> 프론트엔드 상태(camelCase) 매핑
@@ -364,7 +358,7 @@ export default function PersonaManager() {
     e.stopPropagation(); 
     if(window.confirm('정말 삭제하시겠습니까? (DB에서도 완전히 삭제됩니다)')) {
       try {
-        await api.delete(`/pipeline/personas/${id}`);
+        await pipelineApi.delete(`/personas/${id}`);
         setPersonas(personas.filter(p => p.id !== id));
         addToast('삭제되었습니다.', 'info');
       } catch (error) {

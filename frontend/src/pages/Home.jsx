@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
-import api from '../api'; // ✅ API 모듈 임포트
+import api, { pipelineApi } from '../api'; // ✅ API 모듈 임포트
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
 const PageContainer = styled.div`
@@ -266,9 +266,8 @@ export default function Home() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        // [수정 완료] 기존 '/personas' -> '/pipeline/personas' 로 변경
-        const response = await api.get('/pipeline/personas'); 
-        
+        const response = await pipelineApi.post('/personas/list');
+
         // 백엔드 응답 구조에 따라 데이터 추출 (배열인지, 객체 안의 배열인지 확인)
         const data = Array.isArray(response.data) ? response.data : (response.data.personas || []);
         

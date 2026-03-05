@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // ✅ API 및 Context
-import api from '../api';
+import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../components/Toast';
 
@@ -106,7 +106,7 @@ export default function Message() {
   useEffect(() => {
     const fetchPersonas = async () => {
       try {
-        const response = await api.get('/pipeline/personas');
+        const response = await pipelineApi.post('/personas/list');
         const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
         const pData = rawData.map(p => ({
           ...p,

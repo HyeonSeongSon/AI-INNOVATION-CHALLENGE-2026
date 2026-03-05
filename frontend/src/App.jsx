@@ -36,7 +36,7 @@ const ServerStatusCheck = () => {
   useEffect(() => {
     const checkServer = async () => {
       try {
-        await api.get('/'); 
+        await api.get('/marketing/health');
         console.log("✅ 백엔드 서버 연결 성공!");
       } catch (error) {
         console.warn("⚠️ 백엔드 연결 실패 (Docker 실행 여부를 확인하세요)");
