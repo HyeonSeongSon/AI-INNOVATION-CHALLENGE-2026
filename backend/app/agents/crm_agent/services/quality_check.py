@@ -313,8 +313,13 @@ class QualityChecker:
         for results in results_per_sentence:
             all_results.extend(results)
 
-        # score 내림차순 상위 3개 로깅 (통과/실패 공통)
-        top3 = sorted(all_results, key=lambda r: r["score"], reverse=True)[:3]
+        # 문장별 최고점 1개만 추출 후 score 내림차순 상위 3개 로깅
+        top_per_sentence: Dict[str, Dict] = {}
+        for r in all_results:
+            q = r["query_sentence"]
+            if q not in top_per_sentence or r["score"] > top_per_sentence[q]["score"]:
+                top_per_sentence[q] = r
+        top3 = sorted(top_per_sentence.values(), key=lambda r: r["score"], reverse=True)[:3]
         logger.info(
             "semantic_check_top3",
             top3=[
