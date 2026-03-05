@@ -11,7 +11,7 @@ from typing import Any, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
-from database import get_db
+from core.database import get_db
 
 # 라우터 생성
 router = APIRouter(prefix="/api", tags=["Database"])
@@ -270,7 +270,7 @@ async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
     - persona_id: 고유 ID
     - name: 이름
     """
-    from models import Persona
+    from core.models import Persona
 
     # 중복 확인
     existing = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
@@ -303,7 +303,7 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
     **반환:**
     - 페르소나의 모든 상세 정보
     """
-    from models import Persona
+    from core.models import Persona
 
     # 페르소나 조회
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
@@ -349,7 +349,7 @@ async def list_personas(db: Session = Depends(get_db)):
     **반환:**
     - 모든 페르소나의 상세 정보 (생성일 기준 오름차순)
     """
-    from models import Persona
+    from core.models import Persona
 
     personas = db.query(Persona).order_by(Persona.persona_created_at.asc()).all()
 
@@ -395,7 +395,7 @@ async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
     **Path 파라미터:**
     - persona_id: 삭제할 페르소나 ID
     """
-    from models import Persona
+    from core.models import Persona
 
     persona = db.query(Persona).filter(Persona.persona_id == persona_id).first()
     if not persona:
@@ -481,7 +481,7 @@ async def create_analysis_result(request: AnalysisResultCreate, db: Session = De
     - persona_id: 페르소나 ID (FK)
     - analysis_result: 분석 결과 텍스트
     """
-    from models import AnalysisResult, Persona
+    from core.models import AnalysisResult, Persona
 
     # 페르소나 존재 확인
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
@@ -514,7 +514,7 @@ async def get_analysis_results(request: AnalysisResultGetRequest, db: Session = 
     **반환:**
     - 해당 페르소나의 모든 분석 결과 (시간순 정렬)
     """
-    from models import AnalysisResult, Persona
+    from core.models import AnalysisResult, Persona
 
     # 페르소나 존재 확인
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
@@ -548,7 +548,7 @@ async def create_search_query(request: SearchQueryCreate, db: Session = Depends(
     - analysis_id: 분석 ID (FK)
     - search_query: 검색 쿼리 텍스트
     """
-    from models import SearchQuery, AnalysisResult
+    from core.models import SearchQuery, AnalysisResult
 
     # 분석 결과 존재 확인
     analysis = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == request.analysis_id).first()
@@ -582,7 +582,7 @@ async def get_search_queries(request: SearchQueryGetRequest, db: Session = Depen
     **반환:**
     - 해당 분석 ID의 모든 검색 쿼리 (시간순 정렬)
     """
-    from models import SearchQuery, AnalysisResult
+    from core.models import SearchQuery, AnalysisResult
 
     # 분석 결과 존재 확인
     analysis = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == request.analysis_id).first()
@@ -616,7 +616,7 @@ async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
     - product_id: 상품 ID
     - product_name: 상품명
     """
-    from models import Product
+    from core.models import Product
 
     # 중복 확인
     existing = db.query(Product).filter(Product.product_id == request.product_id).first()
@@ -679,7 +679,7 @@ async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depend
     **필수 필드:**
     - tag: 상품 태그 (product_tag 컬럼 일치)
     """
-    from models import Product
+    from core.models import Product
 
     products = db.query(Product).filter(Product.product_tag == request.tag).all()
     return [_to_product_detail(p) for p in products]
@@ -696,7 +696,7 @@ async def get_products_by_brand(request: ProductByBrandRequest, db: Session = De
     **필수 필드:**
     - brand: 브랜드명 (brand 컬럼 일치)
     """
-    from models import Product
+    from core.models import Product
 
     products = db.query(Product).filter(Product.brand == request.brand).all()
     return [_to_product_detail(p) for p in products]
@@ -723,7 +723,7 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
 
     **반환:** 필터 조건에 맞는 상품 리스트
     """
-    from models import Product
+    from core.models import Product
     from sqlalchemy import and_, or_, cast
     from sqlalchemy.dialects.postgresql import ARRAY, INTEGER
     from sqlalchemy.types import Text

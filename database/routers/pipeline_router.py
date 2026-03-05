@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import Persona
-from persona_analyzer import generate_persona_summary
+from core.database import get_db
+from core.models import Persona
+from services.persona_analyzer import generate_persona_summary
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
 

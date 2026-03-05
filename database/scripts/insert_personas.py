@@ -2,10 +2,14 @@
 JSON 파일에서 페르소나 데이터를 읽어서 PostgreSQL에 삽입
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from pathlib import Path
-from database import get_db
-from models import Persona
+from core.database import get_db
+from core.models import Persona
 from sqlalchemy.exc import IntegrityError
 
 

@@ -8,10 +8,10 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db
-from models import Persona, Product, AnalysisResult, SearchQuery
-from api_endpoints import router as db_router
-from pipeline_router import router as pipeline_router
+from core.database import get_db
+from core.models import Persona, Product, AnalysisResult, SearchQuery
+from routers.api_endpoints import router as db_router
+from routers.pipeline_router import router as pipeline_router
 
 app = FastAPI(
     title="AI Innovation Challenge 2026 API",

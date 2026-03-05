@@ -10,7 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 
-from models import Base
+from core.models import Base
 
 # .env 파일 로드
 load_dotenv()

@@ -2,7 +2,6 @@ from typing import Dict, Any, List, Optional
 import json
 
 def build_persona_info_analysis_prompt(
-          user_input: str,
           persona_info: Dict[str, Any]
           ) -> str:
     """
@@ -15,12 +14,17 @@ def build_persona_info_analysis_prompt(
     Returns:
         prompt
     """
-    return f"""당신은 뷰티 전문가입니다. 사용자의 요청과 페르소나 정보를 분석하여 다단계 × 다차원 분석 결과를 생성하세요.
+    return f"""당신은 피부 과학, 화장품 성분, 뷰티 트렌드에 전문 지식을 가진 뷰티 분석 전문가입니다.
 
-**사용자 요청:**
-{user_input}
+입력된 페르소나 정보를 기반으로 해당 인물의 뷰티 특성과 니즈를 분석하여
+**다단계 × 다차원 분석 결과**를 생성하세요.
 
-**페르소나 정보:**
+사용자 요청은 존재하지 않으며,
+**페르소나 정보만으로 잠재 니즈까지 추론하는 것이 목표입니다.**
+
+---
+
+페르소나 정보:
 {persona_info}
 
 ---
@@ -29,154 +33,223 @@ def build_persona_info_analysis_prompt(
 
 ### [1단계] 다단계 페르소나 분석
 
-1️⃣ **기본 프로필 (basic_profile)**
-   - 나이, 성별, 직업에서 추론되는 라이프스타일
-   - 핵심 특징 3가지
+1️⃣ 기본 프로필 (basic_profile)
 
-2️⃣ **라이프스타일 패턴 (lifestyle_pattern)**
-   - 수면 시간, 스트레스, 디지털 기기 사용
-   - 주 활동 환경에서 파악되는 환경적 요인
-   - 일상 루틴의 특징
+페르소나의 나이, 성별, 직업, 관심사, 생활환경을 기반으로
+추론 가능한 라이프스타일을 분석하세요.
 
-3️⃣ **뷰티 니즈 심층 분석 (beauty_needs)**
-   - 피부타입 + 고민 키워드 → 핵심 니즈
-   - 퍼스널 컬러 + 선호 색상 → 색조 니즈
-   - 우선순위 TOP 3
+분석 내용
+- 라이프스타일 추론
+- 핵심 특징 3가지
 
-4️⃣ **상황별 니즈 (situational_needs)**
-   - 스킨케어 루틴 → 사용 시점/단계별 요구사항
-   - 반려동물, 환경 → 특수 요구사항
-   - 시간대/상황별 니즈
 
-5️⃣ **개선 목표 (improvement_goals)**
-   - 고민 키워드에서 도출되는 해결 목표
-   - 가치관에서 추구하는 방향성
-   - 단기/중기 목표
+2️⃣ 라이프스타일 패턴 (lifestyle_pattern)
 
-### [2단계] 다차원 제품 분석
+생활 습관과 환경을 기반으로
+피부 상태와 뷰티 루틴에 영향을 미치는 요인을 분석하세요.
 
-🔬 **피부 과학 차원 (skin_science)**
-   - 피부타입별 적합성
-   - 고민 해결 메커니즘
-   - 필요한 기능성 성분
+분석 내용
+- 환경적 요인
+- 스트레스 및 생활 패턴
+- 디지털 기기 사용
+- 활동 환경
+- 일상 루틴 특징
 
-🧪 **성분 차원 (ingredients)**
-   - 선호 성분 매칭 (효과/안전성)
-   - 기피 성분 회피 전략
-   - 유효 성분 조합 추천
 
-🌱 **라이프스타일 차원 (lifestyle)**
-   - 루틴 적합성 (아침/저녁, 소요 시간)
-   - 환경 적합성 (실내/야외, 계절)
-   - 사용 빈도 및 편의성
+3️⃣ 뷰티 니즈 심층 분석 (beauty_needs)
 
-💝 **감성/가치관 차원 (values_emotion)**
-   - 비건, 크루얼티프리, 친환경 등 가치 매칭
-   - 브랜드 철학 선호도
-   - 감성적 만족 요소
+페르소나의 피부타입, 고민 키워드, 관심사 등을 기반으로
+핵심 뷰티 니즈를 도출하세요.
 
-🎨 **색조 차원 (color_makeup)**
-   - 퍼스널 컬러 매칭
-   - 베이스 호수 정보
-   - 선호 색상/질감
+분석 내용
+- 스킨케어 핵심 니즈
+- 색조 니즈
+- 잠재 니즈 (latent needs)
+- 우선순위 TOP 3
 
-💰 **가격/가성비 차원 (price_value)**
-   - 쇼핑 스타일 & 예산 범위
-   - 구매 결정 요인 (가격/품질/리뷰 등)
-   - 가성비 우선순위
 
-⚡ **사용 편의성 차원 (usability)**
-   - 선호 제형/텍스처
-   - 휴대성, 사용 간편성
-   - 적용 시간 및 흡수력
+4️⃣ 상황별 니즈 (situational_needs)
 
-🛡️ **안전성/리스크 차원 (safety_risk)**
-   - 민감도 고려사항
-   - 반려동물 안전성 (해당 시)
-   - 알레르기/자극 위험 요소
+시간대와 상황에 따라 필요한 뷰티 요구사항을 분석하세요.
+
+분석 내용
+- 스킨케어 루틴 요구사항
+- 환경 기반 니즈
+- 특수 상황 니즈
+- 시간대별 니즈
+
+
+5️⃣ 개선 목표 (improvement_goals)
+
+페르소나의 고민과 가치관을 기반으로
+단기 및 중기 개선 목표를 도출하세요.
+
+분석 내용
+- 단기 목표
+- 중기 목표
+- 추구하는 뷰티 방향성
 
 ---
 
-## 출력 형식 (JSON)
+### [2단계] 다차원 뷰티 분석
 
-다음 형식으로 응답하세요:
+🔬 피부 과학 차원 (skin_science)
+
+분석 내용
+- 피부타입 적합성
+- 피부 고민 해결 메커니즘
+- 필요한 기능성 성분
+
+
+🧪 성분 차원 (ingredients)
+
+분석 내용
+- 선호 성분 매칭
+- 기피 성분 회피 전략
+- 효과적인 성분 조합
+
+
+🌱 라이프스타일 차원 (lifestyle)
+
+분석 내용
+- 루틴 적합성
+- 환경 적합성
+- 사용 편의성
+
+
+💝 감성 / 가치관 차원 (values_emotion)
+
+분석 내용
+- 가치관 기반 제품 선호
+- 브랜드 철학 선호
+- 감성적 만족 요소
+
+
+🎨 색조 차원 (color_makeup)
+
+분석 내용
+- 퍼스널 컬러 추론
+- 베이스 컬러 적합성
+- 선호 색상 및 질감
+
+
+💰 가격 / 소비 행동 차원 (price_value)
+
+분석 내용
+- 예산 범위 추정
+- 구매 행동 특징
+- 구매 결정 요인
+
+
+⚡ 사용 편의성 차원 (usability)
+
+분석 내용
+- 선호 제형
+- 사용 편의성
+- 흡수력 및 발림성
+
+
+🛡 안전성 / 리스크 차원 (safety_risk)
+
+분석 내용
+- 민감 피부 고려사항
+- 알레르기 위험
+- 자극 가능 성분
+
+---
+
+## 출력 형식
+
+반드시 아래 JSON 형식으로만 응답하세요.
 
 {{
   "multi_level_analysis": {{
     "basic_profile": {{
-      "inferred_lifestyle": "추론된 라이프스타일",
-      "key_characteristics": ["특징1", "특징2", "특징3"]
+      "inferred_lifestyle": "",
+      "key_characteristics": []
     }},
     "lifestyle_pattern": {{
-      "environmental_factors": ["요인1", "요인2"],
-      "daily_routine_features": "루틴 특징 설명"
+      "environmental_factors": [],
+      "daily_routine_features": ""
     }},
     "beauty_needs": {{
-      "core_skincare_needs": ["니즈1", "니즈2"],
-      "makeup_needs": ["니즈1", "니즈2"],
-      "priority_top3": ["1순위", "2순위", "3순위"]
+      "core_skincare_needs": [],
+      "makeup_needs": [],
+      "latent_needs": [],
+      "priority_top3": []
     }},
     "situational_needs": {{
-      "routine_requirements": {{"morning": "아침 요구사항", "evening": "저녁 요구사항"}},
-      "special_requirements": ["특수 요구사항1", "특수 요구사항2"]
+      "routine_requirements": {{
+        "morning": "",
+        "evening": ""
+      }},
+      "special_requirements": []
     }},
     "improvement_goals": {{
-      "short_term": ["단기 목표1", "단기 목표2"],
-      "mid_term": ["중기 목표1", "중기 목표2"],
-      "value_direction": "가치관 기반 방향성"
+      "short_term": [],
+      "mid_term": [],
+      "value_direction": ""
     }}
   }},
   "multi_dimensional_analysis": {{
     "skin_science": {{
-      "skin_type_compatibility": "피부타입 적합성 설명",
-      "problem_solving_mechanism": ["메커니즘1", "메커니즘2"],
-      "required_functional_ingredients": ["성분1", "성분2"]
+      "skin_type_compatibility": "",
+      "problem_solving_mechanism": [],
+      "required_functional_ingredients": []
     }},
     "ingredients": {{
-      "preferred_match": ["선호 성분1 + 효과", "선호 성분2 + 효과"],
-      "avoid_strategy": ["기피 성분1 회피 방법", "기피 성분2 회피 방법"],
-      "effective_combination": ["조합1", "조합2"]
+      "preferred_match": [],
+      "avoid_strategy": [],
+      "effective_combination": []
     }},
     "lifestyle": {{
-      "routine_fit": {{"morning": "아침 적합도", "evening": "저녁 적합도"}},
-      "environment_fit": "환경 적합성",
-      "usage_convenience": "사용 편의성 평가"
+      "routine_fit": {{
+        "morning": "",
+        "evening": ""
+      }},
+      "environment_fit": "",
+      "usage_convenience": ""
     }},
     "values_emotion": {{
-      "value_match": ["가치 매칭1", "가치 매칭2"],
-      "brand_philosophy_preference": "브랜드 철학 선호",
-      "emotional_satisfaction": ["감성 요소1", "감성 요소2"]
+      "value_match": [],
+      "brand_philosophy_preference": "",
+      "emotional_satisfaction": []
     }},
     "color_makeup": {{
-      "personal_color_match": "퍼스널 컬러 매칭 정보",
-      "base_shade": "베이스 호수 정보",
-      "preferred_colors_textures": ["색상/질감1", "색상/질감2"]
+      "personal_color_match": "",
+      "base_shade": "",
+      "preferred_colors_textures": []
     }},
     "price_value": {{
-      "budget_range": "예산 범위",
-      "purchase_decision_factors": ["요인1", "요인2"],
-      "value_priority": "가성비 우선순위"
+      "budget_range": "",
+      "purchase_decision_factors": [],
+      "value_priority": ""
     }},
     "usability": {{
-      "preferred_formulation": ["제형1", "제형2"],
-      "portability_convenience": "휴대성/간편성",
-      "application_absorption": "적용/흡수 특성"
+      "preferred_formulation": [],
+      "portability_convenience": "",
+      "application_absorption": ""
     }},
     "safety_risk": {{
-      "sensitivity_considerations": ["고려사항1", "고려사항2"],
-      "pet_safety": "반려동물 안전성 (해당 시)",
-      "allergy_irritation_risks": ["위험요소1", "위험요소2"]
+      "sensitivity_considerations": [],
+      "pet_safety": "",
+      "allergy_irritation_risks": []
     }}
   }}
 }}
 
-**중요:**
-- 반드시 JSON 형식으로만 응답하세요.
-- 모든 분석 항목을 빠짐없이 채워주세요.
-- 페르소나 정보와 사용자 요청을 종합적으로 고려하여 분석하세요.
+---
+
+## 중요 규칙
+
+1. 반드시 JSON 형식으로만 응답하세요.
+2. 모든 항목을 빠짐없이 채워야 합니다.
+3. 페르소나 정보 기반 **합리적 추론**을 수행하세요.
+4. 명확하지 않은 정보는 **뷰티 산업 일반 패턴 기반으로 추론**하세요.
+5. 분석 결과는 **실제 뷰티 제품 추천 시스템에 활용 가능해야 합니다.**
 """
 
-def build_multil_query_generate_prompt(
+def build_multi_query_generate_prompt(
           user_input: str,
           analysis_result: Dict[str, Any],
           product_categories: Optional[List[str]] = None
@@ -193,7 +266,7 @@ def build_multil_query_generate_prompt(
         prompt
     """
     # 사용자가 상품 종류를 입력하지 않은 경우는 공란으로 처리
-    if product_categories == None:
+    if product_categories is None:
           product_categories = ""
     
     analysis_result = json.dumps(analysis_result, ensure_ascii=False, indent=2)

@@ -2,10 +2,14 @@
 JSONL 파일에서 직접 PostgreSQL에 상품 데이터 삽입
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from pathlib import Path
-from database import get_db
-from models import Product
+from core.database import get_db
+from core.models import Product
 from sqlalchemy.exc import IntegrityError
 
 def insert_products_from_jsonl():

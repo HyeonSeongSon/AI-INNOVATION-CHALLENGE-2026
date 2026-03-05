@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Dict, Any, List
 from sqlalchemy import text
 
-# 현재 디렉토리를 sys.path에 추가
-sys.path.insert(0, str(Path(__file__).parent))
+# database/ 루트를 sys.path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database import (
+from core.database import (
     engine,
     get_db,
     init_db,
@@ -20,7 +20,7 @@ from database import (
     check_connection,
     db_config
 )
-from models import Product, Persona
+from core.models import Product, Persona
 
 
 class DatabaseSetupPipeline:

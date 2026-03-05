@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
-from ..prompts.crm_recommend_products import build_persona_info_analysis_prompt, build_multil_query_generate_prompt
+from ..prompts.crm_recommend_products import build_persona_info_analysis_prompt, build_multi_query_generate_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 import os
@@ -171,12 +171,11 @@ class ProductRecommender:
             raise
 
     @traced(name="recommend_persona", run_type="chain")
-    async def recommend_persona(self, user_input: str, persona_id: str, llm: BaseChatModel) -> Dict[str, Any]:
+    async def recommend_persona(self, persona_id: str, llm: BaseChatModel) -> Dict[str, Any]:
         """
         페르소나 기반 다단계 × 다차원 분석
 
         Args:
-            user_input: 사용자 입력 텍스트 (예: "겨울철 건조한 피부에 좋은 크림 추천해줘")
             persona_id: 페르소나 ID
 
         Returns:
@@ -186,7 +185,7 @@ class ProductRecommender:
         persona_info = await self.get_persona_info(persona_id)
 
         # 2. 프롬프트 생성
-        prompt = self._build_analysis_prompt(user_input, persona_info)
+        prompt = self._build_analysis_prompt(persona_info)
 
         # 3. LLM 호출하여 분석 수행
         try:
@@ -215,12 +214,12 @@ class ProductRecommender:
                 "multi_dimensional_analysis": {}
             }
 
-    def _build_analysis_prompt(self, user_input: str, persona_info: Dict[str, Any]) -> str:
+    def _build_analysis_prompt(self, persona_info: Dict[str, Any]) -> str:
         """
         다단계 × 다차원 분석을 위한 프롬프트 구성
         """
         persona_info = json.dumps(persona_info, ensure_ascii=False, indent=2)
-        prompt = build_persona_info_analysis_prompt(user_input, persona_info)
+        prompt = build_persona_info_analysis_prompt(persona_info)
         return prompt
 
     @traced(name="generate_multi_queries", run_type="chain")
@@ -236,14 +235,14 @@ class ProductRecommender:
 
         Args:
             user_input: 사용자 입력 텍스트
-            analysis_result: recommend_persona 함수의 분석 결과
+            analysis_result: recommend_persona 함수의 분석 결과(페르소나 분석 정보)
             product_categories: 제품 카테고리 리스트 (선택)
 
         Returns:
             List[str]: 3~5개의 다각도 검색 쿼리
         """
         # 프롬프트 생성
-        prompt = build_multil_query_generate_prompt(user_input, analysis_result, product_categories)
+        prompt = build_multi_query_generate_prompt(user_input, analysis_result, product_categories)
 
         # LLM 호출하여 멀티 쿼리 생성
         try:

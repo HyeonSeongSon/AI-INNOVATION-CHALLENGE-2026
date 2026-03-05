@@ -35,12 +35,39 @@
    pip install -r requirements.txt
    ```
 
+## 프로젝트 구조
+
+```
+database/
+├── api_server.py          ← FastAPI 진입점 (port 8020)
+│
+├── core/                  ← DB 인프라
+│   ├── database.py        ← 연결 설정, get_db(), init_db()
+│   └── models.py          ← SQLAlchemy ORM 모델
+│
+├── routers/               ← API 라우터
+│   ├── api_endpoints.py   ← CRUD 엔드포인트 (/api/*)
+│   └── pipeline_router.py ← 파이프라인 엔드포인트 (/api/pipeline/*)
+│
+├── services/              ← 비즈니스 로직
+│   └── persona_analyzer.py ← LLM 페르소나 요약 생성
+│
+├── scripts/               ← 데이터 삽입 / 유틸리티
+│   ├── setup_pipeline.py
+│   ├── insert_personas.py
+│   ├── insert_products_from_jsonl.py
+│   └── jsonl_to_sql_new.py
+│
+└── init/                  ← PostgreSQL 초기화 SQL
+    └── 01-create-tables.sql
+```
+
 ## 사용 방법
 
 ### 1. 기본 실행 (기존 데이터 유지)
 ```bash
 cd database
-python setup_pipeline.py
+python scripts/setup_pipeline.py
 ```
 
 이 명령은:
@@ -52,7 +79,7 @@ python setup_pipeline.py
 ### 2. 전체 리셋 (기존 데이터 삭제 후 재생성)
 ```bash
 cd database
-python setup_pipeline.py --reset
+python scripts/setup_pipeline.py --reset
 ```
 
 ⚠️ **경고**: 이 명령은 모든 기존 데이터를 삭제합니다!
@@ -278,18 +305,26 @@ Sample products:
 
 ### 데이터베이스 연결 테스트만
 ```bash
-python database.py
+cd database
+python core/database.py
 ```
 
 ### 테이블만 생성
 ```python
-from database import init_db
+from core.database import init_db
 init_db()
 ```
 
 ### 상품 데이터만 삽입
 ```bash
-python insert_products_from_jsonl.py
+cd database
+python scripts/insert_products_from_jsonl.py
+```
+
+### 페르소나 데이터만 삽입
+```bash
+cd database
+python scripts/insert_personas.py
 ```
 
 ## 다음 단계
@@ -301,9 +336,9 @@ python insert_products_from_jsonl.py
    cd database
    python api_server.py
    ```
-   → 포트 8000에서 데이터베이스 API 실행
+   → 포트 8020에서 데이터베이스 API 실행
 
 2. **API 테스트**
    ```bash
-   curl http://localhost:8000/api/products/filter
+   curl http://localhost:8020/api/products/filter
    ```

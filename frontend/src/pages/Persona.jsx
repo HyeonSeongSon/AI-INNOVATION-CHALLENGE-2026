@@ -658,7 +658,7 @@ export default function PersonaManager() {
 
               {p.aiAnalysis && (
                 <div style={{marginTop:'10px', padding:'12px', background:'#f8f9fa', borderRadius:'12px', fontSize:'12px', color:'#555', lineHeight:'1.5', border: '1px solid #eee'}}>
-                  🤖 <strong>AI 분석:</strong> {p.aiAnalysis.reasoning}
+                  <strong>페르소나 요약:</strong> {p.aiAnalysis.reasoning}
                 </div>
               )}
             </div>

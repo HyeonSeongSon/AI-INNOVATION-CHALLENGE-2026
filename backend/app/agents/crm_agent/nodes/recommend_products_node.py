@@ -127,7 +127,6 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
         if not analysis_result:
             with logger.track_duration("persona_analysis", user_message="페르소나 분석 수행 중..."):
                 analysis_result = await _recommender.recommend_persona(
-                    user_input=user_input,
                     persona_id=persona_id,
                     llm=llm,
                 )
