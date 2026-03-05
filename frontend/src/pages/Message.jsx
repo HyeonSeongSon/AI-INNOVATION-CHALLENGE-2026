@@ -40,10 +40,11 @@ const MessageBubble = styled.div`
 `;
 
 const ProductGrid = styled.div` display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; width: 100%; `;
-const ProductCard = styled.div` 
-  background: white; border: 1px solid #eee; border-radius: 16px; overflow: hidden; transition: all 0.2s; cursor: pointer; position: relative; display: flex; flex-direction: column; height: 480px; 
-  &:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: #6B4DFF; } 
-  ${props => props.$selected && css` border: 2px solid #6B4DFF; box-shadow: 0 0 0 4px rgba(107, 77, 255, 0.1); `} 
+const ProductCard = styled.div`
+  background: white; border: 1px solid #eee; border-radius: 16px; overflow: hidden; transition: all 0.2s; cursor: pointer; position: relative; display: flex; flex-direction: column; height: 480px;
+  &:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: #6B4DFF; }
+  ${props => props.$selected && css` border: 2px solid #6B4DFF; box-shadow: 0 0 0 4px rgba(107, 77, 255, 0.1); `}
+  ${props => props.$disabled && css` opacity: 0.4; cursor: not-allowed; pointer-events: none; `}
 `;
 const CardImage = styled.div` 
   height: 180px; width: 100%; background: #f9f9f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid #f0f0f0; 
@@ -89,6 +90,7 @@ export default function Message() {
   });
 
   const [currentThreadId, setCurrentThreadId] = useState(null);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [simProduct, setSimProduct] = useState(null); 
   
@@ -98,6 +100,7 @@ export default function Message() {
   
   const [simLoading, setSimLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [messageGeneratedProductId, setMessageGeneratedProductId] = useState(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -130,6 +133,8 @@ export default function Message() {
     if (window.confirm("대화 내용을 모두 삭제하시겠습니까?")) {
       clearChat();
       setCurrentThreadId(null);
+      setCurrentSessionId(null);
+      setMessageGeneratedProductId(null);
       addMessage({ id: Date.now(), role: 'ai', text: '대화가 초기화되었습니다. 새로운 타겟을 설정해주세요.' });
     }
   };
@@ -137,53 +142,59 @@ export default function Message() {
   const handleRecommend = async () => {
     if (!config.personaId) { alert("페르소나를 먼저 선택해주세요."); return; }
     setIsGenerating(true);
-    
+
     const targetPersona = personas.find(p => String(p.persona_id) === String(config.personaId));
-    
+
     const userInput = JSON.stringify({
         persona_id: config.personaId,
         purpose: config.purpose,
-        product_categories: [config.category], 
-        brand: config.brand, 
-        persona_detail: targetPersona 
+        product_categories: [config.category],
+        brand: config.brand,
+        persona_detail: targetPersona
     });
-    
+
+    const sessionId = `sess_${crypto.randomUUID()}`;
+    setCurrentSessionId(sessionId);
+
     const displayPrompt = `[${config.purpose}] ${targetPersona?.name || '고객'}님을 위한 ${config.brand} ${config.category} 추천 부탁해.`;
     addMessage({ id: Date.now(), role: 'user', text: displayPrompt });
 
     try {
-      const response = await api.post('/crm/generate', {
+      const response = await api.post('/marketing/chat', {
         user_input: userInput,
-        thread_id: currentThreadId 
-      });
-      
+        session_id: sessionId,
+      }, { headers: { 'X-User-Id': 'son' } });
+
       const result = response.data;
       if (result.thread_id) setCurrentThreadId(result.thread_id);
+      if (result.session_id) setCurrentSessionId(result.session_id);
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
-          id: p.product_id, 
+          id: p.product_id,
           name: p.product_name || "상품명 없음",
           brand: p.brand || "AMORE",
-          image: p.image_url || null, 
-          tags: p.keywords || ["AI추천"],
+          image: (p.product_image_url && p.product_image_url.length > 0) ? p.product_image_url[0] : null,
+          tags: [...(p.skin_type || []), ...(p.skin_concerns || [])].filter(Boolean).slice(0, 5).length > 0
+                ? [...(p.skin_type || []), ...(p.skin_concerns || [])].filter(Boolean).slice(0, 5)
+                : ["AI추천"],
           price: p.sale_price,
-          productUrl: p.product_url || p.url || "#", 
-          oneLineReview: p.one_line_review || p.description || p.summary || "맞춤 솔루션 아이템입니다."
+          productUrl: p.product_page_url || "#",
+          oneLineReview: p.product_comment || "맞춤 솔루션 아이템입니다."
       }));
 
-      const analysis = result.persona_analysis || {};
+      const analysis = result.persona_info || {};
       const summary = analysis.summary || "고객님의 페르소나를 분석했습니다.";
       const keyNeeds = (analysis.key_needs || []).join(", ");
-      
+
       let aiText = `🔎 **분석 결과:**\n${summary}\n\n`;
       if (keyNeeds) aiText += `💡 **핵심 니즈:** ${keyNeeds}\n\n`;
       aiText += `이러한 분석을 바탕으로 **${mappedProducts.length}개의 맞춤 솔루션 상품**을 추천해 드립니다.\n원하시는 상품을 선택하여 마케팅 메시지를 생성해보세요.`;
 
-      addMessage({ 
-        id: Date.now() + 1, 
-        role: 'ai', 
-        text: aiText, 
-        products: mappedProducts 
+      addMessage({
+        id: Date.now() + 1,
+        role: 'ai',
+        text: aiText,
+        products: mappedProducts
       });
 
     } catch (error) {
@@ -195,45 +206,43 @@ export default function Message() {
     }
   };
 
-  const handleProductClick = async (product) => {
+  const handleProductClick = (product) => {
     setSelectedProduct(product.id);
     setSimProduct(product);
+    setSimTitle("");
+    setSimMessage("");
     setIsSimModalOpen(true);
-    await generateMarketingMessage(product.id);
   };
 
   // ✅ 제목/본문 분리 로직 적용
   const generateMarketingMessage = async (productId) => {
     setSimLoading(true);
-    setSimMessage(""); 
-    setSimTitle(""); 
+    setSimMessage("");
+    setSimTitle("");
 
     try {
-      if (!currentThreadId) {
+      if (!currentThreadId || !currentSessionId) {
         alert("세션 정보가 없습니다. 제품 추천을 다시 받아주세요.");
-        setSimLoading(false); return; 
+        setSimLoading(false); return;
       }
 
-      const response = await api.post('/crm/select-product', {
+      const response = await api.post('/marketing/resume', {
         thread_id: currentThreadId,
-        selected_product_id: productId
-      });
+        session_id: currentSessionId,
+        interrupt_type: "product_selection",
+        payload: { selected_product_id: productId },
+      }, { headers: { 'X-User-Id': 'son' } });
 
       const result = response.data;
-      
-      if (result.final_message) {
-          if (typeof result.final_message === 'object') {
-             // 1. 객체일 경우 (제목 + 본문)
-             setSimTitle(result.final_message.title || result.final_message.headline || "AI 마케팅 메시지");
-             setSimMessage(result.final_message.message || result.final_message.content || JSON.stringify(result.final_message));
-          } else {
-             // 2. 문자열일 경우
-             setSimTitle("AI 마케팅 메시지");
-             setSimMessage(result.final_message);
-          }
+      const msg = result.messages && result.messages.length > 0 ? result.messages[0] : null;
+
+      if (msg) {
+        setSimTitle(msg.title || msg.headline || "AI 마케팅 메시지");
+        setSimMessage(msg.message || msg.content || JSON.stringify(msg));
+        setMessageGeneratedProductId(productId);
       } else {
-          setSimTitle("생성 실패");
-          setSimMessage("메시지를 생성하지 못했습니다.");
+        setSimTitle("생성 실패");
+        setSimMessage("메시지를 생성하지 못했습니다.");
       }
 
     } catch (e) {
@@ -299,7 +308,7 @@ export default function Message() {
               {msg.products && msg.products.length > 0 && (
                 <ProductGrid>
                   {msg.products.map(product => (
-                    <ProductCard key={product.id} onClick={() => handleProductClick(product)} $selected={selectedProduct === product.id}>
+                    <ProductCard key={product.id} onClick={() => handleProductClick(product)} $selected={selectedProduct === product.id} $disabled={messageGeneratedProductId !== null && product.id !== messageGeneratedProductId}>
                       <CardImage>
                         <span className="brand-badge">{product.brand}</span>
                         {product.image ? (
@@ -315,7 +324,7 @@ export default function Message() {
                         <OneLineReview>{product.oneLineReview}</OneLineReview>
                         <TagContainer>{product.tags?.slice(0, 3).map((t,i)=><TagChip key={i}>{t}</TagChip>)}</TagContainer>
                         <ProductLinkBtn href={product.productUrl} target="_blank" onClick={(e) => e.stopPropagation()}>
-                          <ExternalLink size={14}/> 구매하러 가기
+                          <ExternalLink size={14}/> 추천 상품 확인하기
                         </ProductLinkBtn>
                       </CardContent>
                     </ProductCard>
@@ -330,14 +339,14 @@ export default function Message() {
       </ChatArea>
 
       {isSimModalOpen && simProduct && (
-        <ModalOverlay onClick={() => setIsSimModalOpen(false)}>
+        <ModalOverlay onClick={() => { if (!simLoading) setIsSimModalOpen(false); }}>
           <ModalBox onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'center'}}>
               <div style={{display:'flex', alignItems:'center', gap:10}}>
                 <MessageCircle size={24} color="#6B4DFF"/>
                 <h2 style={{margin:0, fontSize:20}}>마케팅 메시지 생성</h2>
               </div>
-              <button onClick={() => setIsSimModalOpen(false)} style={{background:'none', border:'none', cursor:'pointer'}}><X size={24} color="#999"/></button>
+              <button onClick={() => setIsSimModalOpen(false)} disabled={simLoading} style={{background:'none', border:'none', cursor: simLoading ? 'not-allowed' : 'pointer', opacity: simLoading ? 0.3 : 1}}><X size={24} color="#999"/></button>
             </div>
             
             <div style={{marginBottom: 20, padding: 15, background: '#fff', border: '1px solid #eee', borderRadius: 12, display:'flex', gap: 15, alignItems:'start'}}>
@@ -380,19 +389,21 @@ export default function Message() {
             <GeneratedBox>
                {simLoading ? (
                  <div style={{display:'flex', alignItems:'center', gap:8, color:'#999'}}><RefreshCw size={16} className="spin"/> AI가 메시지를 작성 중입니다...</div>
-               ) : (
+               ) : simMessage ? (
                  <>
                    {simTitle && <GeneratedTitle>{simTitle}</GeneratedTitle>}
                    <GeneratedContent>{simMessage}</GeneratedContent>
                  </>
+               ) : (
+                 <div style={{color:'#bbb', fontSize:14, textAlign:'center', padding:'20px 0'}}>아래 버튼을 눌러 메시지를 생성해주세요.</div>
                )}
             </GeneratedBox>
 
             <div style={{display:'flex', gap:10, marginTop:20}}>
               <ActionBtn onClick={() => generateMarketingMessage(simProduct.id)} disabled={simLoading}>
-                <RefreshCw size={16}/> 다시 생성
+                <Wand2 size={16}/> {simMessage ? '다시 생성' : '메시지 생성'}
               </ActionBtn>
-              <ActionBtn $primary onClick={handleCopy} disabled={simLoading}>
+              <ActionBtn $primary onClick={handleCopy} disabled={simLoading || !simMessage}>
                 {copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? '복사됨' : '복사하기'}
               </ActionBtn>
             </div>

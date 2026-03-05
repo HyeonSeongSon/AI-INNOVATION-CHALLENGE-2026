@@ -17,6 +17,19 @@ from database import get_db
 router = APIRouter(prefix="/api", tags=["Database"])
 
 
+def _build_ai_analysis(persona_summary: str | None) -> dict | None:
+    """persona_summary 텍스트로부터 ai_analysis 딕셔너리를 구성한다."""
+    if not persona_summary:
+        return None
+    keywords = ["건성", "지성", "복합성", "민감성", "중성", "아토피"]
+    primary = "맞춤형 뷰티"
+    for kw in keywords:
+        if kw in persona_summary:
+            primary = f"{kw} 피부"
+            break
+    return {"primary_category": primary, "ai_analysis_text": persona_summary}
+
+
 # ============================================================
 # Pydantic Models
 # ============================================================
@@ -154,6 +167,7 @@ class PersonaDetailResponse(BaseModel):
     shopping_style: Optional[str] = None
     purchase_decision_factors: Optional[List[str]] = None
     persona_created_at: Optional[datetime] = None
+    ai_analysis: Optional[dict] = None
 
 
 class AnalysisResultResponse(BaseModel):
@@ -320,7 +334,8 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
         digital_device_usage_time=persona.digital_device_usage_time,
         shopping_style=persona.shopping_style,
         purchase_decision_factors=persona.purchase_decision_factors,
-        persona_created_at=persona.persona_created_at
+        persona_created_at=persona.persona_created_at,
+        ai_analysis=_build_ai_analysis(persona.persona_summary),
     )
 
 
@@ -363,7 +378,8 @@ async def list_personas(db: Session = Depends(get_db)):
             digital_device_usage_time=p.digital_device_usage_time,
             shopping_style=p.shopping_style,
             purchase_decision_factors=p.purchase_decision_factors,
-            persona_created_at=p.persona_created_at
+            persona_created_at=p.persona_created_at,
+            ai_analysis=_build_ai_analysis(p.persona_summary),
         )
         for p in personas
     ]
