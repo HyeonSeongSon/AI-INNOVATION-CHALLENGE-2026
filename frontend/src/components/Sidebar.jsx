@@ -217,7 +217,7 @@ export default function Sidebar() {
 
   return (
     <SidebarContainer>
-      <Logo>Gimozzi</Logo>
+      <Logo>EASY MARKING</Logo>
 
       <MenuList>
         <MenuItem to="/" $active={location.pathname === '/'}>

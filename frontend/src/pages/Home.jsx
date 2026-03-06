@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
-import api, { pipelineApi } from '../api'; // ✅ API 모듈 임포트
+import api, { pipelineApi } from '../api';
+import { useChat } from '../context/ChatContext';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
 const PageContainer = styled.div`
@@ -255,12 +256,28 @@ const RankCount = styled.span`
 /* --- 메인 컴포넌트 --- */
 export default function Home() {
   const navigate = useNavigate();
-  
-  // ✅ DB 데이터 상태 관리
-  const [personaStats, setPersonaStats] = useState({
-    count: 0,
-    list: []
-  });
+  const { selectConversation } = useChat();
+
+  const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
+  const [recentMessages, setRecentMessages] = useState([]);
+
+  useEffect(() => {
+    api.get('/generated-messages?user_id=son&limit=5')
+      .then(res => setRecentMessages(res.data || []))
+      .catch(() => {});
+  }, []);
+
+  const handleMessageClick = async (item) => {
+    await selectConversation({ id: item.conversation_id });
+    navigate('/message');
+  };
+
+  const parseTag = (item) => {
+    const purpose = item.conversation_title?.match(/\[(.+?)\]/)?.[1] || '';
+    const product = item.product_name ? item.product_name.slice(0, 20) : '';
+    if (purpose && product) return `${purpose} / ${product}`;
+    return purpose || product || '마케팅 메시지';
+  };
 
   // ✅ 페르소나 데이터 불러오기 (실제 DB 연동)
   useEffect(() => {
@@ -346,29 +363,17 @@ export default function Home() {
             <SectionTitle><History size={18}/> 최근 생성 내역</SectionTitle>
           </SectionHeader>
           
-          <MessageItem>
-            <MessageInfo>
-              <MessageTag>설화수 / 프로모션</MessageTag>
-              <MessageTitle>"어머니, 이번 추석엔 피부 건강을 선물하세요"</MessageTitle>
-              <PersonaInfo>Target: 구매력 높은 50대 여성</PersonaInfo>
-            </MessageInfo>
-          </MessageItem>
-
-          <MessageItem>
-            <MessageInfo>
-              <MessageTag>라네즈 / 신제품 알림</MessageTag>
-              <MessageTitle>"건조한 환절기, 워터뱅크로 수분 장벽 지키기 💧"</MessageTitle>
-              <PersonaInfo>Target: 20대 수부지 대학생</PersonaInfo>
-            </MessageInfo>
-          </MessageItem>
-
-          <MessageItem>
-            <MessageInfo>
-              <MessageTag>헤라 / 재구매 유도</MessageTag>
-              <MessageTitle>"블랙쿠션 다 쓰셨나요? VIP 전용 혜택 확인하세요"</MessageTitle>
-              <PersonaInfo>Target: 30대 오피스 뷰티 고관여층</PersonaInfo>
-            </MessageInfo>
-          </MessageItem>
+          {recentMessages.length === 0 ? (
+            <div style={{color:'#bbb', fontSize:14, textAlign:'center', padding:'32px 0'}}>아직 생성된 메시지가 없습니다</div>
+          ) : recentMessages.map(item => (
+            <MessageItem key={item.id} onClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
+              <MessageInfo>
+                <MessageTag>{parseTag(item)}</MessageTag>
+                <MessageTitle>"{item.title || '(제목 없음)'}"</MessageTitle>
+                <PersonaInfo>페르소나: {item.persona_id || '-'}</PersonaInfo>
+              </MessageInfo>
+            </MessageItem>
+          ))}
         </SectionBox>
 
         {/* 오른쪽: 등록된 페르소나 목록 (실제 데이터 연동) */}

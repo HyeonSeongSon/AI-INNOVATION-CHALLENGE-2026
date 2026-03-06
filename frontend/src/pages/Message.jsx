@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled, { css } from 'styled-components';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Send, Settings, Sparkles, Wand2, ShoppingBag, 
   Tag, Bot, Trash2, X, Copy, RefreshCw, Check, MessageCircle, Image as ImageIcon, ExternalLink 
@@ -23,7 +25,6 @@ const Select = styled.select` padding: 14px; border: 1px solid #e0e0e0; border-r
 const GenerateButton = styled.button` margin-top: auto; background: linear-gradient(135deg, #111 0%, #333 100%); color: white; padding: 18px; border-radius: 16px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; transition: all 0.2s; &:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); } &:disabled { background: #eee; color: #aaa; cursor: not-allowed; transform: none; box-shadow: none; } `;
 const ChatArea = styled.div` flex: 1; background: #F8F9FA; border-radius: 24px; border: 1px solid #eee; display: flex; flex-direction: column; overflow: hidden; position: relative; `;
 const ChatHeader = styled.div` padding: 20px 30px; background: white; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; z-index: 10; h2 { font-size: 16px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 8px; } `;
-const ResetButton = styled.button` background: none; border: none; cursor: pointer; color: #999; display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 8px 12px; border-radius: 8px; transition: 0.2s; &:hover { background: #fee; color: #ff4d4d; } `;
 const ChatScroll = styled.div` flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; &::-webkit-scrollbar { width: 6px; } &::-webkit-scrollbar-thumb { background-color: #ddd; border-radius: 3px; } `;
 
 const MessageBubble = styled.div` 
@@ -35,8 +36,8 @@ const MessageBubble = styled.div`
     align-items: flex-end; 
     .bubble { background: #333; color: white; border-radius: 20px 20px 4px 20px; padding: 12px 20px; white-space: pre-line; } 
   ` : css` 
-    align-items: flex-start; 
-    .bubble { background: white; color: #333; border: 1px solid #eee; border-radius: 20px 20px 20px 4px; padding: 16px 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); white-space: pre-line; line-height: 1.6; } 
+    align-items: flex-start;
+    .bubble { background: white; color: #333; border: 1px solid #eee; border-radius: 20px 20px 20px 4px; padding: 16px 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); line-height: 1.6; }
   `} 
   .sender { font-size: 12px; color: #888; margin-bottom: 6px; margin-left: 4px; display: flex; align-items: center; gap: 4px; } 
 `;
@@ -63,7 +64,29 @@ const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; 
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
 const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; gap: 12px; align-items: center; `;
 const ChatInput = styled.input` flex: 1; padding: 14px 20px; border: 1px solid #ddd; border-radius: 30px; font-size: 14px; outline: none; &:focus { border-color: #6B4DFF; } `;
-const SendBtn = styled.button` width: 44px; height: 44px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } `;
+const SendBtn = styled.button` width: 44px; height: 44px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } &:disabled { background: #ccc; cursor: not-allowed; } `;
+
+const MarkdownBody = styled.div`
+  line-height: 1.7;
+  p { margin: 0 0 10px; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 700; }
+  em { font-style: italic; }
+  h1, h2, h3, h4 { font-weight: 700; margin: 14px 0 6px; line-height: 1.4; }
+  h1 { font-size: 18px; } h2 { font-size: 16px; } h3 { font-size: 15px; }
+  ul, ol { margin: 6px 0 10px 20px; padding: 0; }
+  li { margin-bottom: 4px; }
+  a { color: #6B4DFF; text-decoration: underline; word-break: break-all; }
+  a:hover { opacity: 0.75; }
+  code { background: rgba(107,77,255,0.08); color: #5a3de0; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: monospace; }
+  pre { background: #f4f4f8; padding: 14px; border-radius: 10px; overflow-x: auto; margin: 10px 0; }
+  pre code { background: none; padding: 0; color: #333; }
+  blockquote { border-left: 3px solid #6B4DFF; margin: 10px 0; padding: 6px 14px; color: #666; background: #f8f7ff; border-radius: 0 8px 8px 0; }
+  hr { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+  th, td { border: 1px solid #e0e0e0; padding: 8px 12px; text-align: left; }
+  th { background: #f5f5f5; font-weight: 700; }
+`;
 
 /* --- 시뮬레이션 모달 스타일 --- */
 const ModalOverlay = styled.div` position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); `;
@@ -80,7 +103,7 @@ const ActionBtn = styled.button` flex: 1; padding: 12px; border-radius: 12px; bo
 export default function Message() {
   // ✅ ChatContext — 세션 정보 및 메시지 관리
   const {
-    messages, addMessage, clearChat,
+    messages, addMessage,
     currentConvId, currentThreadId, currentSessionId,
     setCurrentConversation, saveMessages, loadConversations,
   } = useChat();
@@ -94,6 +117,9 @@ export default function Message() {
   const [config, setConfig] = useState({
     personaId: '', purpose: '신제품 홍보', category: '립스틱', brand: '이니스프리'
   });
+
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [simProduct, setSimProduct] = useState(null); 
@@ -144,18 +170,84 @@ export default function Message() {
     fetchPersonas();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClearChat = () => {
-    if (window.confirm("대화 내용을 모두 삭제하시겠습니까?")) {
-      if (currentConvId) {
-        localStorage.removeItem(`selected_product_${currentConvId}`);
+  const handleSendChat = async () => {
+    const text = chatInput.trim();
+    if (!text || isChatLoading) return;
+
+    setChatInput('');
+    const userMsg = { id: Date.now(), role: 'user', text };
+    addMessage(userMsg);
+    setIsChatLoading(true);
+
+    const sessionId = currentSessionId || `sess_${crypto.randomUUID()}`;
+
+    try {
+      const response = await api.post('/marketing/chat', {
+        user_input: text,
+        session_id: sessionId,
+        thread_id: currentThreadId || null,
+        conversation_id: currentConvId || null,
+      }, { headers: { 'X-User-Id': USER_ID } });
+
+      const result = response.data;
+
+      if (result.conversation_id) {
+        setCurrentConversation(result.conversation_id, result.thread_id, result.session_id);
       }
-      clearChat();
-      setMessageGeneratedProductId(null);
-      addMessage({ id: Date.now(), role: 'ai', text: '대화가 초기화되었습니다. 새로운 타겟을 설정해주세요.' });
+
+      const mappedProducts = (result.recommended_products || []).map(p => ({
+        id: p.product_id,
+        name: p.product_name || "상품명 없음",
+        brand: p.brand || "AMORE",
+        image: (p.product_image_url && p.product_image_url.length > 0) ? p.product_image_url[0] : null,
+        tags: [...(p.skin_type || []), ...(p.skin_concerns || [])].filter(Boolean).slice(0, 5).length > 0
+              ? [...(p.skin_type || []), ...(p.skin_concerns || [])].filter(Boolean).slice(0, 5)
+              : ["AI추천"],
+        price: p.sale_price,
+        productUrl: p.product_page_url || "#",
+        oneLineReview: p.product_comment || "맞춤 솔루션 아이템입니다."
+      }));
+
+      const analysis = result.persona_info || {};
+      let aiText = '';
+
+      if (analysis.summary) {
+        aiText += `🔎 **분석 결과:**\n${analysis.summary}\n\n`;
+        const keyNeeds = (analysis.key_needs || []).join(", ");
+        if (keyNeeds) aiText += `💡 **핵심 니즈:** ${keyNeeds}\n\n`;
+      }
+
+      if (mappedProducts.length > 0) {
+        aiText += `이러한 분석을 바탕으로 **${mappedProducts.length}개의 맞춤 솔루션 상품**을 추천해 드립니다.\n원하시는 상품을 선택하여 마케팅 메시지를 생성해보세요.`;
+      } else if (result.messages && result.messages.length > 0) {
+        const msg = result.messages[0];
+        const title = msg.title || msg.headline || "";
+        const content = msg.message || msg.content || JSON.stringify(msg);
+        aiText = title ? `**[${title}]**\n\n${content}` : content;
+      } else if (!aiText) {
+        aiText = "응답을 처리했습니다.";
+      }
+
+      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts.length > 0 ? mappedProducts : undefined };
+      addMessage(aiMsg);
+
+      const convId = result.conversation_id || currentConvId;
+      if (convId) {
+        const title = result.conversation_id ? text.slice(0, 40) : undefined;
+        await saveMessages(convId, [...messages, userMsg, aiMsg], title);
+        if (result.conversation_id) await loadConversations();
+      }
+
+    } catch (error) {
+      console.error("채팅 전송 실패:", error);
+      const errMsg = error.response?.data?.detail || error.message;
+      addMessage({ id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}` });
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
-  const handleRecommend = async () => {
+const handleRecommend = async () => {
     if (!config.personaId) { alert("페르소나를 먼저 선택해주세요."); return; }
     setIsGenerating(true);
 
@@ -354,13 +446,31 @@ export default function Message() {
       <ChatArea>
         <ChatHeader>
           <div><h2 style={{margin:0}}><Bot size={20} color="#6B4DFF"/> AI Merchandiser Agent</h2><div style={{fontSize:'12px', color:'#888', marginTop: 4}}>Powered by Amore GPT</div></div>
-          <ResetButton onClick={handleClearChat}><Trash2 size={14} /> 대화 초기화</ResetButton>
         </ChatHeader>
         <ChatScroll ref={scrollRef}>
           {(messages || []).map((msg, idx) => (
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
-              {msg.text && <div className="bubble">{msg.text}</div>}
+              {msg.text && (
+                <div className="bubble">
+                  {msg.role === 'ai' ? (
+                    <MarkdownBody>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                          )
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    </MarkdownBody>
+                  ) : (
+                    msg.text
+                  )}
+                </div>
+              )}
               {msg.products && msg.products.length > 0 && (
                 <ProductGrid>
                   {msg.products.map(product => (
@@ -391,7 +501,19 @@ export default function Message() {
           ))}
           {isGenerating && <div style={{display:'flex', gap:'8px', alignItems:'center', color:'#888', paddingLeft:'10px'}}><Sparkles size={14} className="spin"/> 분석 중...</div>}
         </ChatScroll>
-        <InputArea><ShoppingBag size={20} color="#bbb" /><ChatInput placeholder="추천된 가이드에 대해 더 물어보세요" disabled /><SendBtn disabled><Send size={18} /></SendBtn></InputArea>
+        <InputArea>
+          <ShoppingBag size={20} color="#bbb" />
+          <ChatInput
+            placeholder="메시지를 입력하세요"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+            disabled={isChatLoading}
+          />
+          <SendBtn onClick={handleSendChat} disabled={isChatLoading || !chatInput.trim()}>
+            {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
+          </SendBtn>
+        </InputArea>
       </ChatArea>
 
       {isSimModalOpen && simProduct && (

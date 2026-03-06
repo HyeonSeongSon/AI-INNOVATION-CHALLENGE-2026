@@ -91,3 +91,40 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE INDEX idx_products_vectordb_id ON products(vectordb_id);
 CREATE INDEX idx_products_brand ON products(brand);
+
+-- ============================================================
+-- 5. 대화 세션 테이블 (conversations)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS conversations (
+    id             VARCHAR(36) PRIMARY KEY,
+    user_id        VARCHAR(100) NOT NULL,
+    thread_id      VARCHAR(36) NOT NULL UNIQUE,
+    session_id     VARCHAR(100),
+    title          VARCHAR(500) DEFAULT '새 대화',
+    messages       JSONB DEFAULT '[]'::JSONB,
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX idx_conversations_thread_id ON conversations(thread_id);
+
+-- ============================================================
+-- 6. 생성된 마케팅 메시지 테이블 (generated_messages)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS generated_messages (
+    id              VARCHAR(36) PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id         VARCHAR(100) NOT NULL,
+    product_id      VARCHAR(100) NOT NULL,
+    product_name    VARCHAR(500),
+    persona_id      VARCHAR(100),
+    title           TEXT,
+    content         TEXT NOT NULL,
+    thread_id       VARCHAR(36),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_generated_messages_conversation_id ON generated_messages(conversation_id);
+CREATE INDEX idx_generated_messages_user_id ON generated_messages(user_id);
+CREATE INDEX idx_generated_messages_product_id ON generated_messages(product_id);
