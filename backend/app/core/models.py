@@ -7,7 +7,7 @@ SQLAlchemy ORM Models for PostgreSQL
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP,
-    ForeignKey, ARRAY
+    ForeignKey, ARRAY, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
@@ -83,6 +83,10 @@ class AnalysisResult(Base):
     persona_id = Column(String(100), ForeignKey('personas.persona_id', ondelete='CASCADE'), nullable=False, index=True)
     analysis_result = Column(Text)
     analysis_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('persona_id', name='uq_analysis_results_persona_id'),
+    )
 
     # Relationships
     persona = relationship("Persona", back_populates="analysis_results")

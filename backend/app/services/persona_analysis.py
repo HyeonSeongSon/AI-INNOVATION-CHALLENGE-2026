@@ -5,9 +5,14 @@ CRM agent의 build_persona_info_analysis_prompt를 활용한 사전 분석 캐�
 
 import os
 import json
+import time
 from typing import Any, Dict, Optional
 
 from openai import AsyncOpenAI
+
+from app.core.logging import get_logger
+
+logger = get_logger("persona_analysis")
 
 
 def build_persona_info_analysis_prompt(persona_info: Dict[str, Any]) -> str:
@@ -297,6 +302,11 @@ async def run_persona_analysis(persona_data: Dict[str, Any], model: Optional[str
         multi_level_analysis + multi_dimensional_analysis 딕셔너리
     """
     model_name = model or os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
+    persona_name = persona_data.get("name", "unknown")
+
+    logger.info("persona_analysis_started", persona_name=persona_name, model=model_name)
+    start = time.perf_counter()
+
     client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # 영문 키 → 한국어 키 변환
@@ -306,21 +316,31 @@ async def run_persona_analysis(persona_data: Dict[str, Any], model: Optional[str
     # 분석 프롬프트 생성
     prompt = build_persona_info_analysis_prompt(persona_info_str)
 
-    response = await client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {"role": "user", "content": prompt},
-        ],
-        response_format={"type": "json_object"},
-    )
+    try:
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+    except Exception as e:
+        duration_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.error("persona_analysis_llm_failed", persona_name=persona_name, model=model_name, duration_ms=duration_ms, error_type=type(e).__name__, error_message=str(e), exc_info=True)
+        raise
 
     content = response.choices[0].message.content.strip()
     try:
         result = json.loads(content)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        duration_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.warning("persona_analysis_json_parse_failed", persona_name=persona_name, duration_ms=duration_ms, error_message=str(e))
         result = {
             "multi_level_analysis": {},
             "multi_dimensional_analysis": {},
         }
+
+    duration_ms = round((time.perf_counter() - start) * 1000, 1)
+    logger.info("persona_analysis_completed", persona_name=persona_name, model=model_name, duration_ms=duration_ms)
 
     return result

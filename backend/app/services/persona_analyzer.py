@@ -5,14 +5,19 @@ OpenAI API로 페르소나 요약 생성
 
 import os
 import uuid
+import time
 from typing import Any, Dict, Tuple
 
 from openai import AsyncOpenAI
 
+from app.core.logging import get_logger
+
+logger = get_logger("persona_analyzer")
+
 SYSTEM_PROMPT = """당신은 뷰티 전문가입니다.
 고객의 피부 정보, 라이프스타일, 선호도를 바탕으로 해당 고객의 특성을 간결하고 명확하게 요약합니다.
 요약은 3~5문장으로 작성하며, 뷰티 제품 추천에 활용될 수 있도록 핵심 특성을 담아주세요.
-한국어로 작성해주세요."""
+공란인 항목은 요약에서 제외합니다. 한국어로 작성해주세요."""
 
 
 def _build_persona_description(data: Dict[str, Any]) -> str:
@@ -47,17 +52,31 @@ async def generate_persona_summary(persona_data: Dict[str, Any], model: str = No
         (persona_id, persona_summary)
     """
     model_name = model or os.getenv("CHATGPT_MODEL_NAME", "gpt-4o-mini")
+    persona_name = persona_data.get("name", "unknown")
+
+    logger.info("persona_summary_started", persona_name=persona_name, model=model_name)
+    start = time.perf_counter()
+
     client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     description = _build_persona_description(persona_data)
-    response = await client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"다음 고객 정보를 요약해주세요:\n\n{description}"},
-        ],
-    )
+    try:
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"다음 고객 정보를 요약해주세요:\n\n{description}"},
+            ],
+        )
+    except Exception as e:
+        duration_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.error("persona_summary_llm_failed", persona_name=persona_name, model=model_name, duration_ms=duration_ms, error_type=type(e).__name__, error_message=str(e), exc_info=True)
+        raise
+
     summary = response.choices[0].message.content.strip()
     persona_id = f"PERSONA_{uuid.uuid4().hex[:12].upper()}"
+
+    duration_ms = round((time.perf_counter() - start) * 1000, 1)
+    logger.info("persona_summary_completed", persona_name=persona_name, persona_id=persona_id, model=model_name, duration_ms=duration_ms)
 
     return persona_id, summary

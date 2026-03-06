@@ -11,9 +11,12 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
+from app.core.logging import get_logger
 from app.core.models import AnalysisResult, Persona
 from app.services.persona_analyzer import generate_persona_summary
 from app.services.persona_analysis import run_persona_analysis
+
+logger = get_logger("pipeline")
 
 router = APIRouter(prefix="/api/pipeline", tags=["Pipeline"])
 
@@ -66,15 +69,18 @@ class PreAnalyzeRequest(BaseModel):
 async def _run_pre_analysis_bg(persona_id: str, persona_data: dict, model: Optional[str]) -> None:
     """
     별도 DB 세션으로 background에서 페르소나 분석 실행 및 저장
-    분석 실패 시 로그 없이 종료 (페르소나 생성은 이미 완료됨)
+    분석 실패 시 로그를 남기고 종료 (페르소나 생성은 이미 완료됨)
     """
     db = SessionLocal()
     try:
+        logger.info("pre_analysis_bg_started", persona_id=persona_id)
+
         # 중복 분석 방지
         existing = db.query(AnalysisResult).filter(
             AnalysisResult.persona_id == persona_id
         ).first()
         if existing:
+            logger.info("pre_analysis_bg_skipped", persona_id=persona_id, reason="already_exists", analysis_id=existing.analysis_id)
             return
 
         analysis_result = await run_persona_analysis(persona_data, model)
@@ -85,8 +91,12 @@ async def _run_pre_analysis_bg(persona_id: str, persona_data: dict, model: Optio
         )
         db.add(record)
         db.commit()
-    except Exception:
+        db.refresh(record)
+        logger.info("pre_analysis_bg_completed", persona_id=persona_id, analysis_id=record.analysis_id)
+
+    except Exception as e:
         db.rollback()
+        logger.error("pre_analysis_bg_failed", persona_id=persona_id, error_type=type(e).__name__, error_message=str(e), exc_info=True)
     finally:
         db.close()
 
