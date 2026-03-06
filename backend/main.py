@@ -12,6 +12,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api import marketing_api
 from app.api import personas as personas_api
 from app.api import pipeline as pipeline_api
+from app.api import conversations as conversations_api
+from app.api import generated_messages as generated_messages_api
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
@@ -19,7 +21,7 @@ from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
 
 # Load .env before anything else
-load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"), override=True)
 
 # Configure structured logging (must be first)
 configure_logging(
@@ -67,6 +69,8 @@ app.add_middleware(
 app.include_router(marketing_api.router)
 app.include_router(personas_api.router)
 app.include_router(pipeline_api.router)
+app.include_router(conversations_api.router)
+app.include_router(generated_messages_api.router)
 
 
 @app.get("/")
@@ -98,5 +102,5 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8005,
-        reload=True  # 개발 환경에서만 사용
+        workers=2
     )

@@ -4,10 +4,11 @@ SQLAlchemy ORM Models for PostgreSQL
 새로운 테이블 스키마 (table_type.md 기준)
 """
 
+import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP,
-    ForeignKey, ARRAY, UniqueConstraint
+    ForeignKey, ARRAY, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
@@ -163,3 +164,47 @@ class Product(Base):
 
     def __repr__(self):
         return f"<Product(product_id='{self.product_id}', name='{self.product_name}', brand='{self.brand}')>"
+
+
+# ============================================================
+# 5. Conversation Table
+# ============================================================
+
+class Conversation(Base):
+    """마케팅 대화 세션 테이블"""
+    __tablename__ = 'conversations'
+
+    id             = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id        = Column(String(100), nullable=False, index=True)
+    thread_id      = Column(String(36), nullable=False, unique=True)
+    session_id     = Column(String(100))
+    title          = Column(String(500), default="새 대화")
+    messages       = Column(JSON, default=list)  # 프론트 UI 메시지 전체 (제품 그리드 포함)
+    created_at     = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    last_active_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<Conversation(id='{self.id}', user_id='{self.user_id}', title='{self.title}')>"
+
+
+# ============================================================
+# 6. Generated Message Table
+# ============================================================
+
+class GeneratedMessage(Base):
+    """생성된 마케팅 메시지 테이블"""
+    __tablename__ = 'generated_messages'
+
+    id              = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String(36), ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id         = Column(String(100), nullable=False, index=True)
+    product_id      = Column(String(100), nullable=False, index=True)
+    product_name    = Column(String(500))
+    persona_id      = Column(String(100))
+    title           = Column(Text)
+    content         = Column(Text, nullable=False)
+    thread_id       = Column(String(36))  # LangSmith 트레이싱용
+    created_at      = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<GeneratedMessage(id='{self.id}', product_id='{self.product_id}', user_id='{self.user_id}')>"

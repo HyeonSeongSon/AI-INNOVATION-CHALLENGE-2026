@@ -10,7 +10,7 @@ import httpx
 import asyncio
 
 # .env 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=True)
 
 logger = get_logger("recommend_products")
 

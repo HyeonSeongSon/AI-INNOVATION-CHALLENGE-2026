@@ -10,6 +10,8 @@ import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../components/Toast';
 
+const USER_ID = 'son';
+
 /* --- [1] 스타일 컴포넌트 --- */
 const Container = styled.div` display: flex; height: calc(100vh - 100px); gap: 24px; max-width: 1400px; margin: 0 auto; `;
 const Sidebar = styled.div` width: 340px; background: white; border-radius: 24px; border: 1px solid #eee; padding: 24px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02); `;
@@ -76,10 +78,14 @@ const ActionBtn = styled.button` flex: 1; padding: 12px; border-radius: 12px; bo
 
 /* --- [2] 메인 컴포넌트 --- */
 export default function Message() {
-  // ✅ 만드신 ChatContext를 사용합니다.
-  const { messages, addMessage, clearChat } = useChat();
+  // ✅ ChatContext — 세션 정보 및 메시지 관리
+  const {
+    messages, addMessage, clearChat,
+    currentConvId, currentThreadId, currentSessionId,
+    setCurrentConversation, saveMessages, loadConversations,
+  } = useChat();
   const { addToast } = useToast();
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const scrollRef = useRef(null);
@@ -89,8 +95,6 @@ export default function Message() {
     personaId: '', purpose: '신제품 홍보', category: '립스틱', brand: '이니스프리'
   });
 
-  const [currentThreadId, setCurrentThreadId] = useState(null);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [simProduct, setSimProduct] = useState(null); 
   
@@ -102,11 +106,22 @@ export default function Message() {
   const [copied, setCopied] = useState(false);
   const [messageGeneratedProductId, setMessageGeneratedProductId] = useState(null);
 
+  // currentConvId 변경 시 localStorage에서 선택된 상품 복원
+  useEffect(() => {
+    if (currentConvId) {
+      const saved = localStorage.getItem(`selected_product_${currentConvId}`);
+      setMessageGeneratedProductId(saved || null);
+    } else {
+      setMessageGeneratedProductId(null);
+    }
+  }, [currentConvId]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
+    loadConversations();
     const fetchPersonas = async () => {
       try {
         const response = await pipelineApi.post('/personas/list');
@@ -118,7 +133,7 @@ export default function Message() {
         }));
         setPersonas(pData);
         if (pData.length > 0) setConfig(prev => ({ ...prev, personaId: pData[0].persona_id }));
-        
+
         if (messages.length === 0) {
            addMessage({ id: Date.now(), role: 'ai', text: '안녕하세요! 페르소나를 선택하고 맞춤 상품을 추천받아보세요.' });
         }
@@ -127,13 +142,14 @@ export default function Message() {
       }
     };
     fetchPersonas();
-  }, []); 
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClearChat = () => {
     if (window.confirm("대화 내용을 모두 삭제하시겠습니까?")) {
+      if (currentConvId) {
+        localStorage.removeItem(`selected_product_${currentConvId}`);
+      }
       clearChat();
-      setCurrentThreadId(null);
-      setCurrentSessionId(null);
       setMessageGeneratedProductId(null);
       addMessage({ id: Date.now(), role: 'ai', text: '대화가 초기화되었습니다. 새로운 타겟을 설정해주세요.' });
     }
@@ -154,20 +170,22 @@ export default function Message() {
     });
 
     const sessionId = `sess_${crypto.randomUUID()}`;
-    setCurrentSessionId(sessionId);
-
     const displayPrompt = `[${config.purpose}] ${targetPersona?.name || '고객'}님을 위한 ${config.brand} ${config.category} 추천 부탁해.`;
-    addMessage({ id: Date.now(), role: 'user', text: displayPrompt });
+    const userMsg = { id: Date.now(), role: 'user', text: displayPrompt };
+    addMessage(userMsg);
 
     try {
       const response = await api.post('/marketing/chat', {
         user_input: userInput,
         session_id: sessionId,
-      }, { headers: { 'X-User-Id': 'son' } });
+      }, { headers: { 'X-User-Id': USER_ID } });
 
       const result = response.data;
-      if (result.thread_id) setCurrentThreadId(result.thread_id);
-      if (result.session_id) setCurrentSessionId(result.session_id);
+
+      // 신규 conversation 컨텍스트에 저장
+      if (result.conversation_id) {
+        setCurrentConversation(result.conversation_id, result.thread_id, result.session_id);
+      }
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
           id: p.product_id,
@@ -190,12 +208,15 @@ export default function Message() {
       if (keyNeeds) aiText += `💡 **핵심 니즈:** ${keyNeeds}\n\n`;
       aiText += `이러한 분석을 바탕으로 **${mappedProducts.length}개의 맞춤 솔루션 상품**을 추천해 드립니다.\n원하시는 상품을 선택하여 마케팅 메시지를 생성해보세요.`;
 
-      addMessage({
-        id: Date.now() + 1,
-        role: 'ai',
-        text: aiText,
-        products: mappedProducts
-      });
+      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts };
+      addMessage(aiMsg);
+
+      // DB에 메시지 저장 (제목 포함)
+      if (result.conversation_id) {
+        const title = `[${config.purpose}] ${targetPersona?.name || '고객'} · ${config.brand} ${config.category}`;
+        await saveMessages(result.conversation_id, [userMsg, aiMsg], title);
+        await loadConversations();
+      }
 
     } catch (error) {
       console.error("추천 실패:", error);
@@ -206,12 +227,29 @@ export default function Message() {
     }
   };
 
-  const handleProductClick = (product) => {
+  const handleProductClick = async (product) => {
     setSelectedProduct(product.id);
     setSimProduct(product);
     setSimTitle("");
     setSimMessage("");
     setIsSimModalOpen(true);
+
+    // 기존에 생성된 메시지 조회
+    if (currentConvId) {
+      try {
+        const res = await api.get('/generated-messages/latest', {
+          params: { conversation_id: currentConvId, product_id: product.id }
+        });
+        if (res.data) {
+          setSimTitle(res.data.title || "");
+          setSimMessage(res.data.content || "");
+        }
+      } catch (e) {
+        if (e.response?.status !== 404) {
+          console.error('[generated-messages] GET 오류:', e.response?.status, e.message);
+        }
+      }
+    }
   };
 
   // ✅ 제목/본문 분리 로직 적용
@@ -231,15 +269,33 @@ export default function Message() {
         session_id: currentSessionId,
         interrupt_type: "product_selection",
         payload: { selected_product_id: productId },
-      }, { headers: { 'X-User-Id': 'son' } });
+        conversation_id: currentConvId,
+      }, { headers: { 'X-User-Id': USER_ID } });
 
       const result = response.data;
       const msg = result.messages && result.messages.length > 0 ? result.messages[0] : null;
 
       if (msg) {
-        setSimTitle(msg.title || msg.headline || "AI 마케팅 메시지");
-        setSimMessage(msg.message || msg.content || JSON.stringify(msg));
+        const title = msg.title || msg.headline || "AI 마케팅 메시지";
+        const content = msg.message || msg.content || JSON.stringify(msg);
+        setSimTitle(title);
+        setSimMessage(content);
         setMessageGeneratedProductId(productId);
+        if (currentConvId) {
+          localStorage.setItem(`selected_product_${currentConvId}`, productId);
+        }
+
+        // 생성된 메시지를 채팅에 추가 후 DB 저장
+        const genMsg = {
+          id: Date.now(),
+          role: 'ai',
+          text: `**[${title}]**\n\n${content}`,
+        };
+        const updatedMessages = [...messages, genMsg];
+        addMessage(genMsg);
+        if (currentConvId) {
+          await saveMessages(currentConvId, updatedMessages);
+        }
       } else {
         setSimTitle("생성 실패");
         setSimMessage("메시지를 생성하지 못했습니다.");
