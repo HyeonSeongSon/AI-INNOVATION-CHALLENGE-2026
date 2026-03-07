@@ -2,15 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import styled, { css } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  Send, Settings, Sparkles, Wand2, ShoppingBag, 
-  Tag, Bot, Trash2, X, Copy, RefreshCw, Check, MessageCircle, Image as ImageIcon, ExternalLink 
+import {
+  Send, Settings, Sparkles, Wand2, ShoppingBag,
+  Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 
 // ✅ API 및 Context
 import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
-import { useToast } from '../components/Toast';
 
 const USER_ID = 'son';
 
@@ -47,7 +46,14 @@ const ProductCard = styled.div`
   background: white; border: 1px solid #eee; border-radius: 16px; overflow: hidden; transition: all 0.2s; cursor: pointer; position: relative; display: flex; flex-direction: column; height: 480px;
   &:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: #6B4DFF; }
   ${props => props.$selected && css` border: 2px solid #6B4DFF; box-shadow: 0 0 0 4px rgba(107, 77, 255, 0.1); `}
-  ${props => props.$disabled && css` opacity: 0.4; cursor: not-allowed; pointer-events: none; `}
+  ${props => props.$disabled && css` opacity: 0.4; cursor: default; `}
+  ${props => props.$locked && css`
+    cursor: default;
+    &:hover { transform: none; box-shadow: none; border-color: #eee; }
+  `}
+  ${props => props.$locked && props.$selected && css`
+    &:hover { border-color: #6B4DFF; box-shadow: 0 0 0 4px rgba(107, 77, 255, 0.1); }
+  `}
 `;
 const CardImage = styled.div` 
   height: 180px; width: 100%; background: #f9f9f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid #f0f0f0; 
@@ -62,9 +68,27 @@ const OneLineReview = styled.div` font-size: 14px; color: #444; background: #f0f
 const TagContainer = styled.div` display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; `;
 const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-weight: 600; `;
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
-const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; gap: 12px; align-items: center; `;
+const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; `;
+const InputRow = styled.div` display: flex; gap: 12px; align-items: center; `;
 const ChatInput = styled.input` flex: 1; padding: 14px 20px; border: 1px solid #ddd; border-radius: 30px; font-size: 14px; outline: none; &:focus { border-color: #6B4DFF; } `;
 const SendBtn = styled.button` width: 44px; height: 44px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } &:disabled { background: #ccc; cursor: not-allowed; } `;
+const SelectedProductChip = styled.div`
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 12px; background: rgba(107, 77, 255, 0.08);
+  border: 1px solid rgba(107, 77, 255, 0.3); border-radius: 20px;
+  font-size: 13px; color: #6B4DFF; font-weight: 600; align-self: flex-start;
+  span { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { background: none; border: none; cursor: pointer; color: #6B4DFF; display: flex; align-items: center; padding: 0; opacity: 0.6; &:hover { opacity: 1; } }
+`;
+
+const CopyBtn = styled.button`
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 8px; padding: 5px 12px;
+  background: none; border: 1px solid #e0e0e0; border-radius: 8px;
+  font-size: 12px; color: #888; cursor: pointer; transition: all 0.15s;
+  &:hover { border-color: #6B4DFF; color: #6B4DFF; background: rgba(107,77,255,0.05); }
+  &.copied { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,0.05); }
+`;
 
 const MarkdownBody = styled.div`
   line-height: 1.7;
@@ -88,16 +112,6 @@ const MarkdownBody = styled.div`
   th { background: #f5f5f5; font-weight: 700; }
 `;
 
-/* --- 시뮬레이션 모달 스타일 --- */
-const ModalOverlay = styled.div` position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); `;
-const ModalBox = styled.div` background: white; width: 600px; max-height: 90vh; overflow-y: auto; border-radius: 24px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; `;
-const GeneratedBox = styled.div` background: #f8f9fa; border: 1px solid #eee; border-radius: 12px; padding: 20px; margin-top: 15px; min-height: 120px; line-height: 1.6; color: #444; font-size: 15px; display: flex; flex-direction: column; gap: 10px; `;
-
-// ✅ 제목(Title) 스타일 정의
-const GeneratedTitle = styled.div` font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; line-height: 1.4; `;
-const GeneratedContent = styled.div` white-space: pre-line; `;
-
-const ActionBtn = styled.button` flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; background: ${props => props.$primary ? '#6B4DFF' : '#f0f0f0'}; color: ${props => props.$primary ? 'white' : '#555'}; &:hover { transform: translateY(-2px); filter: brightness(0.95); } &:disabled { opacity: 0.6; cursor: not-allowed; } `;
 
 /* --- [2] 메인 컴포넌트 --- */
 export default function Message() {
@@ -107,7 +121,7 @@ export default function Message() {
     currentConvId, currentThreadId, currentSessionId,
     setCurrentConversation, saveMessages, loadConversations,
   } = useChat();
-  const { addToast } = useToast();
+
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -121,16 +135,9 @@ export default function Message() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  const [isSimModalOpen, setIsSimModalOpen] = useState(false);
-  const [simProduct, setSimProduct] = useState(null); 
-  
-  // ✅ 제목/본문 분리 상태
-  const [simMessage, setSimMessage] = useState("");
-  const [simTitle, setSimTitle] = useState(""); 
-  
-  const [simLoading, setSimLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [simProduct, setSimProduct] = useState(null);
   const [messageGeneratedProductId, setMessageGeneratedProductId] = useState(null);
+  const [copiedMsgId, setCopiedMsgId] = useState(null);
 
   // currentConvId 변경 시 localStorage에서 선택된 상품 복원
   useEffect(() => {
@@ -171,6 +178,56 @@ export default function Message() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendChat = async () => {
+    // 상품이 선택된 상태 → Enter로 resume → 채팅창에 결과 출력
+    if (selectedProduct && simProduct) {
+      if (!currentThreadId || !currentSessionId) {
+        addMessage({ id: Date.now(), role: 'ai', text: '세션 정보가 없습니다. 제품 추천을 다시 받아주세요.' });
+        return;
+      }
+      const productId = selectedProduct;
+      const productName = simProduct.name;
+      setChatInput('');
+      setSelectedProduct(null);
+      setSimProduct(null);
+
+      const userMsg = { id: Date.now(), role: 'user', text: `📦 ${productName} 선택` };
+      addMessage(userMsg);
+      setIsChatLoading(true);
+
+      try {
+        const response = await api.post('/marketing/resume', {
+          thread_id: currentThreadId,
+          session_id: currentSessionId,
+          interrupt_type: "product_selection",
+          payload: { selected_product_id: productId },
+          conversation_id: currentConvId,
+        }, { headers: { 'X-User-Id': USER_ID } });
+
+        const result = response.data;
+        const msg = result.messages?.[0] ?? null;
+
+        if (msg) {
+          const title = msg.title || msg.headline || "AI 마케팅 메시지";
+          const content = msg.message || msg.content || JSON.stringify(msg);
+          const aiMsg = { id: Date.now() + 1, role: 'ai', text: `**[${title}]**\n\n${content}`, isGenerated: true };
+          addMessage(aiMsg);
+          setMessageGeneratedProductId(productId);
+          if (currentConvId) {
+            localStorage.setItem(`selected_product_${currentConvId}`, productId);
+            await saveMessages(currentConvId, [...messages, userMsg, aiMsg]);
+          }
+        } else {
+          addMessage({ id: Date.now() + 1, role: 'ai', text: '메시지를 생성하지 못했습니다.' });
+        }
+      } catch (e) {
+        const errMsg = e.response?.data?.detail || e.message;
+        addMessage({ id: Date.now() + 1, role: 'ai', text: `오류 발생: ${errMsg}` });
+      } finally {
+        setIsChatLoading(false);
+      }
+      return;
+    }
+
     const text = chatInput.trim();
     if (!text || isChatLoading) return;
 
@@ -319,96 +376,16 @@ const handleRecommend = async () => {
     }
   };
 
-  const handleProductClick = async (product) => {
+  const handleProductClick = (product) => {
+    // 토글: 이미 선택된 상품 재클릭 → 선택 해제
+    if (selectedProduct === product.id) {
+      setSelectedProduct(null);
+      setSimProduct(null);
+      return;
+    }
+    // 새 상품 선택 → 하이라이트 + 칩 표시
     setSelectedProduct(product.id);
     setSimProduct(product);
-    setSimTitle("");
-    setSimMessage("");
-    setIsSimModalOpen(true);
-
-    // 기존에 생성된 메시지 조회
-    if (currentConvId) {
-      try {
-        const res = await api.get('/generated-messages/latest', {
-          params: { conversation_id: currentConvId, product_id: product.id }
-        });
-        if (res.data) {
-          setSimTitle(res.data.title || "");
-          setSimMessage(res.data.content || "");
-        }
-      } catch (e) {
-        if (e.response?.status !== 404) {
-          console.error('[generated-messages] GET 오류:', e.response?.status, e.message);
-        }
-      }
-    }
-  };
-
-  // ✅ 제목/본문 분리 로직 적용
-  const generateMarketingMessage = async (productId) => {
-    setSimLoading(true);
-    setSimMessage("");
-    setSimTitle("");
-
-    try {
-      if (!currentThreadId || !currentSessionId) {
-        alert("세션 정보가 없습니다. 제품 추천을 다시 받아주세요.");
-        setSimLoading(false); return;
-      }
-
-      const response = await api.post('/marketing/resume', {
-        thread_id: currentThreadId,
-        session_id: currentSessionId,
-        interrupt_type: "product_selection",
-        payload: { selected_product_id: productId },
-        conversation_id: currentConvId,
-      }, { headers: { 'X-User-Id': USER_ID } });
-
-      const result = response.data;
-      const msg = result.messages && result.messages.length > 0 ? result.messages[0] : null;
-
-      if (msg) {
-        const title = msg.title || msg.headline || "AI 마케팅 메시지";
-        const content = msg.message || msg.content || JSON.stringify(msg);
-        setSimTitle(title);
-        setSimMessage(content);
-        setMessageGeneratedProductId(productId);
-        if (currentConvId) {
-          localStorage.setItem(`selected_product_${currentConvId}`, productId);
-        }
-
-        // 생성된 메시지를 채팅에 추가 후 DB 저장
-        const genMsg = {
-          id: Date.now(),
-          role: 'ai',
-          text: `**[${title}]**\n\n${content}`,
-        };
-        const updatedMessages = [...messages, genMsg];
-        addMessage(genMsg);
-        if (currentConvId) {
-          await saveMessages(currentConvId, updatedMessages);
-        }
-      } else {
-        setSimTitle("생성 실패");
-        setSimMessage("메시지를 생성하지 못했습니다.");
-      }
-
-    } catch (e) {
-      console.error("메시지 생성 에러:", e);
-      setSimTitle("오류 발생");
-      setSimMessage(`오류 발생: ${e.response?.data?.detail || e.message}`);
-    } finally {
-      setSimLoading(false);
-    }
-  };
-
-  // ✅ 제목도 같이 복사되게 수정
-  const handleCopy = () => {
-    const textToCopy = simTitle ? `[${simTitle}]\n\n${simMessage}` : simMessage;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    addToast("클립보드에 복사되었습니다.", "success");
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -471,10 +448,22 @@ const handleRecommend = async () => {
                   )}
                 </div>
               )}
+              {msg.isGenerated && (
+                <CopyBtn
+                  className={copiedMsgId === msg.id ? 'copied' : ''}
+                  onClick={() => {
+                    navigator.clipboard.writeText(msg.text.replace(/\*\*/g, ''));
+                    setCopiedMsgId(msg.id);
+                    setTimeout(() => setCopiedMsgId(null), 2000);
+                  }}
+                >
+                  {copiedMsgId === msg.id ? <><Check size={12}/> 복사됨</> : <><Copy size={12}/> 텍스트 복사</>}
+                </CopyBtn>
+              )}
               {msg.products && msg.products.length > 0 && (
                 <ProductGrid>
                   {msg.products.map(product => (
-                    <ProductCard key={product.id} onClick={() => handleProductClick(product)} $selected={selectedProduct === product.id} $disabled={messageGeneratedProductId !== null && product.id !== messageGeneratedProductId}>
+                    <ProductCard key={product.id} onClick={messageGeneratedProductId !== null ? undefined : () => handleProductClick(product)} $selected={messageGeneratedProductId === null && selectedProduct === product.id} $locked={messageGeneratedProductId !== null}>
                       <CardImage>
                         <span className="brand-badge">{product.brand}</span>
                         {product.image ? (
@@ -502,92 +491,28 @@ const handleRecommend = async () => {
           {isGenerating && <div style={{display:'flex', gap:'8px', alignItems:'center', color:'#888', paddingLeft:'10px'}}><Sparkles size={14} className="spin"/> 분석 중...</div>}
         </ChatScroll>
         <InputArea>
-          <ShoppingBag size={20} color="#bbb" />
-          <ChatInput
-            placeholder="메시지를 입력하세요"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-            disabled={isChatLoading}
-          />
-          <SendBtn onClick={handleSendChat} disabled={isChatLoading || !chatInput.trim()}>
-            {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
-          </SendBtn>
+          {selectedProduct && simProduct && (
+            <SelectedProductChip>
+              <Sparkles size={12} />
+              <span>선택됨: {simProduct.name}</span>
+              <button onClick={() => { setSelectedProduct(null); setSimProduct(null); }}><X size={12} /></button>
+            </SelectedProductChip>
+          )}
+          <InputRow>
+            <ShoppingBag size={20} color="#bbb" />
+            <ChatInput
+              placeholder={selectedProduct && simProduct ? `"${simProduct.name}" 선택됨 — Enter로 메시지 생성` : "메시지를 입력하세요"}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+              disabled={isChatLoading}
+            />
+            <SendBtn onClick={handleSendChat} disabled={isChatLoading || (!chatInput.trim() && !selectedProduct)}>
+              {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
+            </SendBtn>
+          </InputRow>
         </InputArea>
       </ChatArea>
-
-      {isSimModalOpen && simProduct && (
-        <ModalOverlay onClick={() => { if (!simLoading) setIsSimModalOpen(false); }}>
-          <ModalBox onClick={e => e.stopPropagation()}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:20, alignItems:'center'}}>
-              <div style={{display:'flex', alignItems:'center', gap:10}}>
-                <MessageCircle size={24} color="#6B4DFF"/>
-                <h2 style={{margin:0, fontSize:20}}>마케팅 메시지 생성</h2>
-              </div>
-              <button onClick={() => setIsSimModalOpen(false)} disabled={simLoading} style={{background:'none', border:'none', cursor: simLoading ? 'not-allowed' : 'pointer', opacity: simLoading ? 0.3 : 1}}><X size={24} color="#999"/></button>
-            </div>
-            
-            <div style={{marginBottom: 20, padding: 15, background: '#fff', border: '1px solid #eee', borderRadius: 12, display:'flex', gap: 15, alignItems:'start'}}>
-              <div style={{width: 60, height: 60, background: '#f5f5f5', borderRadius: 8, overflow:'hidden', flexShrink: 0}}>
-                {simProduct.image ? 
-                   <img src={simProduct.image} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}} onError={(e)=>e.target.style.display='none'}/>
-                   : <ImageIcon size={20} color="#ccc"/>
-                }
-              </div>
-              <div style={{flex: 1}}>
-                <div style={{fontSize: 12, color:'#666', fontWeight:'bold'}}>{simProduct.brand}</div>
-                <div style={{fontSize: 14, fontWeight:'bold', color:'#333', marginBottom: 6}}>{simProduct.name}</div>
-                
-                {/* ✅ [추가됨] 모달창에 한줄평 표시 */}
-                {simProduct.oneLineReview && (
-                  <div style={{
-                    fontSize: '12px', 
-                    color: '#444', 
-                    background: '#f0f4ff', 
-                    padding: '6px 8px', 
-                    borderRadius: '6px', 
-                    lineHeight: '1.4',
-                    borderLeft: '3px solid #6B4DFF',
-                    marginBottom: 4,
-                    display: 'inline-block'
-                  }}>
-                    💡 {simProduct.oneLineReview}
-                  </div>
-                )}
-
-                <a href={simProduct.productUrl} target="_blank" style={{fontSize:12, color:'#6B4DFF', textDecoration:'none', display:'flex', alignItems:'center', gap:4, marginTop:4}}>
-                  <ExternalLink size={12}/> 상품 페이지로 이동
-                </a>
-              </div>
-            </div>
-
-            <h4 style={{margin:'0 0 10px 0', fontSize:14, color:'#555'}}>생성된 메시지 (AI Agent)</h4>
-            
-            {/* ✅ [수정완료] 제목(GeneratedTitle)과 본문(GeneratedContent) 분리 표시 */}
-            <GeneratedBox>
-               {simLoading ? (
-                 <div style={{display:'flex', alignItems:'center', gap:8, color:'#999'}}><RefreshCw size={16} className="spin"/> AI가 메시지를 작성 중입니다...</div>
-               ) : simMessage ? (
-                 <>
-                   {simTitle && <GeneratedTitle>{simTitle}</GeneratedTitle>}
-                   <GeneratedContent>{simMessage}</GeneratedContent>
-                 </>
-               ) : (
-                 <div style={{color:'#bbb', fontSize:14, textAlign:'center', padding:'20px 0'}}>아래 버튼을 눌러 메시지를 생성해주세요.</div>
-               )}
-            </GeneratedBox>
-
-            <div style={{display:'flex', gap:10, marginTop:20}}>
-              <ActionBtn onClick={() => generateMarketingMessage(simProduct.id)} disabled={simLoading}>
-                <Wand2 size={16}/> {simMessage ? '다시 생성' : '메시지 생성'}
-              </ActionBtn>
-              <ActionBtn $primary onClick={handleCopy} disabled={simLoading || !simMessage}>
-                {copied ? <Check size={16}/> : <Copy size={16}/>} {copied ? '복사됨' : '복사하기'}
-              </ActionBtn>
-            </div>
-          </ModalBox>
-        </ModalOverlay>
-      )}
 
     </Container>
   );

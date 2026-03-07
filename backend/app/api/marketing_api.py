@@ -231,10 +231,14 @@ async def resume_interrupt(
                 )
                 db = SessionLocal()
                 try:
+                    _persona_info = result.get("persona_info") or {}
+                    _selected_product = result.get("selected_product") or {}
                     gm = GeneratedMessage(
                         conversation_id=conv_id,
                         user_id=user_id,
                         product_id=request.payload.get("selected_product_id", ""),
+                        product_name=_selected_product.get("product_name"),
+                        persona_id=str(_persona_info.get("persona_id")) if _persona_info.get("persona_id") else None,
                         title=msg.get("title") or msg.get("headline"),
                         content=content,
                         thread_id=request.thread_id,

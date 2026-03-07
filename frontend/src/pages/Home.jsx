@@ -146,8 +146,10 @@ const ActionButton = styled.button`
 /* 하단 2단 레이아웃 */
 const BottomSection = styled.div`
   display: grid;
-  grid-template-columns: 1.4fr 0.6fr; /* 7:3 비율로 조정 */
+  grid-template-columns: 1.4fr 0.6fr;
   gap: 24px;
+  width: 100%;
+  max-width: 1200px;
 `;
 
 const SectionBox = styled.div`
@@ -155,6 +157,8 @@ const SectionBox = styled.div`
   padding: 24px;
   border-radius: 16px;
   border: 1px solid #eee;
+  min-width: 0;
+  overflow: hidden;
 `;
 
 const SectionHeader = styled.div`
@@ -259,10 +263,11 @@ export default function Home() {
   const { selectConversation } = useChat();
 
   const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
+  const [personaMap, setPersonaMap] = useState({});
   const [recentMessages, setRecentMessages] = useState([]);
 
   useEffect(() => {
-    api.get('/generated-messages?user_id=son&limit=5')
+    api.get('/generated-messages?user_id=son&limit=3')
       .then(res => setRecentMessages(res.data || []))
       .catch(() => {});
   }, []);
@@ -290,6 +295,11 @@ export default function Home() {
         
         // 최신순으로 정렬 (ID 기준 역순 가정)
         const sorted = [...data].reverse();
+
+        // persona_id → persona 이름 lookup map 생성
+        const map = {};
+        data.forEach(p => { map[String(p.persona_id || p.id)] = p; });
+        setPersonaMap(map);
 
         setPersonaStats({
           count: data.length, // 실제 개수
@@ -363,17 +373,31 @@ export default function Home() {
             <SectionTitle><History size={18}/> 최근 생성 내역</SectionTitle>
           </SectionHeader>
           
-          {recentMessages.length === 0 ? (
-            <div style={{color:'#bbb', fontSize:14, textAlign:'center', padding:'32px 0'}}>아직 생성된 메시지가 없습니다</div>
-          ) : recentMessages.map(item => (
-            <MessageItem key={item.id} onClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
-              <MessageInfo>
-                <MessageTag>{parseTag(item)}</MessageTag>
-                <MessageTitle>"{item.title || '(제목 없음)'}"</MessageTitle>
-                <PersonaInfo>페르소나: {item.persona_id || '-'}</PersonaInfo>
-              </MessageInfo>
-            </MessageItem>
-          ))}
+          {Array.from({ length: 3 }).map((_, i) => {
+            const item = recentMessages[i];
+            if (item) {
+              return (
+                <MessageItem key={item.id} onClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
+                  <MessageInfo>
+                    <MessageTag>{parseTag(item)}</MessageTag>
+                    <MessageTitle>"{item.title || '(제목 없음)'}"</MessageTitle>
+                    <PersonaInfo>페르소나: {
+                      item.persona_id
+                        ? `${personaMap[String(item.persona_id)]?.name || '?'} (${item.persona_id})`
+                        : '-'
+                    }</PersonaInfo>
+                  </MessageInfo>
+                </MessageItem>
+              );
+            }
+            return (
+              <MessageItem key={`empty-${i}`} onClick={() => navigate('/message')} style={{cursor:'pointer', opacity:0.5}}>
+                <MessageInfo>
+                  <MessageTitle style={{color:'#aaa', fontStyle:'italic'}}>메시지를 생성해보세요.</MessageTitle>
+                </MessageInfo>
+              </MessageItem>
+            );
+          })}
         </SectionBox>
 
         {/* 오른쪽: 등록된 페르소나 목록 (실제 데이터 연동) */}
