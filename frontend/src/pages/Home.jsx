@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
-import api, { pipelineApi } from '../api';
+import api, { pipelineApi, dbApi } from '../api';
 import { useChat } from '../context/ChatContext';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
@@ -267,7 +267,7 @@ export default function Home() {
   const [recentMessages, setRecentMessages] = useState([]);
 
   useEffect(() => {
-    api.get('/generated-messages?user_id=son&limit=3')
+    dbApi.get('/generated-messages?user_id=son&limit=3')
       .then(res => setRecentMessages(res.data || []))
       .catch(() => {});
   }, []);

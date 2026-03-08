@@ -136,15 +136,25 @@ export default function Message() {
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   const [simProduct, setSimProduct] = useState(null);
-  const [messageGeneratedProductId, setMessageGeneratedProductId] = useState(null);
+  const [messageGeneratedProductId, setMessageGeneratedProductId] = useState(null); // 레거시 호환
+  const [completedThreadIds, setCompletedThreadIds] = useState(new Set());
   const [copiedMsgId, setCopiedMsgId] = useState(null);
 
-  // currentConvId 변경 시 localStorage에서 선택된 상품 복원
+  // currentConvId 변경 시 localStorage에서 완료된 thread 목록 복원
   useEffect(() => {
     if (currentConvId) {
-      const saved = localStorage.getItem(`selected_product_${currentConvId}`);
-      setMessageGeneratedProductId(saved || null);
+      const newSaved = localStorage.getItem(`completed_threads_${currentConvId}`);
+      if (newSaved) {
+        setCompletedThreadIds(new Set(JSON.parse(newSaved)));
+        setMessageGeneratedProductId(null);
+      } else {
+        // 레거시 포맷 fallback (이전 대화 호환)
+        const legacySaved = localStorage.getItem(`selected_product_${currentConvId}`);
+        setMessageGeneratedProductId(legacySaved || null);
+        setCompletedThreadIds(new Set());
+      }
     } else {
+      setCompletedThreadIds(new Set());
       setMessageGeneratedProductId(null);
     }
   }, [currentConvId]);
@@ -211,9 +221,15 @@ export default function Message() {
           const content = msg.message || msg.content || JSON.stringify(msg);
           const aiMsg = { id: Date.now() + 1, role: 'ai', text: `**[${title}]**\n\n${content}`, isGenerated: true };
           addMessage(aiMsg);
-          setMessageGeneratedProductId(productId);
+          const completedThreadId = currentThreadId;
+          setCompletedThreadIds(prev => {
+            const next = new Set([...prev, completedThreadId]);
+            if (currentConvId) {
+              localStorage.setItem(`completed_threads_${currentConvId}`, JSON.stringify([...next]));
+            }
+            return next;
+          });
           if (currentConvId) {
-            localStorage.setItem(`selected_product_${currentConvId}`, productId);
             await saveMessages(currentConvId, [...messages, userMsg, aiMsg]);
           }
         } else {
@@ -285,7 +301,7 @@ export default function Message() {
         aiText = "응답을 처리했습니다.";
       }
 
-      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts.length > 0 ? mappedProducts : undefined };
+      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts.length > 0 ? mappedProducts : undefined, threadId: result.thread_id };
       addMessage(aiMsg);
 
       const convId = result.conversation_id || currentConvId;
@@ -323,15 +339,17 @@ const handleRecommend = async () => {
     const userMsg = { id: Date.now(), role: 'user', text: displayPrompt };
     addMessage(userMsg);
 
+    const isNewConv = !currentConvId;
     try {
       const response = await api.post('/marketing/chat', {
         user_input: userInput,
         session_id: sessionId,
+        conversation_id: currentConvId || null,
       }, { headers: { 'X-User-Id': USER_ID } });
 
       const result = response.data;
 
-      // 신규 conversation 컨텍스트에 저장
+      // conversation 컨텍스트 업데이트 (conv_id 유지, thread_id만 갱신)
       if (result.conversation_id) {
         setCurrentConversation(result.conversation_id, result.thread_id, result.session_id);
       }
@@ -357,14 +375,14 @@ const handleRecommend = async () => {
       if (keyNeeds) aiText += `💡 **핵심 니즈:** ${keyNeeds}\n\n`;
       aiText += `이러한 분석을 바탕으로 **${mappedProducts.length}개의 맞춤 솔루션 상품**을 추천해 드립니다.\n원하시는 상품을 선택하여 마케팅 메시지를 생성해보세요.`;
 
-      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts };
+      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, products: mappedProducts, threadId: result.thread_id };
       addMessage(aiMsg);
 
-      // DB에 메시지 저장 (제목 포함)
+      // DB에 메시지 저장 (신규 conv만 title 설정, 전체 메시지 저장)
       if (result.conversation_id) {
-        const title = `[${config.purpose}] ${targetPersona?.name || '고객'} · ${config.brand} ${config.category}`;
-        await saveMessages(result.conversation_id, [userMsg, aiMsg], title);
-        await loadConversations();
+        const title = isNewConv ? `[${config.purpose}] ${targetPersona?.name || '고객'} · ${config.brand} ${config.category}` : undefined;
+        await saveMessages(result.conversation_id, [...messages, userMsg, aiMsg], title);
+        if (isNewConv) await loadConversations();
       }
 
     } catch (error) {
@@ -425,7 +443,12 @@ const handleRecommend = async () => {
           <div><h2 style={{margin:0}}><Bot size={20} color="#6B4DFF"/> AI Merchandiser Agent</h2><div style={{fontSize:'12px', color:'#888', marginTop: 4}}>Powered by Amore GPT</div></div>
         </ChatHeader>
         <ChatScroll ref={scrollRef}>
-          {(messages || []).map((msg, idx) => (
+          {(() => {
+            const lastProductMsgIdx = (messages || []).reduce(
+              (last, msg, i) => (msg.products?.length > 0 ? i : last),
+              -1
+            );
+            return (messages || []).map((msg, idx) => (
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
               {msg.text && (
@@ -462,8 +485,15 @@ const handleRecommend = async () => {
               )}
               {msg.products && msg.products.length > 0 && (
                 <ProductGrid>
-                  {msg.products.map(product => (
-                    <ProductCard key={product.id} onClick={messageGeneratedProductId !== null ? undefined : () => handleProductClick(product)} $selected={messageGeneratedProductId === null && selectedProduct === product.id} $locked={messageGeneratedProductId !== null}>
+                  {msg.products.map(product => {
+                    const isLastProductList = idx === lastProductMsgIdx;
+                    // thread 단위 잠금: threadId 있으면 신규 방식, 없으면 레거시 fallback
+                    const isThreadCompleted = msg.threadId
+                      ? completedThreadIds.has(msg.threadId)
+                      : messageGeneratedProductId !== null;
+                    const isLocked = isThreadCompleted || !isLastProductList;
+                    return (
+                    <ProductCard key={product.id} onClick={isLocked ? undefined : () => handleProductClick(product)} $selected={!isLocked && selectedProduct === product.id} $locked={isLocked}>
                       <CardImage>
                         <span className="brand-badge">{product.brand}</span>
                         {product.image ? (
@@ -483,11 +513,12 @@ const handleRecommend = async () => {
                         </ProductLinkBtn>
                       </CardContent>
                     </ProductCard>
-                  ))}
+                  ); })}
                 </ProductGrid>
               )}
             </MessageBubble>
-          ))}
+          ));
+          })()}
           {isGenerating && <div style={{display:'flex', gap:'8px', alignItems:'center', color:'#888', paddingLeft:'10px'}}><Sparkles size={14} className="spin"/> 분석 중...</div>}
         </ChatScroll>
         <InputArea>

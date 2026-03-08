@@ -64,6 +64,20 @@ services:
       postgres:
         condition: service_healthy
 
+  api_server:
+    build: .
+    container_name: ai-innovation-db-api
+    restart: always
+    ports:
+      - "8020:8020"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai-innovation-network
+
 volumes:
   postgres_data:
     driver: local

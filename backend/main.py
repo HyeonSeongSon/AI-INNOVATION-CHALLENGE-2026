@@ -10,10 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api import marketing_api
-from app.api import personas as personas_api
-from app.api import pipeline as pipeline_api
-from app.api import conversations as conversations_api
-from app.api import generated_messages as generated_messages_api
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
@@ -67,10 +63,6 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(marketing_api.router)
-app.include_router(personas_api.router)
-app.include_router(pipeline_api.router)
-app.include_router(conversations_api.router)
-app.include_router(generated_messages_api.router)
 
 
 @app.get("/")

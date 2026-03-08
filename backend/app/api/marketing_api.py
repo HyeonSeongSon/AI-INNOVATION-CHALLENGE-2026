@@ -135,7 +135,7 @@ async def chat(
             thread_id=request.thread_id,
         )
 
-        # 신규 대화 시 Conversation 레코드 생성
+        # Conversation 레코드 생성 또는 thread_id 업데이트
         conv_id = request.conversation_id
         if not conv_id:
             conv_id = str(uuid.uuid4())
@@ -150,6 +150,17 @@ async def chat(
                 )
                 db.add(conv)
                 db.commit()
+            finally:
+                db.close()
+        else:
+            # 기존 대화에 새 추천 → thread_id/session_id 최신화
+            db = SessionLocal()
+            try:
+                conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+                if conv:
+                    conv.thread_id = result["thread_id"]
+                    conv.session_id = result["session_id"]
+                    db.commit()
             finally:
                 db.close()
 

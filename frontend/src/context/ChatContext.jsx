@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import api from '../api';
+import { dbApi as api } from '../api';
 
 const ChatContext = createContext();
 
