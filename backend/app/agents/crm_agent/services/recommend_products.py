@@ -122,23 +122,34 @@ class ProductRecommender:
 
     @traced(name="save_search_queries", run_type="tool")
     async def save_search_queries(self, analysis_id: int, queries: List[str]) -> None:
-        """검색 쿼리를 DB에 저장"""
-        try:
-            for query in queries:
-                response = await self.http_client.post(
-                    f"{self.db_api_url}/api/search-queries",
-                    json={
-                        "analysis_id": analysis_id,
-                        "search_query": query
-                    },
-                )
-                response.raise_for_status()
+        """검색 쿼리를 DB에 저장 (asyncio.gather 병렬 실행)"""
+        async def _save_single(query: str) -> None:
+            response = await self.http_client.post(
+                f"{self.db_api_url}/api/search-queries",
+                json={
+                    "analysis_id": analysis_id,
+                    "search_query": query
+                },
+            )
+            response.raise_for_status()
 
+        results = await asyncio.gather(
+            *[_save_single(q) for q in queries],
+            return_exceptions=True
+        )
+
+        exceptions = [r for r in results if isinstance(r, Exception)]
+        if exceptions:
+            logger.warning(
+                "some_queries_save_failed",
+                analysis_id=analysis_id,
+                failed_count=len(exceptions),
+                total_count=len(queries),
+            )
+            if len(exceptions) == len(queries):
+                raise exceptions[0]
+        else:
             logger.info("queries_saved", analysis_id=analysis_id, query_count=len(queries))
-
-        except Exception as e:
-            logger.error("queries_save_failed", analysis_id=analysis_id, error=str(e), exc_info=True)
-            raise
 
     @traced(name="get_filtered_products", run_type="tool")
     async def get_filtered_products(
@@ -265,22 +276,17 @@ class ProductRecommender:
     async def search_with_multi_queries(
         self,
         queries: List[str],
-        brands: Optional[List[str]] = None,
-        product_categories: Optional[List[str]] = None,
-        exclusive_target: Optional[str] = None,
+        product_ids: List[str],
         top_k: int = 3
     ) -> List[Dict[str, Any]]:
         """
         멀티 쿼리로 벡터 검색 수행 및 결과 병합 (asyncio.gather 병렬 실행)
-        """
-        # 1. 필터링된 상품 조회
-        filtered_products = await self.get_filtered_products(
-            brands=brands,
-            product_categories=product_categories,
-            exclusive_target=exclusive_target
-        )
-        product_ids = [p["product_id"] for p in filtered_products]
 
+        Args:
+            queries: 검색 쿼리 리스트
+            product_ids: 검색 범위를 제한할 상품 ID 리스트 (get_filtered_products 결과)
+            top_k: 쿼리당 반환할 최대 결과 수
+        """
         if not product_ids:
             logger.warning("no_filtered_products")
             return []

@@ -166,13 +166,26 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
                 queries=queries
             )
 
-        # 9. 멀티 쿼리로 벡터 검색
+        # 9. 필터링된 상품 조회
+        with logger.track_duration("get_filtered_products", user_message="필터링된 상품 조회 중..."):
+            filtered_products = await _recommender.get_filtered_products(
+                brands=brands if brands else None,
+                product_categories=product_categories if product_categories else None,
+                exclusive_target=exclusive_target
+            )
+        product_ids = [p["product_id"] for p in filtered_products]
+
+        logger.info(
+            "filtered_products_fetched",
+            user_message=f"필터링된 상품: {len(filtered_products)}개",
+            product_count=len(filtered_products),
+        )
+
+        # 10. 멀티 쿼리로 벡터 검색
         with logger.track_duration("vector_search", user_message="멀티 쿼리 검색 수행 중..."):
             search_results = await _recommender.search_with_multi_queries(
                 queries=queries,
-                brands=brands if brands else None,
-                product_categories=product_categories if product_categories else None,
-                exclusive_target=exclusive_target,
+                product_ids=product_ids,
                 top_k=5
             )
 
@@ -183,17 +196,11 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
             )
             intermediate["recommendation"]["recommended_products"] = []
         else:
-            # 10. 상품 데이터 병합
+            # 11. 상품 데이터 병합
             with logger.track_duration("merge_products", user_message="상품 데이터 병합 중..."):
-                all_products = await _recommender.get_filtered_products(
-                    brands=brands if brands else None,
-                    product_categories=product_categories if product_categories else None,
-                    exclusive_target=exclusive_target
-                )
-
                 merged_products = _recommender.merge_product_data(
                     search_results=search_results,
-                    all_products=all_products
+                    all_products=filtered_products
                 )
 
             # 상위 3개만 선택
