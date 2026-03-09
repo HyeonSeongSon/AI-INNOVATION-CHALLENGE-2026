@@ -14,6 +14,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=T
 
 logger = get_logger("recommend_products")
 
+RRF_K = int(os.getenv("RRF_K", "60"))  # Reciprocal Rank Fusion 상수 (표준값 60)
+
 
 class ProductRecommender:
     """상품 추천 로직"""
@@ -326,34 +328,43 @@ class ProductRecommender:
             *[search_single(q, i) for i, q in enumerate(queries, 1)]
         )
 
-        # 4. 결과 병합
-        all_results = []
-        for results in all_query_results:
-            all_results.extend(results)
+        # 4. RRF(Reciprocal Rank Fusion)로 결과 병합
+        # 각 쿼리 결과에서 rank(1-indexed)를 기반으로 1/(k+rank) 누적
+        total_raw = 0
+        product_rrf_map: Dict[str, Any] = {}
 
-        # 중복 제거: product_id별로 최고 스코어만 유지
-        product_score_map = {}
-        for result in all_results:
-            product_id = result.get("product_id")
-            score = result.get("score", 0)
+        for query_results in all_query_results:
+            total_raw += len(query_results)
+            for rank, result in enumerate(query_results, 1):
+                product_id = result.get("product_id")
+                raw_score = result.get("score", 0)
+                rrf_contribution = 1.0 / (RRF_K + rank)
 
-            if product_id not in product_score_map:
-                product_score_map[product_id] = result
-            else:
-                # 기존 스코어보다 높으면 교체
-                if score > product_score_map[product_id].get("score", 0):
-                    product_score_map[product_id] = result
+                if product_id not in product_rrf_map:
+                    product_rrf_map[product_id] = {
+                        "product_id": product_id,
+                        "score": 0.0,
+                        "appearance_count": 0,
+                        "max_vector_score": 0.0,
+                    }
 
-        # 스코어 높은 순으로 정렬
+                product_rrf_map[product_id]["score"] += rrf_contribution
+                product_rrf_map[product_id]["appearance_count"] += 1
+                product_rrf_map[product_id]["max_vector_score"] = max(
+                    product_rrf_map[product_id]["max_vector_score"],
+                    raw_score
+                )
+
+        # RRF 스코어 높은 순으로 정렬
         merged_results = sorted(
-            product_score_map.values(),
-            key=lambda x: x.get("score", 0),
+            product_rrf_map.values(),
+            key=lambda x: x["score"],
             reverse=True
         )
 
         logger.info(
             "multi_query_search_completed",
-            total_raw=len(all_results),
+            total_raw=total_raw,
             deduplicated=len(merged_results),
         )
 
@@ -373,6 +384,8 @@ class ProductRecommender:
             if product_id in product_map:
                 product_data = product_map[product_id].copy()
                 product_data["vector_search_score"] = result.get("score")
+                product_data["query_appearance_count"] = result.get("appearance_count", 0)
+                product_data["max_vector_score"] = result.get("max_vector_score", 0.0)
                 merged.append(product_data)
 
         logger.info("products_merged", merged_count=len(merged))

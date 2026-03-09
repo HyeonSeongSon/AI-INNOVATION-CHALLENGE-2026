@@ -7,15 +7,21 @@
 import os
 import json
 from typing import Dict, Any
+from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ..services.recommend_products import ProductRecommender
 from ....core.logging import AgentLogger
 from ....core.llm_factory import get_llm
 
+# .env 로드
+load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=True)
 
-# Recommender 인스턴스 
+# Recommender 인스턴스
 _recommender = ProductRecommender()
+
+# RRF 스코어 최소 임계값 (5개 쿼리 기준 최대 ~0.082, 기본값 0.01은 사실상 순위 기반 선택과 동일)
+MIN_RRF_SCORE_THRESHOLD = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))
 
 
 async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
@@ -203,13 +209,36 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
                     all_products=filtered_products
                 )
 
-            # 상위 3개만 선택
-            top_3_products = merged_products[:3]
+            # RRF 임계값 이상의 상품만 선택 후 상위 3개
+            qualified_products = [
+                p for p in merged_products
+                if p.get("vector_search_score", 0) >= MIN_RRF_SCORE_THRESHOLD
+            ]
+            top_3_products = qualified_products[:3]
+
+            if not top_3_products and merged_products:
+                logger.warning(
+                    "no_qualified_products",
+                    user_message=f"임계값({MIN_RRF_SCORE_THRESHOLD}) 이상의 상품 없음 (최고 RRF 스코어: {merged_products[0].get('vector_search_score', 0):.4f})",
+                    threshold=MIN_RRF_SCORE_THRESHOLD,
+                    best_score=merged_products[0].get("vector_search_score", 0),
+                )
+
             logger.info(
                 "products_recommended",
-                user_message=f"상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개)",
+                user_message=f"상품 추천 완료: 상위 {len(top_3_products)}개 (전체 {len(merged_products)}개, RRF 임계값 통과 {len(qualified_products)}개)",
                 top_count=len(top_3_products),
+                qualified_count=len(qualified_products),
                 total_count=len(merged_products),
+                top_products=[
+                    {
+                        "product_id": p.get("product_id"),
+                        "product_name": p.get("product_name"),
+                        "rrf_score": round(p.get("vector_search_score", 0), 4),
+                        "query_appearance_count": p.get("query_appearance_count", 0),
+                    }
+                    for p in top_3_products
+                ],
             )
 
             # Context 구조로 결과 저장
