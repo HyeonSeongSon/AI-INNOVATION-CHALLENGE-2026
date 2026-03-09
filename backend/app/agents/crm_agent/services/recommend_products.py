@@ -16,7 +16,6 @@ logger = get_logger("recommend_products")
 
 RRF_K = int(os.getenv("RRF_K", "60"))  # Reciprocal Rank Fusion 상수 (표준값 60)
 
-
 class ProductRecommender:
     """상품 추천 로직"""
     def __init__(self):
@@ -227,12 +226,36 @@ class ProductRecommender:
                 "multi_dimensional_analysis": {}
             }
 
+    def _extract_populated_fields(self, persona_info: Dict[str, Any]) -> Dict[str, bool]:
+        """
+        PersonaInfo dict에서 실제 데이터가 있는 필드와 빈 필드를 분류.
+        LLM 프롬프트에 전달하여 추론 범위를 명시하는 데 사용됨.
+        """
+        list_fields = [
+            "피부타입", "고민 키워드", "메이크업 선호 색상",
+            "선호 성분", "기피 성분", "선호 향", "가치관",
+            "선호 제형(텍스처)", "구매 결정 요인",
+        ]
+        str_fields = [
+            "퍼스널 컬러", "베이스 호수", "스킨케어 루틴",
+            "주 활동 환경", "반려동물", "수면 시간",
+            "스트레스", "디지털 기기 사용", "쇼핑 스타일&예산",
+        ]
+        result: Dict[str, bool] = {}
+        for f in list_fields:
+            result[f] = bool(persona_info.get(f))  # 빈 리스트 [] → False
+        for f in str_fields:
+            val = persona_info.get(f)
+            result[f] = bool(val and str(val).strip())  # None / "" → False
+        return result
+
     def _build_analysis_prompt(self, persona_info: Dict[str, Any]) -> str:
         """
         다단계 × 다차원 분석을 위한 프롬프트 구성
         """
-        persona_info = json.dumps(persona_info, ensure_ascii=False, indent=2)
-        prompt = build_persona_info_analysis_prompt(persona_info)
+        populated_fields = self._extract_populated_fields(persona_info)
+        persona_info_str = json.dumps(persona_info, ensure_ascii=False, indent=2)
+        prompt = build_persona_info_analysis_prompt(persona_info_str, populated_fields)
         return prompt
 
     @traced(name="generate_multi_queries", run_type="chain")

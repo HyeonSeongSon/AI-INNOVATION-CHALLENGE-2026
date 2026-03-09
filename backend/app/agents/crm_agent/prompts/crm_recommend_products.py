@@ -2,18 +2,30 @@ from typing import Dict, Any, List, Optional
 import json
 
 def build_persona_info_analysis_prompt(
-          persona_info: Dict[str, Any]
+          persona_info: str,
+          populated_fields: Dict[str, bool]
           ) -> str:
     """
     페르소나 정보를 사용자 요청을 참고하여 다단계 x 다차원 분석 프롬프트
-  
+
     Args:
-        user_input: 사용자 요청
-        persona_info: 메시지 생성 대상 페르소나 정보
+        persona_info: 메시지 생성 대상 페르소나 정보 (JSON 문자열)
+        populated_fields: 실제 데이터가 있는 필드 여부 맵 (필드명 → bool)
 
     Returns:
         prompt
     """
+    has_data = [f for f, v in populated_fields.items() if v]
+    no_data  = [f for f, v in populated_fields.items() if not v]
+
+    data_status_section = f"""## 실제 데이터 현황
+아래는 페르소나 DB에 실제 입력된 데이터의 존재 여부입니다.
+
+- **데이터 있음** ({len(has_data)}개): {', '.join(has_data) if has_data else '없음'}
+- **데이터 없음** ({len(no_data)}개): {', '.join(no_data) if no_data else '없음'}
+
+분석 시 이 현황을 반드시 참고하세요."""
+
     return f"""당신은 피부 과학, 화장품 성분, 뷰티 트렌드에 전문 지식을 가진 뷰티 분석 전문가입니다.
 
 입력된 페르소나 정보를 기반으로 해당 인물의 뷰티 특성과 니즈를 분석하여
@@ -21,6 +33,10 @@ def build_persona_info_analysis_prompt(
 
 사용자 요청은 존재하지 않으며,
 **페르소나 정보만으로 잠재 니즈까지 추론하는 것이 목표입니다.**
+
+---
+
+{data_status_section}
 
 ---
 
@@ -235,7 +251,8 @@ def build_persona_info_analysis_prompt(
       "pet_safety": "",
       "allergy_irritation_risks": []
     }}
-  }}
+  }},
+  "inferred_dimensions": []
 }}
 
 ---
@@ -244,8 +261,10 @@ def build_persona_info_analysis_prompt(
 
 1. 반드시 JSON 형식으로만 응답하세요.
 2. 모든 항목을 빠짐없이 채워야 합니다.
-3. 페르소나 정보 기반 **합리적 추론**을 수행하세요.
-4. 명확하지 않은 정보는 **뷰티 산업 일반 패턴 기반으로 추론**하세요.
+3. **데이터 있음** 필드는 페르소나 정보를 그대로 사용하세요. 임의로 변경하거나 확장하지 마세요.
+4. **데이터 없음** 필드는 뷰티 산업 일반 패턴으로 추론할 수 있습니다. 단, 추론을 사용한 차원(dimension)은 반드시 `inferred_dimensions` 배열에 해당 키를 포함시키세요.
+   - 추론 사용 차원 예시: `"ingredients"`, `"color_makeup"`, `"price_value"` 등
+   - 실제 데이터만으로 분석한 차원은 `inferred_dimensions`에 포함하지 마세요.
 5. 분석 결과는 **실제 뷰티 제품 추천 시스템에 활용 가능해야 합니다.**
 """
 
@@ -268,8 +287,27 @@ def build_multi_query_generate_prompt(
     # 사용자가 상품 종류를 입력하지 않은 경우는 공란으로 처리
     if product_categories is None:
           product_categories = ""
-    
-    analysis_result = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+
+    # inferred_dimensions 추출: 추론 기반 차원 vs 실제 데이터 기반 차원 구분
+    inferred_dimensions = analysis_result.get("inferred_dimensions", [])
+    all_dimensions = [
+        "skin_science", "ingredients", "lifestyle", "values_emotion",
+        "color_makeup", "price_value", "usability", "safety_risk",
+    ]
+    data_based_dimensions = [d for d in all_dimensions if d not in inferred_dimensions]
+
+    if inferred_dimensions:
+        data_reliability_section = f"""## 데이터 신뢰도 안내
+아래 정보를 참고하여 쿼리 생성 시 실제 데이터를 우선 활용하세요.
+
+- **실제 페르소나 데이터 기반** (우선 활용): {', '.join(data_based_dimensions)}
+- **LLM 추론 기반** (보조적 활용): {', '.join(inferred_dimensions)}
+
+→ 실제 데이터 차원을 중심으로 쿼리를 구성하고, 추론 차원은 보완적으로만 사용하세요."""
+    else:
+        data_reliability_section = "## 데이터 신뢰도 안내\n모든 분석 차원이 실제 페르소나 데이터를 기반으로 합니다."
+
+    analysis_result_str = json.dumps(analysis_result, ensure_ascii=False, indent=2)
 
     prompt = f"""당신은 뷰티 전문가입니다. 사용자의 요청과 페르소나 분석 결과를 바탕으로 최적의 제품을 찾기 위한 3~5개의 검색 쿼리를 생성하세요.
 
@@ -278,8 +316,10 @@ def build_multi_query_generate_prompt(
 **제품 카테고리 (필수 고려):** {product_categories}
 → 쿼리는 반드시 이 카테고리에 맞춰 생성해야 합니다.
 
+{data_reliability_section}
+
 **페르소나 분석 결과:**
-{analysis_result}
+{analysis_result_str}
 
 ---
 
