@@ -157,7 +157,8 @@ class ProductRecommender:
         self,
         brands: Optional[List[str]] = None,
         product_categories: Optional[List[str]] = None,
-        exclusive_target: Optional[str] = None
+        exclusive_target: Optional[str] = None,
+        avoided_ingredients: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """필터 조건에 맞는 상품 조회"""
         filters = {}
@@ -167,6 +168,8 @@ class ProductRecommender:
             filters["product_categories"] = product_categories
         if exclusive_target:
             filters["exclusive_target"] = exclusive_target
+        if avoided_ingredients:
+            filters["avoided_ingredients"] = avoided_ingredients
 
         try:
             response = await self.http_client.post(
@@ -265,6 +268,7 @@ class ProductRecommender:
         analysis_result: Dict[str, Any],
         product_categories: Optional[List[str]] = None,
         llm: Optional[BaseChatModel] = None,
+        persona_info: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """
         분석 결과를 기반으로 멀티 쿼리 생성
@@ -273,12 +277,13 @@ class ProductRecommender:
             user_input: 사용자 입력 텍스트
             analysis_result: recommend_persona 함수의 분석 결과(페르소나 분석 정보)
             product_categories: 제품 카테고리 리스트 (선택)
+            persona_info: 원본 페르소나 정보 (퍼스널컬러, 고민키워드 등을 쿼리에 직접 반영)
 
         Returns:
             List[str]: 3~5개의 다각도 검색 쿼리
         """
         # 프롬프트 생성
-        prompt = build_multi_query_generate_prompt(user_input, analysis_result, product_categories)
+        prompt = build_multi_query_generate_prompt(user_input, analysis_result, product_categories, persona_info)
 
         # LLM 호출하여 멀티 쿼리 생성
         try:

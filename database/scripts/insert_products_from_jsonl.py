@@ -88,8 +88,8 @@ def insert_products_from_jsonl():
                     preferred_scents=persona_tags.get('선호향', []),
                     values=persona_tags.get('가치관', []),
                     exclusive_product=', '.join(persona_tags.get('전용제품', [])) if persona_tags.get('전용제품') else None,
-                    personal_color=persona_tags.get('퍼스널컬러', []),
-                    skin_shades=persona_tags.get('피부톤번호', []),
+                    personal_color=data.get('퍼스널컬러', []),
+                    skin_shades=data.get('피부호수', persona_tags.get('피부톤번호', [])),
                     product_image_url=data.get('상품이미지', []),
                     product_page_url=data.get('product_url'),
                     product_comment=data.get('한줄소개')

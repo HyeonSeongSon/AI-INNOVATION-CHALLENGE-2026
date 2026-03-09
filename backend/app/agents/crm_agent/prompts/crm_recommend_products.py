@@ -271,15 +271,17 @@ def build_persona_info_analysis_prompt(
 def build_multi_query_generate_prompt(
           user_input: str,
           analysis_result: Dict[str, Any],
-          product_categories: Optional[List[str]] = None
+          product_categories: Optional[List[str]] = None,
+          persona_info: Optional[Dict[str, Any]] = None,
     ) -> str:
     """
     RAG 검색에 사용할 상품 멀티 쿼리 생성 프롬프트
-    
+
     Args:
         user_input: 사용자 요청
         analysis_result: 페르소나 분석 결과
         product_categories: 메시지 생성 대상 상품 종류
+        persona_info: 원본 페르소나 정보 (퍼스널컬러, 고민키워드 등을 쿼리에 직접 반영)
 
     Returns:
         prompt
@@ -309,6 +311,32 @@ def build_multi_query_generate_prompt(
 
     analysis_result_str = json.dumps(analysis_result, ensure_ascii=False, indent=2)
 
+    # 페르소나 원본 데이터에서 핵심 필터 항목 추출
+    persona_context_section = ""
+    if persona_info:
+        personal_color = persona_info.get("퍼스널 컬러")
+        skin_concerns = persona_info.get("고민 키워드") or []
+        skin_type = persona_info.get("피부타입") or []
+        avoided_ingredients = persona_info.get("기피 성분") or []
+
+        lines = []
+        if personal_color:
+            lines.append(f"- 퍼스널컬러: {personal_color}")
+        if skin_type:
+            lines.append(f"- 피부타입: {', '.join(skin_type)}")
+        if skin_concerns:
+            lines.append(f"- 고민키워드: {', '.join(skin_concerns)}")
+        if avoided_ingredients:
+            lines.append(f"- 기피성분(쿼리에서 제외): {', '.join(avoided_ingredients)}")
+
+        if lines:
+            persona_context_section = f"""## 페르소나 핵심 속성 (쿼리에 직접 반영 필수)
+{chr(10).join(lines)}
+
+→ 위 속성들을 최소 2개 이상의 쿼리에 명시적으로 포함하세요.
+→ 예: 퍼스널컬러가 '쿨톤'이면 "쿨톤 적합" 또는 "블루베이스", 고민키워드가 '모공'이면 "모공 케어" 같은 식으로 반영하세요.
+"""
+
     prompt = f"""당신은 뷰티 전문가입니다. 사용자의 요청과 페르소나 분석 결과를 바탕으로 최적의 제품을 찾기 위한 3~5개의 검색 쿼리를 생성하세요.
 
 **사용자 요청:** {user_input}
@@ -316,7 +344,7 @@ def build_multi_query_generate_prompt(
 **제품 카테고리 (필수 고려):** {product_categories}
 → 쿼리는 반드시 이 카테고리에 맞춰 생성해야 합니다.
 
-{data_reliability_section}
+{persona_context_section}{data_reliability_section}
 
 **페르소나 분석 결과:**
 {analysis_result_str}

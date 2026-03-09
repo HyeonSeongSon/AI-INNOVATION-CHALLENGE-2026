@@ -150,13 +150,14 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
                 analysis_id=analysis_id,
             )
 
-        # 7. 멀티 쿼리 생성
+        # 7. 멀티 쿼리 생성 (persona_info 전달 → 퍼스널컬러, 고민키워드를 쿼리에 직접 반영)
         with logger.track_duration("multi_query_generation", user_message="멀티 쿼리 생성 중..."):
             queries = await _recommender.generate_multi_queries(
                 user_input=user_input,
                 analysis_result=analysis_result,
                 product_categories=product_categories,
                 llm=llm,
+                persona_info=persona_info,
             )
 
         logger.info(
@@ -172,19 +173,67 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
                 queries=queries
             )
 
-        # 9. 필터링된 상품 조회
+        # 9. 필터링된 상품 조회 (Fallback: 결과가 너무 적으면 필터 단계적 완화)
+        avoided_ingredients = persona_info.get("기피 성분") or []
+        MIN_PRODUCTS = int(os.getenv("MIN_FILTERED_PRODUCTS", "3"))
+
         with logger.track_duration("get_filtered_products", user_message="필터링된 상품 조회 중..."):
+            # 레벨 1: brands + categories + avoided_ingredients(EXCLUDE)
             filtered_products = await _recommender.get_filtered_products(
                 brands=brands if brands else None,
                 product_categories=product_categories if product_categories else None,
-                exclusive_target=exclusive_target
+                exclusive_target=exclusive_target,
+                avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
             )
+            filter_level = 1
+
+            # 레벨 2: brands 제거 (카테고리 + EXCLUDE)
+            if len(filtered_products) < MIN_PRODUCTS and brands:
+                logger.warning(
+                    "filter_fallback_level2",
+                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 브랜드 필터 제거 후 재시도",
+                    current_count=len(filtered_products),
+                )
+                filtered_products = await _recommender.get_filtered_products(
+                    brands=None,
+                    product_categories=product_categories if product_categories else None,
+                    exclusive_target=exclusive_target,
+                    avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
+                )
+                filter_level = 2
+
+            # 레벨 3: 카테고리도 제거 (EXCLUDE만)
+            if len(filtered_products) < MIN_PRODUCTS and product_categories:
+                logger.warning(
+                    "filter_fallback_level3",
+                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 카테고리 필터도 제거 후 재시도",
+                    current_count=len(filtered_products),
+                )
+                filtered_products = await _recommender.get_filtered_products(
+                    brands=None,
+                    product_categories=None,
+                    exclusive_target=exclusive_target,
+                    avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
+                )
+                filter_level = 3
+
+            # 레벨 4: 필터 전체 제거 (전체 상품)
+            if len(filtered_products) < MIN_PRODUCTS:
+                logger.warning(
+                    "filter_fallback_level4",
+                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 전체 상품 대상으로 재시도",
+                    current_count=len(filtered_products),
+                )
+                filtered_products = await _recommender.get_filtered_products()
+                filter_level = 4
+
         product_ids = [p["product_id"] for p in filtered_products]
 
         logger.info(
             "filtered_products_fetched",
-            user_message=f"필터링된 상품: {len(filtered_products)}개",
+            user_message=f"필터링된 상품: {len(filtered_products)}개 (필터 레벨 {filter_level})",
             product_count=len(filtered_products),
+            filter_level=filter_level,
         )
 
         # 10. 멀티 쿼리로 벡터 검색
