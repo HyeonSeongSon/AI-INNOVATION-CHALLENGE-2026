@@ -4,12 +4,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Send, Settings, Sparkles, Wand2, ShoppingBag,
-  Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink
+  Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink, ChevronDown
 } from 'lucide-react';
 
 // ✅ API 및 Context
 import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
+
+// ✅ 브랜드 / 카테고리 데이터
+import brandsData from '../data/brands.json';
+import categoriesData from '../data/categories.json';
 
 const USER_ID = 'son';
 
@@ -21,6 +25,11 @@ const SectionLabel = styled.label` font-size: 12px; font-weight: 700; color: #88
 const FormGroup = styled.div` display: flex; flex-direction: column; `;
 const Input = styled.input` padding: 14px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 14px; outline: none; transition: 0.2s; &:focus { border-color: #6B4DFF; box-shadow: 0 0 0 3px rgba(107, 77, 255, 0.1); } `;
 const Select = styled.select` padding: 14px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 14px; outline: none; background: white; cursor: pointer; transition: 0.2s; &:focus { border-color: #6B4DFF; } `;
+const ComboWrapper = styled.div` position: relative; `;
+const ComboInput = styled.input` width: 100%; padding: 14px 40px 14px 14px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 14px; outline: none; transition: 0.2s; box-sizing: border-box; &:focus { border-color: #6B4DFF; box-shadow: 0 0 0 3px rgba(107, 77, 255, 0.1); } `;
+const ComboCaret = styled.button` position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #888; padding: 2px; display: flex; align-items: center; &:hover { color: #6B4DFF; } `;
+const ComboDropdown = styled.ul` position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto; z-index: 100; margin: 0; padding: 6px 0; list-style: none; &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; } `;
+const ComboOption = styled.li` padding: 10px 14px; font-size: 14px; cursor: pointer; color: ${p => p.$active ? '#6B4DFF' : '#333'}; font-weight: ${p => p.$active ? '700' : '400'}; background: ${p => p.$active ? 'rgba(107,77,255,0.06)' : 'transparent'}; &:hover { background: rgba(107,77,255,0.08); color: #6B4DFF; } `;
 const GenerateButton = styled.button` margin-top: auto; background: linear-gradient(135deg, #111 0%, #333 100%); color: white; padding: 18px; border-radius: 16px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; transition: all 0.2s; &:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); } &:disabled { background: #eee; color: #aaa; cursor: not-allowed; transform: none; box-shadow: none; } `;
 const ChatArea = styled.div` flex: 1; background: #F8F9FA; border-radius: 24px; border: 1px solid #eee; display: flex; flex-direction: column; overflow: hidden; position: relative; `;
 const ChatHeader = styled.div` padding: 20px 30px; background: white; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; z-index: 10; h2 { font-size: 16px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 8px; } `;
@@ -113,7 +122,72 @@ const MarkdownBody = styled.div`
 `;
 
 
-/* --- [2] 메인 컴포넌트 --- */
+/* --- [2] ComboSelect 컴포넌트 (키보드 입력 + 스크롤 선택) --- */
+function ComboSelect({ value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+        setSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()));
+
+  const handleInput = (e) => {
+    setSearch(e.target.value);
+    onChange(e.target.value);
+    setOpen(true);
+  };
+
+  const handleSelect = (opt) => {
+    onChange(opt);
+    setSearch('');
+    setOpen(false);
+  };
+
+  const handleFocus = () => {
+    setSearch('');
+    setOpen(true);
+  };
+
+  const handleCaretClick = () => {
+    setOpen(o => !o);
+    setSearch('');
+  };
+
+  return (
+    <ComboWrapper ref={wrapperRef}>
+      <ComboInput
+        value={open ? search : value}
+        onChange={handleInput}
+        onFocus={handleFocus}
+        placeholder={placeholder}
+      />
+      <ComboCaret type="button" onClick={handleCaretClick}>
+        <ChevronDown size={14} />
+      </ComboCaret>
+      {open && filtered.length > 0 && (
+        <ComboDropdown>
+          {filtered.map(opt => (
+            <ComboOption key={opt} onMouseDown={() => handleSelect(opt)} $active={opt === value}>
+              {opt}
+            </ComboOption>
+          ))}
+        </ComboDropdown>
+      )}
+    </ComboWrapper>
+  );
+}
+
+/* --- [3] 메인 컴포넌트 --- */
 export default function Message() {
   // ✅ ChatContext — 세션 정보 및 메시지 관리
   const {
@@ -431,8 +505,24 @@ const handleRecommend = async () => {
           </Select>
         </FormGroup>
 
-        <FormGroup><SectionLabel>Category</SectionLabel><Input value={config.category} onChange={(e) => setConfig({...config, category: e.target.value})} /></FormGroup>
-        <FormGroup><SectionLabel>Brand</SectionLabel><Input value={config.brand} onChange={(e) => setConfig({...config, brand: e.target.value})} /></FormGroup>
+        <FormGroup>
+          <SectionLabel>Category</SectionLabel>
+          <ComboSelect
+            value={config.category}
+            onChange={(val) => setConfig({...config, category: val})}
+            options={categoriesData.categories}
+            placeholder="카테고리 입력 또는 선택"
+          />
+        </FormGroup>
+        <FormGroup>
+          <SectionLabel>Brand</SectionLabel>
+          <ComboSelect
+            value={config.brand}
+            onChange={(val) => setConfig({...config, brand: val})}
+            options={brandsData.brands}
+            placeholder="브랜드 입력 또는 선택"
+          />
+        </FormGroup>
         
         <GenerateButton onClick={handleRecommend} disabled={isGenerating}>
           {isGenerating ? 'AI가 분석 중...' : '맞춤 제품 추천받기'} <Wand2 size={18} className={isGenerating ? 'spin' : ''} />
