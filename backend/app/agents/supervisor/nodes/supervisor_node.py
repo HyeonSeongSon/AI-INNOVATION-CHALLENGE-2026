@@ -4,6 +4,7 @@ from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
 from ..services.supervisor import Supervisor
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 from langgraph.constants import END
 
@@ -29,16 +30,17 @@ async def supervisor_node(state: SupervisorState, config: RunnableConfig):
         if decision.next_step == "FINISH":
             return Command(goto=END)
         elif decision.next_step == "crm_node":
-            # CRM subgraph 진입 시 필요한 초기 상태 설정
             # input: CRMState가 공유 key로 읽어가는 사용자 원본 텍스트
-            user_input = messages[-1].content if hasattr(messages[-1], "content") else str(messages[-1])
+            # messages[-1]이 노드 결과일 수 있으므로 마지막 HumanMessage를 사용
+            last_human = next(
+                (m for m in reversed(messages) if isinstance(m, HumanMessage)),
+                messages[-1],
+            )
+            user_input = last_human.content if hasattr(last_human, "content") else str(last_human)
             return Command(
                 goto="crm_node",
                 update={
                     "input": user_input,
-                    "step": 0,
-                    "logs": [],
-                    "intermediate": {},
                     "status": "running",
                 },
             )

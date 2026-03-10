@@ -3,7 +3,7 @@ from .state import SupervisorState
 from ...core.logging import get_logger
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.types import Command
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import uuid
 
 _logger = get_logger("marketing_agent")
@@ -39,6 +39,22 @@ class MarketingAgent:
             configurable["model"] = model
         return {"configurable": configurable}
 
+    def _history_to_messages(self, history: list) -> List:
+        """DB 메시지 목록 → LangChain 메시지 객체 변환
+
+        history 항목은 {"role": "user"|"assistant", "content": str, ...} 형식.
+        LLM 컨텍스트에는 role/content만 필요 — 나머지 메타데이터는 무시.
+        """
+        result = []
+        for entry in history:
+            role = entry.get("role")
+            content = entry.get("content", "")
+            if role == "user":
+                result.append(HumanMessage(content=content))
+            elif role == "assistant":
+                result.append(AIMessage(content=content))
+        return result
+
     def _extract_response_messages(self, result: Dict) -> list:
         """
         CRM 플로우: intermediate["message"]["messages"]
@@ -63,65 +79,38 @@ class MarketingAgent:
         user_input: str,
         session_id: str,
         user_id: str,
-        thread_id: Optional[str] = None,
+        history: list,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        대화 처리 (신규 + 이어가기 통합)
+        대화 처리
 
-        - thread_id 없음: 새 대화 시작 (새 thread_id 생성)
-        - thread_id 있음: 기존 대화 이어가기 (add_messages reducer가 메시지 누적)
-        - thread_id가 interrupt 대기 상태이면 waiting_for_user 반환 → /resume 유도
+        - 매 호출마다 fresh thread_id 생성 (task 격리)
+        - history: API 레이어가 DB에서 로드해 넘겨주는 이전 대화 이력
+          ({"role": "user"|"assistant", "content": str, ...} 목록)
+        - LangGraph 상태는 task마다 항상 깨끗하게 시작
+          (intermediate, step, logs, status 등 stale 데이터 없음)
 
         Returns:
             {
                 "status": "waiting_for_user" | "completed" | "failed",
-                "interrupt_type": str | None,    # waiting_for_user 시 어떤 interrupt인지
+                "interrupt_type": str | None,
                 "thread_id": str,
                 "session_id": str,
-                "recommended_products": [...],   # product_selection interrupt 시
-                "persona_info": {...},            # product_selection interrupt 시
-                "messages": [...],               # 완료 시
+                "recommended_products": [...],
+                "persona_info": {...},
+                "messages": [...],
                 "logs": [...],
                 "error": str | None
             }
         """
-        is_new = thread_id is None
-        thread_id = thread_id or str(uuid.uuid4())
+        thread_id = str(uuid.uuid4())  # 항상 fresh — task 격리의 핵심
         config = self._build_config(thread_id, session_id, user_id, model)
 
-        # 상태 가드: 기존 thread가 interrupt 대기 중이면 /resume으로 유도
-        if not is_new:
-            current_state = await self.workflow.aget_state(config)
-            if current_state and current_state.tasks:
-                _logger.warning(
-                    "chat_blocked_by_interrupt",
-                    thread_id=thread_id,
-                    tasks=[str(t) for t in current_state.tasks],
-                )
-                return {
-                    "status": "waiting_for_user",
-                    "interrupt_type": "product_selection",
-                    "thread_id": thread_id,
-                    "session_id": session_id,
-                    "recommended_products": (
-                        current_state.values.get("intermediate", {})
-                        .get("recommendation", {})
-                        .get("recommended_products", [])
-                    ),
-                    "persona_info": (
-                        current_state.values.get("intermediate", {})
-                        .get("recommendation", {})
-                        .get("persona_info")
-                    ),
-                    "messages": [],
-                    "logs": [],
-                    "error": "상품 선택이 필요합니다. /resume 엔드포인트를 사용해주세요.",
-                }
-
-        initial_state: SupervisorState = {
-            "messages": [HumanMessage(content=user_input)]
-        }
+        # 이전 대화 이력 + 현재 사용자 메시지로 초기 상태 구성
+        seed_messages = self._history_to_messages(history)
+        seed_messages.append(HumanMessage(content=user_input))
+        initial_state: SupervisorState = {"messages": seed_messages}
 
         try:
             result = await self.workflow.ainvoke(initial_state, config)
@@ -129,12 +118,11 @@ class MarketingAgent:
             # interrupt 감지 (CRM 상품 선택 대기)
             interrupts = result.get("__interrupt__", [])
             if interrupts:
-                intermediate = result.get("intermediate", {})
-                recommended_products = (
-                    intermediate.get("recommendation", {})
-                    .get("recommended_products", [])
-                )
-                persona_info = intermediate.get("recommendation", {}).get("persona_info")
+                # ainvoke 반환값(result)은 부모 graph state라 서브그래프 intermediate가 없음.
+                # wait_for_product_selection_node가 interrupt()에 담아 전달한 value에서 직접 읽음.
+                interrupt_value = interrupts[0].value if interrupts else {}
+                recommended_products = interrupt_value.get("recommended_products", [])
+                persona_info = interrupt_value.get("persona_info")
 
                 product_names = [p.get("product_name", "") for p in recommended_products]
                 interrupt_msg = (
@@ -155,9 +143,11 @@ class MarketingAgent:
                 }
 
             # 정상 완료
+            # fresh thread이므로 intermediate는 항상 현재 task 결과만 담고 있음
             intermediate = result.get("intermediate", {})
             raw_status = result.get("status")
             api_status = "failed" if raw_status in ("failed", "quality_check_failed") else "completed"
+
             return {
                 "status": api_status,
                 "interrupt_type": None,
@@ -270,42 +260,15 @@ class MarketingAgent:
                 (p for p in recommended if p.get("product_id") == selected_product_id),
                 {}
             )
-            product_name = selected.get("product_name", selected_product_id)
 
-            # interrupt 상태를 보존하기 위해 ainvoke 전에 aupdate_state 호출 금지
             result = await self.workflow.ainvoke(
                 Command(resume=selected_product_id),
                 config
             )
+            # 대화 이력은 DB(conversations.messages)가 source of truth.
+            # LangGraph checkpoint에 역으로 메시지를 추가하지 않음.
 
-            # 워크플로우 완료 후 대화 이력 소급 저장
-            # 1) interrupt AI 메시지 소급 저장
-            product_names = [p.get("product_name", "") for p in recommended]
-            interrupt_msg = (
-                f"총 {len(product_names)}개 상품을 추천드렸습니다. "
-                f"{', '.join(product_names)} 중 상품 하나를 선택해주세요."
-            )
-            await self.workflow.aupdate_state(
-                config,
-                {"messages": [AIMessage(content=interrupt_msg)]}
-            )
-
-            # 2) 사용자 선택 HumanMessage 저장
-            await self.workflow.aupdate_state(
-                config,
-                {"messages": [HumanMessage(content=f"{product_name}을(를) 선택하겠습니다.")]}
-            )
-
-            # 3) 완료 AI 메시지 저장
             intermediate = result.get("intermediate", {})
-            final_messages = intermediate.get("message", {}).get("messages", [])
-            if final_messages:
-                title = final_messages[0].get("title", "")
-                await self.workflow.aupdate_state(
-                    config,
-                    {"messages": [AIMessage(content=f"CRM 메시지 생성이 완료되었습니다: {title}")]}
-                )
-
             raw_status = result.get("status")
             api_status = "failed" if raw_status in ("failed", "quality_check_failed") else "completed"
             return {
@@ -313,7 +276,7 @@ class MarketingAgent:
                 "interrupt_type": None,
                 "thread_id": thread_id,
                 "session_id": session_id,
-                "messages": final_messages,
+                "messages": intermediate.get("message", {}).get("messages", []),
                 "selected_product": selected or None,
                 "recommended_products": intermediate.get("recommendation", {}).get("recommended_products", []),
                 "persona_info": intermediate.get("recommendation", {}).get("persona_info"),

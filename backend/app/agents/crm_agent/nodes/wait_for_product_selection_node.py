@@ -33,7 +33,9 @@ async def wait_for_product_selection_node(state: CRMState) -> Dict[str, Any]:
         intermediate["hitl"] = {}
 
     hitl = intermediate["hitl"]
-    recommended_products = intermediate.get("recommendation", {}).get("recommended_products", [])
+    recommendation = intermediate.get("recommendation", {})
+    recommended_products = recommendation.get("recommended_products", [])
+    persona_info = recommendation.get("persona_info")
 
     logger.info(
         "waiting_for_product_selection",
@@ -42,11 +44,18 @@ async def wait_for_product_selection_node(state: CRMState) -> Dict[str, Any]:
     )
 
     try:
-        # interrupt() 반환값 = Command(resume=selected_product_id)로 전달된 값
+        # 서브그래프 interrupt 규칙:
+        # 이 노드는 부모 graph(SupervisorState) 안의 서브그래프 내부에서 실행됨.
+        # interrupt() 발생 시 서브그래프가 return하지 않으므로 부모 state의
+        # intermediate가 갱신되지 않음.
+        # → 부모에서 필요한 모든 데이터는 interrupt(value)에 명시적으로 포함해야 함.
         hitl["product_selection"] = interrupt({
             "type": "product_selection",
             "recommended_products": recommended_products,
+            "persona_info": persona_info,
+            # 향후 부모에서 필요한 데이터 추가 시 여기에 포함할 것
         })
+
 
         selected_product_id = hitl["product_selection"]
         logger.info(
