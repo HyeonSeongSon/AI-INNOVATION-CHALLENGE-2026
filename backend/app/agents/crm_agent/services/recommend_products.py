@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
-from ..prompts.crm_recommend_products import build_persona_info_analysis_prompt, build_multi_query_generate_prompt
+from ..prompts.crm_recommend_products import build_multi_query_generate_prompt, build_analysis_prompt, build_persona_needs_analysis_prompt, build_needs_multi_query_generate_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 import os
@@ -200,7 +200,7 @@ class ProductRecommender:
         persona_info = await self.get_persona_info(persona_id)
 
         # 2. 프롬프트 생성
-        prompt = self._build_analysis_prompt(persona_info)
+        prompt = build_analysis_prompt(persona_info)
 
         # 3. LLM 호출하여 분석 수행
         try:
@@ -229,37 +229,34 @@ class ProductRecommender:
                 "multi_dimensional_analysis": {}
             }
 
-    def _extract_populated_fields(self, persona_info: Dict[str, Any]) -> Dict[str, bool]:
+    @staticmethod
+    def extract_query_context(analysis_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        PersonaInfo dict에서 실제 데이터가 있는 필드와 빈 필드를 분류.
-        LLM 프롬프트에 전달하여 추론 범위를 명시하는 데 사용됨.
-        """
-        list_fields = [
-            "피부타입", "고민 키워드", "메이크업 선호 색상",
-            "선호 성분", "기피 성분", "선호 향", "가치관",
-            "선호 제형(텍스처)", "구매 결정 요인",
-        ]
-        str_fields = [
-            "퍼스널 컬러", "베이스 호수", "스킨케어 루틴",
-            "주 활동 환경", "반려동물", "수면 시간",
-            "스트레스", "디지털 기기 사용", "쇼핑 스타일&예산",
-        ]
-        result: Dict[str, bool] = {}
-        for f in list_fields:
-            result[f] = bool(persona_info.get(f))  # 빈 리스트 [] → False
-        for f in str_fields:
-            val = persona_info.get(f)
-            result[f] = bool(val and str(val).strip())  # None / "" → False
-        return result
+        analysis_result에서 쿼리 생성에 필요한 핵심 컨텍스트만 추출.
+        search_keywords 필드가 있으면 우선 사용, 없으면 규칙 기반 fallback.
 
-    def _build_analysis_prompt(self, persona_info: Dict[str, Any]) -> str:
+        Args:
+            analysis_result: LLM #1이 생성한 페르소나 분석 결과
+
+        Returns:
+            LLM #2에 전달할 압축 컨텍스트 (~150-300 tokens)
         """
-        다단계 × 다차원 분석을 위한 프롬프트 구성
-        """
-        populated_fields = self._extract_populated_fields(persona_info)
-        persona_info_str = json.dumps(persona_info, ensure_ascii=False, indent=2)
-        prompt = build_persona_info_analysis_prompt(persona_info_str, populated_fields)
-        return prompt
+        if "search_keywords" in analysis_result:
+            return {"search_keywords": analysis_result["search_keywords"]}
+
+        # Fallback: 구버전 캐시(search_keywords 없음) 또는 경로 A 결과 대응
+        multi_dim = analysis_result.get("multi_dimensional_analysis", {})
+        multi_level = analysis_result.get("multi_level_analysis", {})
+        return {
+            "top_priorities": multi_level.get("beauty_needs", {}).get("priority_top3"),
+            "preferred_ingredients": multi_dim.get("ingredients", {}).get("preferred_match"),
+            "avoid_ingredients": multi_dim.get("ingredients", {}).get("avoid_strategy"),
+            "preferred_formulation": multi_dim.get("usability", {}).get("preferred_formulation"),
+            "functional_ingredients": multi_dim.get("skin_science", {}).get("required_functional_ingredients"),
+            "inferred_dimensions": analysis_result.get("inferred_dimensions", []),
+        }
+
+
 
     @traced(name="generate_multi_queries", run_type="chain")
     async def generate_multi_queries(
@@ -282,8 +279,12 @@ class ProductRecommender:
         Returns:
             List[str]: 3~5개의 다각도 검색 쿼리
         """
+        # 분석 결과 압축 (전체 JSON → 핵심 컨텍스트)
+        query_context = self.extract_query_context(analysis_result)
+        logger.info("query_context_to_llm2", has_search_keywords=("search_keywords" in analysis_result), query_context=query_context)
+
         # 프롬프트 생성
-        prompt = build_multi_query_generate_prompt(user_input, analysis_result, product_categories, persona_info)
+        prompt = build_multi_query_generate_prompt(user_input, query_context, product_categories, persona_info)
 
         # LLM 호출하여 멀티 쿼리 생성
         try:
@@ -418,3 +419,167 @@ class ProductRecommender:
 
         logger.info("products_merged", merged_count=len(merged))
         return merged
+    
+    @traced(name="persona_needs_analysis", run_type="chain")
+    async def persona_needs_analysis(self, persona_id: str, llm: BaseChatModel) -> Dict[str, Any]:
+        """
+        페르소나 정보를 기반으로 소비자 니즈를 분석합니다.
+
+        라이프스타일·피부 상태·취향을 종합하여 명시적 니즈뿐 아니라
+        잠재 니즈까지 추론하며, 결과는 멀티 쿼리 생성의 입력으로 사용됩니다.
+
+        Args:
+            persona_id: 페르소나 ID
+            llm: LLM 모델
+
+        Returns:
+            Dict with keys: core_needs, skin_needs, ingredient_preferences,
+            product_texture_preferences, lifestyle_needs, emotional_needs,
+            fragrance_preferences, makeup_color_preferences,
+            purchase_decision_factors, recommended_product_features
+        """
+        # 1. 페르소나 정보 가져오기
+        persona_info = await self.get_persona_info(persona_id)
+
+        # 2. 프롬프트 생성
+        prompt = build_persona_needs_analysis_prompt(persona_info)
+
+        # 3. LLM 호출하여 분석 수행
+        try:
+            response = await llm.ainvoke(prompt)
+        except Exception as e:
+            logger.error("llm_persona_needs_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            return {
+                "core_needs": [],
+                "skin_needs": [],
+                "ingredient_preferences": {"preferred": [], "avoided": []},
+                "product_texture_preferences": [],
+                "lifestyle_needs": [],
+                "emotional_needs": [],
+                "fragrance_preferences": {},
+                "makeup_color_preferences": [],
+                "purchase_decision_factors": [],
+                "recommended_product_features": [],
+            }
+
+        # 4. 응답 파싱 (JSON 형태로 받음)
+        try:
+            result = json.loads(response.content)
+            logger.info(
+                "persona_needs_analysis_completed",
+                persona_id=persona_id,
+                core_needs_count=len(result.get("core_needs", [])),
+                skin_needs_count=len(result.get("skin_needs", [])),
+            )
+            return result
+        except json.JSONDecodeError:
+            logger.error("llm_response_parse_failed", persona_id=persona_id, response_preview=str(response.content)[:200])
+            return {
+                "core_needs": [],
+                "skin_needs": [],
+                "ingredient_preferences": {"preferred": [], "avoided": []},
+                "product_texture_preferences": [],
+                "lifestyle_needs": [],
+                "emotional_needs": [],
+                "fragrance_preferences": {},
+                "makeup_color_preferences": [],
+                "purchase_decision_factors": [],
+                "recommended_product_features": [],
+            }
+
+    @staticmethod
+    def extract_query_context_from_needs(needs_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        persona_needs_analysis 결과에서 멀티 쿼리 생성용 컨텍스트 추출.
+
+        core_needs + skin_needs를 핵심 키워드로,
+        recommended_product_features를 추가 키워드로 매핑하여
+        build_multi_query_generate_prompt의 search_keywords 경로를 활용합니다.
+
+        Args:
+            needs_result: persona_needs_analysis의 반환값
+
+        Returns:
+            build_multi_query_generate_prompt에 전달할 query_context
+        """
+        core_needs = needs_result.get("core_needs", [])
+        skin_needs = needs_result.get("skin_needs", [])
+        ingredient_prefs = needs_result.get("ingredient_preferences", {})
+        recommended_features = needs_result.get("recommended_product_features", [])
+
+        return {
+            "search_keywords": {
+                "핵심_키워드": (core_needs + skin_needs)[:5],
+                "추가_키워드": recommended_features[:4],
+                "제외_키워드": ingredient_prefs.get("avoided", []),
+                "추천_쿼리_힌트": [],
+            },
+            "product_texture_preferences": needs_result.get("product_texture_preferences", []),
+            "lifestyle_needs": needs_result.get("lifestyle_needs", []),
+            "emotional_needs": needs_result.get("emotional_needs", []),
+            "makeup_color_preferences": needs_result.get("makeup_color_preferences", []),
+            "purchase_decision_factors": needs_result.get("purchase_decision_factors", []),
+        }
+
+    @traced(name="generate_multi_queries_from_needs_analysis", run_type="chain")
+    async def generate_multi_queries_from_needs_analysis(
+        self,
+        persona_id: str,
+        user_input: str,
+        llm: BaseChatModel,
+        product_categories: Optional[List[str]] = None,
+    ) -> List[str]:
+        """
+        페르소나 니즈 분석을 기반으로 멀티 쿼리 생성.
+
+        persona_needs_analysis()로 소비자 니즈(core_needs, skin_needs 등)를 파악하고
+        해당 니즈에 맞는 검색 쿼리를 생성합니다.
+
+        Args:
+            persona_id: 페르소나 ID
+            user_input: 사용자 요청 텍스트
+            llm: LLM 모델
+            product_categories: 제품 카테고리 리스트 (선택)
+
+        Returns:
+            List[str]: 3~5개의 검색 쿼리
+        """
+        # 1. 페르소나 니즈 분석
+        needs_result = await self.persona_needs_analysis(persona_id, llm)
+
+        # 2. 페르소나 원본 속성을 쿼리에 직접 반영하기 위해 persona_info 조회
+        persona_info = await self.get_persona_info(persona_id)
+
+        # 3. 니즈 분석 결과 → 쿼리 컨텍스트 변환
+        query_context = self.extract_query_context_from_needs(needs_result)
+        logger.info(
+            "needs_query_context_extracted",
+            persona_id=persona_id,
+            core_needs_count=len(needs_result.get("core_needs", [])),
+            skin_needs_count=len(needs_result.get("skin_needs", [])),
+        )
+
+        # 4. 프롬프트 생성
+        prompt = build_needs_multi_query_generate_prompt(user_input=user_input, query_context=needs_result, product_categories=product_categories)
+
+        # 5. LLM 호출
+        try:
+            response = await llm.ainvoke(prompt)
+        except Exception as e:
+            logger.error("llm_multi_query_from_needs_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            return [user_input]
+
+        # 6. 응답 파싱
+        try:
+            result = json.loads(response.content)
+            queries = result.get("queries", [])
+            logger.info(
+                "multi_queries_from_needs_generated",
+                persona_id=persona_id,
+                query_count=len(queries),
+                queries=queries,
+            )
+            return queries
+        except json.JSONDecodeError:
+            logger.error("llm_response_parse_failed", persona_id=persona_id, response_preview=str(response.content)[:200])
+            return [user_input]

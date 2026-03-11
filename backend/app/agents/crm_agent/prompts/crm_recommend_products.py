@@ -1,7 +1,123 @@
 from typing import Dict, Any, List, Optional
 import json
 
-def build_persona_info_analysis_prompt(
+def build_persona_needs_analysis_prompt(
+        persona_info: str,
+        ) -> str:
+    prompt = f"""
+당신은 뷰티 제품 추천 시스템에서 페르소나를 분석하여
+사용자의 구매 니즈를 도출하는 전문가입니다.
+
+주어진 페르소나 정보를 기반으로 사용자의 스킨케어 및 메이크업 관련 니즈를 분석하세요.
+니즈 분석 결과는 제품 검색에 사용할 멀티 쿼리 생성에 사용됩니다.
+
+분석 시 다음 원칙을 따르세요.
+
+1. 페르소나 정보에서 명시적으로 나타난 니즈뿐 아니라
+   라이프스타일, 피부 상태, 취향을 고려하여 잠재 니즈까지 추론합니다.
+
+2. 니즈는 실제 상품 추천에 활용될 수 있도록
+   기능적 니즈, 제품 특성 니즈, 성분 니즈, 감성 니즈로 구분합니다.
+
+3. 각 니즈는 구체적인 제품 특성으로 연결될 수 있어야 합니다.
+
+4. 니즈는 중요도 순으로 정리합니다.
+
+5. 제품 설명에 등장하는 표현들을 사용해주세요.
+
+출력 형식은 반드시 JSON으로 작성하세요.
+
+출력 구조:
+
+{{
+  "core_needs": [],
+  "skin_needs": [],
+  "ingredient_preferences": {{
+    "preferred": [],
+    "avoided": []
+  }},
+  "product_texture_preferences": [],
+  "lifestyle_needs": [],
+  "emotional_needs": [],
+  "fragrance_preferences": {{}},
+  "makeup_color_preferences": [],
+  "purchase_decision_factors": [],
+  "recommended_product_features": []
+}}
+
+각 항목 설명:
+
+core_needs:
+사용자의 가장 중요한 핵심 니즈 (3~5개)
+
+skin_needs:
+피부 상태 기반 기능적 니즈
+
+ingredient_preferences:
+선호 성분과 기피 성분
+
+product_texture_preferences:
+선호 제형 및 사용감
+
+lifestyle_needs:
+사용자의 생활 패턴에서 파생되는 니즈
+
+emotional_needs:
+사용자가 중요하게 생각하는 가치 또는 감성적 니즈
+
+fragrance_preferences:
+선호 향과 향 강도
+
+makeup_color_preferences:
+어울리는 메이크업 컬러
+
+purchase_decision_factors:
+구매 시 중요하게 보는 요소
+
+recommended_product_features:
+상품 검색 및 추천에 사용할 수 있는 제품 특성 키워드
+
+다음 페르소나 정보를 분석하세요.
+
+[페르소나 정보]
+{persona_info}
+"""
+    return prompt
+
+
+def build_analysis_prompt(persona_info: Dict[str, Any]) -> str:
+    """
+    다단계 × 다차원 분석을 위한 프롬프트 구성
+    """
+    populated_fields = _extract_populated_fields(persona_info)
+    persona_info_str = json.dumps(persona_info, ensure_ascii=False, indent=2)
+    prompt = _build_persona_info_analysis_prompt(persona_info_str, populated_fields)
+    return prompt
+
+def _extract_populated_fields(persona_info: Dict[str, Any]) -> Dict[str, bool]:
+    """
+    PersonaInfo dict에서 실제 데이터가 있는 필드와 빈 필드를 분류.
+    LLM 프롬프트에 전달하여 추론 범위를 명시하는 데 사용됨.
+    """
+    list_fields = [
+        "피부타입", "고민 키워드", "메이크업 선호 색상",
+        "선호 성분", "기피 성분", "선호 향", "가치관",
+        "선호 제형(텍스처)", "구매 결정 요인",
+    ]
+    str_fields = [
+        "퍼스널 컬러", "베이스 호수", "스킨케어 루틴",
+        "주 활동 환경", "반려동물", "수면 시간",
+        "스트레스", "디지털 기기 사용", "쇼핑 스타일&예산",
+    ]
+    result: Dict[str, bool] = {}
+    for f in list_fields:
+        result[f] = bool(persona_info.get(f))  # 빈 리스트 [] → False
+    for f in str_fields:
+        val = persona_info.get(f)
+        result[f] = bool(val and str(val).strip())  # None / "" → False
+    return result
+
+def _build_persona_info_analysis_prompt(
           persona_info: str,
           populated_fields: Dict[str, bool]
           ) -> str:
@@ -252,7 +368,13 @@ def build_persona_info_analysis_prompt(
       "allergy_irritation_risks": []
     }}
   }},
-  "inferred_dimensions": []
+  "inferred_dimensions": [],
+  "search_keywords": {{
+    "핵심_키워드": [],
+    "추가_키워드": [],
+    "제외_키워드": [],
+    "추천_쿼리_힌트": []
+  }}
 }}
 
 ---
@@ -266,11 +388,19 @@ def build_persona_info_analysis_prompt(
    - 추론 사용 차원 예시: `"ingredients"`, `"color_makeup"`, `"price_value"` 등
    - 실제 데이터만으로 분석한 차원은 `inferred_dimensions`에 포함하지 마세요.
 5. 분석 결과는 **실제 뷰티 제품 추천 시스템에 활용 가능해야 합니다.**
+6. `search_keywords`는 위 13개 차원 전체를 종합하여 벡터 검색에 최적화된 키워드를 추출하세요.
+   - `핵심_키워드` (3-5개): 모든 차원의 핵심을 관통하는 가장 중요한 벡터 검색 키워드 (예: "건성피부", "세라마이드", "고보습")
+   - `추가_키워드` (2-4개): 쿼리 다양화를 위한 보조 키워드 (예: "저자극", "무향", "빠른흡수")
+   - `제외_키워드`: 기피 성분 분석에서 도출된 제외어 (기피 성분이 없으면 빈 배열)
+   - `추천_쿼리_힌트` (2-3개): 핵심·추가 키워드를 조합한 실제 벡터 검색 쿼리 예시 문자열
+   - **반드시 상품 설명 문서에 실제로 등장할 수 있는 키워드만 사용하세요.**
+     포함 가능: 성분명, 피부타입, 피부고민, 제형, 기능, 퍼스널컬러, 향, 가치관(비건·친환경 등)
+     사용 금지: "베스트셀러", "후기 상위", "임상 검증", "비포애프터" 등 리뷰·마케팅 표현
 """
 
 def build_multi_query_generate_prompt(
           user_input: str,
-          analysis_result: Dict[str, Any],
+          query_context: Dict[str, Any],
           product_categories: Optional[List[str]] = None,
           persona_info: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -279,7 +409,8 @@ def build_multi_query_generate_prompt(
 
     Args:
         user_input: 사용자 요청
-        analysis_result: 페르소나 분석 결과
+        query_context: 페르소나 분석 결과에서 추출한 압축 컨텍스트
+                       (search_keywords 또는 규칙 기반 핵심 필드)
         product_categories: 메시지 생성 대상 상품 종류
         persona_info: 원본 페르소나 정보 (퍼스널컬러, 고민키워드 등을 쿼리에 직접 반영)
 
@@ -290,26 +421,27 @@ def build_multi_query_generate_prompt(
     if product_categories is None:
           product_categories = ""
 
-    # inferred_dimensions 추출: 추론 기반 차원 vs 실제 데이터 기반 차원 구분
-    inferred_dimensions = analysis_result.get("inferred_dimensions", [])
-    all_dimensions = [
-        "skin_science", "ingredients", "lifestyle", "values_emotion",
-        "color_makeup", "price_value", "usability", "safety_risk",
-    ]
-    data_based_dimensions = [d for d in all_dimensions if d not in inferred_dimensions]
-
-    if inferred_dimensions:
-        data_reliability_section = f"""## 데이터 신뢰도 안내
-아래 정보를 참고하여 쿼리 생성 시 실제 데이터를 우선 활용하세요.
-
+    # 데이터 신뢰도 안내: search_keywords 방식이면 간략히, fallback이면 inferred_dimensions 표시
+    search_keywords = query_context.get("search_keywords")
+    if search_keywords:
+        data_reliability_section = "## 데이터 신뢰도 안내\n페르소나 분석 전 차원을 종합한 핵심 키워드가 제공됩니다."
+    else:
+        inferred_dimensions = query_context.get("inferred_dimensions", [])
+        all_dimensions = [
+            "skin_science", "ingredients", "lifestyle", "values_emotion",
+            "color_makeup", "price_value", "usability", "safety_risk",
+        ]
+        data_based_dimensions = [d for d in all_dimensions if d not in inferred_dimensions]
+        if inferred_dimensions:
+            data_reliability_section = f"""## 데이터 신뢰도 안내
 - **실제 페르소나 데이터 기반** (우선 활용): {', '.join(data_based_dimensions)}
 - **LLM 추론 기반** (보조적 활용): {', '.join(inferred_dimensions)}
 
-→ 실제 데이터 차원을 중심으로 쿼리를 구성하고, 추론 차원은 보완적으로만 사용하세요."""
-    else:
-        data_reliability_section = "## 데이터 신뢰도 안내\n모든 분석 차원이 실제 페르소나 데이터를 기반으로 합니다."
+→ 실제 데이터 기반 항목을 중심으로 쿼리를 구성하세요."""
+        else:
+            data_reliability_section = "## 데이터 신뢰도 안내\n모든 분석 항목이 실제 페르소나 데이터를 기반으로 합니다."
 
-    analysis_result_str = json.dumps(analysis_result, ensure_ascii=False, indent=2)
+    query_context_str = json.dumps(query_context, ensure_ascii=False, indent=2)
 
     # 페르소나 원본 데이터에서 핵심 필터 항목 추출
     persona_context_section = ""
@@ -346,17 +478,17 @@ def build_multi_query_generate_prompt(
 
 {persona_context_section}{data_reliability_section}
 
-**페르소나 분석 결과:**
-{analysis_result_str}
+**페르소나 분석 요약 (쿼리 생성용):**
+{query_context_str}
 
 ---
 
 ## 쿼리 생성 가이드
 
-### 페르소나 분석 결과 활용
-위에서 제공된 페르소나 분석 결과는 이미 다단계(5단계) × 다차원(8차원) 분석이 완료된 상태입니다.
-- **multi_level_analysis**: 기본 프로필, 라이프스타일 패턴, 뷰티 니즈, 상황별 니즈, 개선 목표
-- **multi_dimensional_analysis**: 피부 과학, 성분, 라이프스타일, 감성/가치관, 색조, 가격/가성비, 사용 편의성, 안전성/리스크
+### 핵심 키워드 활용
+위에서 제공된 페르소나 분석 요약을 기반으로 쿼리를 생성하세요.
+- `search_keywords`가 있는 경우: `핵심_키워드`를 중심으로 활용하고, `추천_쿼리_힌트`를 참고하여 더 다양한 각도로 변형하세요.
+- 추가 필드(top_priorities, preferred_ingredients 등)가 있는 경우: 해당 내용을 조합하여 쿼리를 구성하세요.
 
 ### 제품 카테고리 최적화
 **중요:** 제품 카테고리가 제공된 경우, 모든 쿼리는 해당 카테고리에 맞춰 생성해야 합니다.
@@ -364,20 +496,14 @@ def build_multi_query_generate_prompt(
 - 예: "메이크업-립스틱" → 립스틱 관련 키워드 중심 (색상, 지속력, 발색 등)
 
 ### 크로스 매칭 전략
-분석 결과의 여러 차원을 조합하여 **3~5개의 서로 다른 관점의 쿼리**를 생성하세요.
+제공된 키워드와 속성을 조합하여 **3~5개의 서로 다른 관점의 쿼리**를 생성하세요.
 
 **쿼리 생성 원칙:**
-1. 각 쿼리는 분석 결과의 2~3개 차원을 조합
+1. 각 쿼리는 2~3개 키워드/속성을 조합
 2. 서로 다른 우선순위/관점 반영
 3. 구체적이고 검색 가능한 키워드 사용
 4. 제품 카테고리가 있다면 필수 반영
-
-**예시 조합 패턴:**
-- 쿼리1: 피부 과학 차원 + 성분 차원 + 가치관 차원
-- 쿼리2: 라이프스타일 차원 + 사용 편의성 차원 + 가격 차원
-- 쿼리3: 색조 차원 + 감성 차원 + 안전성 차원
-- 쿼리4: 뷰티 니즈 + 선호 제형 + 루틴 적합성
-- 쿼리5: 환경 적합성 + 성분 + 브랜드 가치
+5. 일관성 있는 키워드들을 사용하여 포커스 있는 쿼리 생성
 
 **쿼리 예시 (제품 카테고리: "스킨케어-크림"):**
 - "건성 피부 세라마이드 고보습 크림 비건 인증"
@@ -392,18 +518,88 @@ def build_multi_query_generate_prompt(
 
 {{
   "queries": [
-    "쿼리1: 구체적인 검색 키워드 조합",
-    "쿼리2: 다른 관점의 키워드 조합",
-    "쿼리3: 또 다른 관점의 키워드 조합",
-    "쿼리4: 추가 관점 (선택)",
-    "쿼리5: 추가 관점 (선택)"
+    "건성 피부 세라마이드 고보습 크림 저자극",
+    "웜톤 적합 수분크림 히알루론산 무향 파라벤 프리",
+    "민감성 피부 판테놀 진정 크림 친환경 비건"
   ]
 }}
 
 **중요:**
 - 반드시 JSON 형식으로만 응답하세요.
 - queries 배열에 3~5개의 문자열을 포함하세요.
-- 각 쿼리는 실제 제품 검색에 사용될 구체적인 키워드여야 합니다.
+- 각 쿼리는 **키워드만** 담은 순수 문자열이어야 합니다. "쿼리1:", "쿼리2:" 같은 접두사를 절대 포함하지 마세요.
+- 각 쿼리는 성분명·피부타입·제형·기능·가치관 등 **상품 설명 문서에 실제로 등장할 수 있는 키워드**로만 구성하세요.
+- "베스트셀러", "후기 상위", "임상 검증", "비포애프터" 등 리뷰·마케팅 표현은 사용하지 않은 상품 관련 쿼리로 작성하시오.
 """
 
     return prompt 
+
+
+def build_needs_multi_query_generate_prompt(user_input, query_context, product_categories):
+    prompt = f"""당신은 뷰티 전문가입니다. 사용자의 요청과 페르소나 분석 결과를 바탕으로 최적의 제품을 찾기 위한 3~5개의 검색 쿼리를 생성하세요.
+
+**사용자 요청:** {user_input}
+
+**제품 카테고리 (필수 고려):** {product_categories}
+→ 쿼리는 반드시 이 카테고리에 맞춰 생성해야 합니다.
+
+**페르소나 분석 니즈 (쿼리 생성용):**
+{query_context}
+
+---
+
+## 쿼리 생성 가이드
+
+### 핵심 키워드 활용
+위에서 제공된 페르소나 니즈 분석을 기반으로 쿼리를 생성하세요.
+- core_needs를 중심으로 멀티 쿼리를 생성
+- product_texture_preferences, lifestyle_needs, emotional_needs 등은 제품 카테고리를 고려하여 활용(스킨, 앰플 같은 제품은 makeup_color_preferences 사용 하지 않음)
+- 핵심 키워드에는 있지만 제품 카테고리와 관련 없는 내용은 멀티 쿼리 생성에서 제외
+
+### 제품 카테고리 최적화
+**중요:** 제품 카테고리가 제공된 경우, 모든 쿼리는 해당 카테고리에 맞춰 생성해야 합니다.
+- 예: "스킨케어-크림" → 크림 관련 키워드 중심 (보습, 텍스처, 흡수력 등)
+- 예: "메이크업-립스틱" → 립스틱 관련 키워드 중심 (색상, 지속력, 발색 등)
+
+### 크로스 매칭 전략
+제공된 키워드와 속성을 조합하여 **3~5개의 서로 다른 관점의 쿼리**를 생성하세요.
+
+**쿼리 생성 원칙:**
+1. 각 쿼리는 2~3개 키워드/속성을 조합
+2. 서로 다른 우선순위/관점 반영
+3. 구체적이고 검색 가능한 키워드 사용
+4. 제품 카테고리가 있다면 필수 반영
+5. 일관성 있는 키워드들을 사용하여 각각 다른 포인트가 있는 쿼리 생성
+6. 한번 사용한 키워드는 다른 쿼리에서 사용하지 않음
+7. 벡터 임베딩 의도 캡처가 가능하며, 성분+기능+속성 구조의 5~7토큰 쿼리 생성 
+
+**쿼리 예시 (제품 카테고리: "스킨&토너"):**
+- "스킨 토너 히알루론산 멀티분자 워터베이스 오일프리 무향"
+- "스킨 토너 살리실산 0.5-2% 피지조절 논코메도제닉",
+- "스킨 토너 니아신아마이드 2-5% 트러블자국 케어 저자극 무알콜",
+- "스킨 토너 센텔라아시아티카 판테놀 진정 천연유래 무향"
+- "스킨 토너 빠른흡수 워터리 가벼운제형 무끈적 데일리"
+
+각각의 쿼리 포인트는 Q1(수분/보습), Q2(피지조절), Q3(트러블자국), Q4(진정/가치관), Q5(질감/사용편의) — 5개 쿼리가 모두 다른 각도, 중복 키워드 X
+---
+
+## 출력 형식 (JSON)
+
+다음 형식으로 응답하세요:
+
+{{
+  "queries": [
+    "건성 피부 세라마이드 고보습 크림 저자극",
+    "웜톤 적합 수분크림 히알루론산 무향 파라벤 프리",
+    "민감성 피부 판테놀 진정 크림 친환경 비건"
+  ]
+}}
+
+**중요:**
+- 반드시 JSON 형식으로만 응답하세요.
+- queries 배열에 3~5개의 문자열을 포함하세요.
+- 각 쿼리는 **키워드만** 담은 순수 문자열이어야 합니다. "쿼리1:", "쿼리2:" 같은 접두사를 절대 포함하지 마세요.
+- 각 쿼리는 성분명·피부타입·제형·기능·가치관 등 **상품 설명 문서에 실제로 등장할 수 있는 키워드**로만 구성하세요.
+- "베스트셀러", "후기 상위", "임상 검증", "비포애프터", "가성비" 등 리뷰·마케팅 표현 언어은 사용하지 않은 상품 관련 쿼리로 작성하시오.
+"""
+    return prompt

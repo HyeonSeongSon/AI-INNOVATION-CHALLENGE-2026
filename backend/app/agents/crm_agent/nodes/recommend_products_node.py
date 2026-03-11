@@ -159,6 +159,13 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
                 llm=llm,
                 persona_info=persona_info,
             )
+            # 니즈 분석으로 멀티 쿼리
+            # queries = await _recommender.generate_multi_queries_from_needs_analysis(
+            #     user_input=user_input,
+            #     product_categories=product_categories,
+            #     llm=llm,
+            #     persona_id=persona_id,
+            # )
 
         logger.info(
             "queries_generated",
