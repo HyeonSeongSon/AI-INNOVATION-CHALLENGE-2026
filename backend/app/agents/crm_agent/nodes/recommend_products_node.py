@@ -68,6 +68,7 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
         persona_id = parsed_request.get("persona_id")
         brands = parsed_request.get("brands", [])
         product_categories = parsed_request.get("product_categories", [])
+        category_type = parsed_request.get("category_type")
         exclusive_target = parsed_request.get("exclusive_target")
 
         if not persona_id:

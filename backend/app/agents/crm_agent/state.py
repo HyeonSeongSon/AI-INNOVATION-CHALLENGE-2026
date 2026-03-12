@@ -10,6 +10,7 @@ class ParsedRequest(TypedDict, total=False):
     """파싱된 CRM 요청 데이터"""
     persona_id: str                      # 페르소나 ID (예: "PERSONA_001")
     purpose: str                         # 메시지 목적 (예: "신제품 홍보")
+    category_type: Optional[str]         # 상품 카테고리 대분류 (예: "스킨케어", "색조")
     product_categories: List[str]        # 상품 카테고리 (예: ["크림"])
     brands: List[str]                    # 브랜드 리스트 (예: ["설화수"])
     exclusive_target: Optional[str]      # 독점 타겟 (선택)

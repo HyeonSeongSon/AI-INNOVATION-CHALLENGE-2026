@@ -2,6 +2,8 @@ from typing import Dict, Any, List, Optional
 from langchain_core.language_models import BaseChatModel
 from dotenv import load_dotenv
 from ..prompts.crm_recommend_products import build_multi_query_generate_prompt, build_analysis_prompt, build_persona_needs_analysis_prompt, build_needs_multi_query_generate_prompt
+from ..prompts.slot_keywords_generate_prompt import get_prompt_by_category_type
+from .slot_query_builder import validate_and_build
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 import os
@@ -419,7 +421,41 @@ class ProductRecommender:
 
         logger.info("products_merged", merged_count=len(merged))
         return merged
-    
+
+    @staticmethod
+    def extract_query_context_from_needs(needs_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        persona_needs_analysis 결과에서 멀티 쿼리 생성용 컨텍스트 추출.
+
+        core_needs + skin_needs를 핵심 키워드로,
+        recommended_product_features를 추가 키워드로 매핑하여
+        build_multi_query_generate_prompt의 search_keywords 경로를 활용합니다.
+
+        Args:
+            needs_result: persona_needs_analysis의 반환값
+
+        Returns:
+            build_multi_query_generate_prompt에 전달할 query_context
+        """
+        core_needs = needs_result.get("core_needs", [])
+        skin_needs = needs_result.get("skin_needs", [])
+        ingredient_prefs = needs_result.get("ingredient_preferences", {})
+        recommended_features = needs_result.get("recommended_product_features", [])
+
+        return {
+            "search_keywords": {
+                "핵심_키워드": (core_needs + skin_needs)[:5],
+                "추가_키워드": recommended_features[:4],
+                "제외_키워드": ingredient_prefs.get("avoided", []),
+                "추천_쿼리_힌트": [],
+            },
+            "product_texture_preferences": needs_result.get("product_texture_preferences", []),
+            "lifestyle_needs": needs_result.get("lifestyle_needs", []),
+            "emotional_needs": needs_result.get("emotional_needs", []),
+            "makeup_color_preferences": needs_result.get("makeup_color_preferences", []),
+            "purchase_decision_factors": needs_result.get("purchase_decision_factors", []),
+        }
+
     @traced(name="persona_needs_analysis", run_type="chain")
     async def persona_needs_analysis(self, persona_id: str, llm: BaseChatModel) -> Dict[str, Any]:
         """
@@ -487,40 +523,6 @@ class ProductRecommender:
                 "recommended_product_features": [],
             }
 
-    @staticmethod
-    def extract_query_context_from_needs(needs_result: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        persona_needs_analysis 결과에서 멀티 쿼리 생성용 컨텍스트 추출.
-
-        core_needs + skin_needs를 핵심 키워드로,
-        recommended_product_features를 추가 키워드로 매핑하여
-        build_multi_query_generate_prompt의 search_keywords 경로를 활용합니다.
-
-        Args:
-            needs_result: persona_needs_analysis의 반환값
-
-        Returns:
-            build_multi_query_generate_prompt에 전달할 query_context
-        """
-        core_needs = needs_result.get("core_needs", [])
-        skin_needs = needs_result.get("skin_needs", [])
-        ingredient_prefs = needs_result.get("ingredient_preferences", {})
-        recommended_features = needs_result.get("recommended_product_features", [])
-
-        return {
-            "search_keywords": {
-                "핵심_키워드": (core_needs + skin_needs)[:5],
-                "추가_키워드": recommended_features[:4],
-                "제외_키워드": ingredient_prefs.get("avoided", []),
-                "추천_쿼리_힌트": [],
-            },
-            "product_texture_preferences": needs_result.get("product_texture_preferences", []),
-            "lifestyle_needs": needs_result.get("lifestyle_needs", []),
-            "emotional_needs": needs_result.get("emotional_needs", []),
-            "makeup_color_preferences": needs_result.get("makeup_color_preferences", []),
-            "purchase_decision_factors": needs_result.get("purchase_decision_factors", []),
-        }
-
     @traced(name="generate_multi_queries_from_needs_analysis", run_type="chain")
     async def generate_multi_queries_from_needs_analysis(
         self,
@@ -550,26 +552,17 @@ class ProductRecommender:
         # 2. 페르소나 원본 속성을 쿼리에 직접 반영하기 위해 persona_info 조회
         persona_info = await self.get_persona_info(persona_id)
 
-        # 3. 니즈 분석 결과 → 쿼리 컨텍스트 변환
-        query_context = self.extract_query_context_from_needs(needs_result)
-        logger.info(
-            "needs_query_context_extracted",
-            persona_id=persona_id,
-            core_needs_count=len(needs_result.get("core_needs", [])),
-            skin_needs_count=len(needs_result.get("skin_needs", [])),
-        )
-
-        # 4. 프롬프트 생성
+        # 3. 프롬프트 생성
         prompt = build_needs_multi_query_generate_prompt(user_input=user_input, query_context=needs_result, product_categories=product_categories)
 
-        # 5. LLM 호출
+        # 4. LLM 호출
         try:
             response = await llm.ainvoke(prompt)
         except Exception as e:
             logger.error("llm_multi_query_from_needs_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return [user_input]
 
-        # 6. 응답 파싱
+        # 5. 응답 파싱
         try:
             result = json.loads(response.content)
             queries = result.get("queries", [])
@@ -583,3 +576,45 @@ class ProductRecommender:
         except json.JSONDecodeError:
             logger.error("llm_response_parse_failed", persona_id=persona_id, response_preview=str(response.content)[:200])
             return [user_input]
+
+    @traced(name="generate_multi_queries", run_type="chain")
+    async def generate_slot_based_multi_query(
+        self,
+        analysis_result: Dict[str, Any],
+        category_type: str,
+        product_categories: Optional[List[str]] = None,
+        llm: Optional[BaseChatModel] = None
+    ) -> List[str]:
+        """
+        슬롯 키워드 생성
+        """
+        # # 분석 결과 압축 (전체 JSON → 핵심 컨텍스트)
+        # query_context = self.extract_query_context(analysis_result)
+        # logger.info("query_context_to_llm2", has_search_keywords=("search_keywords" in analysis_result), query_context=query_context)
+
+        # 프롬프트 생성
+        prompt = get_prompt_by_category_type(category_type, analysis_result, product_categories)
+
+        # LLM 호출하여 슬롯 키워드 추출
+        try:
+            response = await llm.ainvoke(prompt)
+        except Exception as e:
+            logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
+            return []
+
+        # 응답 파싱 → validate_and_build로 쿼리 조립
+        try:
+            extracted = json.loads(response.content)
+            queries = validate_and_build(extracted)
+            logger.info(
+                "slot_queries_generated",
+                query_count=len(queries),
+                queries=queries,
+            )
+            return queries
+        except json.JSONDecodeError:
+            logger.error(
+                "slot_query_parse_failed",
+                response_preview=str(response.content)[:200],
+            )
+            return []

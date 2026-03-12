@@ -405,7 +405,6 @@ const handleRecommend = async () => {
         purpose: config.purpose,
         product_categories: [config.category],
         brand: config.brand,
-        persona_detail: targetPersona
     });
 
     const sessionId = `sess_${crypto.randomUUID()}`;
