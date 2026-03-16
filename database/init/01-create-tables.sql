@@ -48,16 +48,32 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 CREATE INDEX idx_analysis_results_persona_id ON analysis_results(persona_id);
 
 -- ============================================================
--- 3. 검색 쿼리 테이블 (search_queries)
+-- 3. 상품 검색 쿼리 테이블 (search_queries)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS search_queries (
-    query_id SERIAL PRIMARY KEY,
-    analysis_id INTEGER REFERENCES analysis_results(analysis_id) ON DELETE CASCADE,
-    search_query TEXT,
-    query_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TYPE IF NOT EXISTS query_type_enum AS ENUM (
+    'need',
+    'preference',
+    'retrieval',
+    'persona'
 );
 
-CREATE INDEX idx_search_queries_analysis_id ON search_queries(analysis_id);
+CREATE TABLE IF NOT EXISTS search_queries (
+    search_query_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    persona_id VARCHAR(50) NOT NULL,
+    query_type query_type_enum NOT NULL,
+    query_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_search_queries_persona
+        FOREIGN KEY (persona_id)
+        REFERENCES personas(persona_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT unique_persona_query_type
+        UNIQUE (persona_id, query_type)
+);
+
+CREATE INDEX idx_search_queries_persona_type ON search_queries (persona_id, query_type);
 
 -- ============================================================
 -- 4. 상품 테이블 (products)

@@ -1,0 +1,245 @@
+import json
+import logging
+from opensearch_hybrid import OpenSearchHybridClient
+from path_utils import get_absolute_path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# 스킨케어와 공통 structured 필드
+STRUCTURED_TEXT_FIELDS = [
+    'summary', 'concern', 'ingredient', 'texture', 'value',
+    'target_user', 'function', 'function_desc', 'attribute', 'attribute_desc',
+    'combined', 'key_benefits', 'proof_points', 'usage_context',
+    'product_story', 'highlight_keywords',
+]
+STRUCTURED_KEYWORD_FIELDS = [
+    'suitable_for', 'body_area',
+    # 색조 전용
+    'application_texture', 'brow_type', 'cheek_finish', 'cheek_product_type',
+    'color_family', 'coverage', 'durability', 'finish_variety', 'kit_extras',
+    'liner_type', 'lip_care_function', 'lip_finish', 'mascara_effect',
+    'moisture_level', 'palette_categories', 'pigmentation', 'portability',
+    'powder_type', 'primer_function', 'product_form', 'shade_info',
+    'shadow_finish', 'transfer_resistance', 'undertone', 'wear_time',
+]
+STRUCTURED_INT_FIELDS = [
+    'total_shade_count',
+]
+# dict/list-of-dict 구조 — 문자열로 변환해서 저장
+STRUCTURED_OBJECT_FIELDS = [
+    'included_items', 'lash_info', 'sun_protection',
+]
+
+
+def get_color_tone_new_field_mappings():
+    """스킨케어 인덱스에 없는 색조 전용 필드 매핑"""
+    keyword_fields = [
+        'application_texture', 'brow_type', 'cheek_finish', 'cheek_product_type',
+        'color_family', 'coverage', 'durability', 'finish_variety', 'kit_extras',
+        'liner_type', 'lip_care_function', 'lip_finish', 'mascara_effect',
+        'moisture_level', 'palette_categories', 'pigmentation', 'portability',
+        'powder_type', 'primer_function', 'product_form', 'shade_info',
+        'shadow_finish', 'transfer_resistance', 'undertone', 'wear_time',
+    ]
+    properties = {field: {"type": "keyword"} for field in keyword_fields}
+    properties["total_shade_count"] = {"type": "integer"}
+    properties["included_items"] = {"type": "text"}
+    properties["lash_info"] = {"type": "text"}
+    properties["sun_protection"] = {"type": "text"}
+    return properties
+
+
+def update_index_mapping(client, index_name: str):
+    """기존 인덱스에 색조 전용 필드 매핑 추가"""
+    new_properties = get_color_tone_new_field_mappings()
+    try:
+        client.client.indices.put_mapping(
+            index=index_name,
+            body={"properties": new_properties}
+        )
+        logging.info(f"'{index_name}' 인덱스 매핑 업데이트 완료 ({len(new_properties)}개 필드)")
+        return True
+    except Exception as e:
+        logging.error(f"매핑 업데이트 실패: {e}")
+        return False
+
+
+def load_and_prepare_documents(jsonl_file_path):
+    """
+    color_tone JSONL에서 문서를 로드하고 색인할 필드만 추출합니다.
+    structured 필드를 최상위로 펼쳐서 저장합니다.
+    """
+    documents = []
+
+    base_fields = [
+        'product_id', '카테고리', '태그', '브랜드', '상품명', '피부타입',
+        '고민키워드', '선호포인트색상', '선호성분', '기피성분',
+        '선호향', '가치관', '전용제품', '퍼스널컬러', '피부호수',
+    ]
+
+    try:
+        with open(jsonl_file_path, 'r', encoding='utf-8') as file:
+            for line_num, line in enumerate(file, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    filtered_doc = {}
+
+                    for field in base_fields:
+                        if field in data:
+                            filtered_doc[field] = data[field]
+
+                    # 페르소나태그에서 필드 추출
+                    persona = data.get('페르소나태그', {})
+                    for field in ['피부타입', '고민키워드', '선호포인트색상', '선호성분',
+                                  '기피성분', '선호향', '가치관', '전용제품']:
+                        if field not in filtered_doc and field in persona:
+                            filtered_doc[field] = persona[field]
+
+                    structured = data.get('structured', {})
+
+                    for field in STRUCTURED_TEXT_FIELDS:
+                        val = structured.get(field)
+                        if val is not None:
+                            filtered_doc[field] = val if val != [] else None
+
+                    for field in STRUCTURED_KEYWORD_FIELDS:
+                        val = structured.get(field)
+                        if val is not None:
+                            filtered_doc[field] = val
+
+                    for field in STRUCTURED_INT_FIELDS:
+                        val = structured.get(field)
+                        if val is not None:
+                            filtered_doc[field] = val
+
+                    # object 필드는 JSON 문자열로 변환
+                    for field in STRUCTURED_OBJECT_FIELDS:
+                        val = structured.get(field)
+                        if val is not None:
+                            filtered_doc[field] = json.dumps(val, ensure_ascii=False)
+
+                    if 'product_id' not in filtered_doc:
+                        logging.warning(f"라인 {line_num}: product_id가 없어 건너뜁니다.")
+                        continue
+
+                    documents.append(filtered_doc)
+
+                except json.JSONDecodeError as e:
+                    logging.error(f"라인 {line_num} JSON 파싱 오류: {e}")
+                    continue
+
+        logging.info(f"'{jsonl_file_path}'에서 {len(documents)}개 문서를 로드했습니다.")
+        return documents
+
+    except FileNotFoundError:
+        logging.error(f"파일을 찾을 수 없습니다: {jsonl_file_path}")
+        return []
+    except Exception as e:
+        logging.error(f"파일 로드 중 오류 발생: {e}")
+        return []
+
+
+def index_color_tone_to_opensearch(
+    jsonl_file_path,
+    index_name="product_index_v2",
+    recreate_index=False
+):
+    client = OpenSearchHybridClient()
+
+    if not client.client:
+        logging.error("OpenSearch 클라이언트 초기화 실패")
+        return False
+
+    if recreate_index:
+        logging.info(f"기존 '{index_name}' 인덱스 삭제 중...")
+        client.delete_index(index_name)
+
+    # 인덱스가 없으면 생성, 있으면 매핑만 업데이트
+    index_exists = client.client.indices.exists(index=index_name)
+    if not index_exists:
+        logging.error(f"'{index_name}' 인덱스가 존재하지 않습니다. 먼저 스킨케어 색인을 실행하세요.")
+        return False
+
+    logging.info(f"'{index_name}' 인덱스에 색조 전용 필드 매핑 추가 중...")
+    if not update_index_mapping(client, index_name):
+        return False
+
+    logging.info("JSONL 파일에서 문서 로드 중...")
+    documents = load_and_prepare_documents(jsonl_file_path)
+
+    if not documents:
+        logging.error("로드할 문서가 없습니다.")
+        return False
+
+    logging.info(f"{len(documents)}개 문서에 대해 임베딩 생성 및 색인 시작...")
+
+    EMBED_FIELDS = [
+        ('function_desc',  'function_desc_vector'),
+        ('attribute_desc', 'attribute_desc_vector'),
+        ('combined',       'combined_vector'),
+        ('target_user',    'target_user_vector'),
+    ]
+
+    if hasattr(client, 'model') and client.model:
+        for src_field, vec_field in EMBED_FIELDS:
+            texts = []
+            for doc in documents:
+                val = doc.get(src_field) or ''
+                texts.append(' '.join(val) if isinstance(val, list) else val)
+
+            logging.info(f"'{src_field}' 배치 임베딩 중... ({len(texts)}건)")
+            vectors = client.model.encode(texts, batch_size=64, show_progress_bar=False)
+
+            for doc, vec, text in zip(documents, vectors, texts):
+                if text:
+                    doc[vec_field] = vec.tolist()
+
+    logging.info("Bulk 색인 시작...")
+    success = client.bulk_index_documents(
+        index_name=index_name,
+        documents=documents,
+        refresh=True
+    )
+
+    if success:
+        logging.info(f"색인 완료! {len(documents)}개 문서가 '{index_name}' 인덱스에 추가되었습니다.")
+        try:
+            count_response = client.client.count(index=index_name)
+            logging.info(f"인덱스 통계 - 총 문서 수: {count_response['count']}")
+        except Exception as e:
+            logging.warning(f"인덱스 통계 조회 실패: {e}")
+        return True
+    else:
+        logging.error("색인 실패")
+        return False
+
+
+if __name__ == "__main__":
+    JSONL_FILE = get_absolute_path("data", "product_data_structured_color_tone.jsonl")
+    INDEX_NAME = "product_index_v2"
+    RECREATE_INDEX = False  # 기존 인덱스에 추가
+
+    print("=" * 60)
+    print("색조 상품 데이터 OpenSearch 색인 시작")
+    print("=" * 60)
+    print(f"JSONL 파일: {JSONL_FILE}")
+    print(f"인덱스 이름: {INDEX_NAME}")
+    print(f"인덱스 재생성: {RECREATE_INDEX}")
+    print("=" * 60)
+
+    success = index_color_tone_to_opensearch(
+        jsonl_file_path=JSONL_FILE,
+        index_name=INDEX_NAME,
+        recreate_index=RECREATE_INDEX
+    )
+
+    if success:
+        print("\n모든 작업이 성공적으로 완료되었습니다!")
+    else:
+        print("\n작업 중 오류가 발생했습니다.")

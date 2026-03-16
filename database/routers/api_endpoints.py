@@ -229,6 +229,33 @@ class ProductDetailResponse(BaseModel):
     product_created_at: Optional[datetime] = None
 
 
+class ProductSearchQueryCreate(BaseModel):
+    """페르소나 검색 쿼리 저장 요청"""
+    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
+    need: str = Field(..., description="니즈 쿼리", examples=["탈모 케어 샴푸"])
+    preference: str = Field(..., description="선호도 쿼리", examples=["자연 성분 샴푸"])
+    retrieval: str = Field(..., description="검색 쿼리", examples=["탈모 두피 케어 샴푸 추천"])
+    persona: str = Field(..., description="페르소나 쿼리", examples=["민감 두피 남성"])
+
+
+class ProductSearchQueryGetRequest(BaseModel):
+    """페르소나 검색 쿼리 조회 요청"""
+    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
+
+
+class QueryItem(BaseModel):
+    query_id: int
+    text: str
+
+
+class ProductSearchQueryResponse(BaseModel):
+    """페르소나 검색 쿼리 응답"""
+    need: QueryItem
+    preference: QueryItem
+    retrieval: QueryItem
+    persona: QueryItem
+
+
 class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
 
@@ -486,6 +513,69 @@ async def get_search_queries(request: SearchQueryGetRequest, db: Session = Depen
         )
         for query in queries
     ]
+
+
+@router.post("/product-search-queries", response_model=ProductSearchQueryResponse, summary="삼품 검색 쿼리 저장")
+async def generate_product_search_queries(request: ProductSearchQueryCreate, db: Session = Depends(get_db)):
+    from core.models import Persona
+
+    persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    upsert_sql = sa_text("""
+        INSERT INTO search_queries (persona_id, query_type, query_text)
+        VALUES (:persona_id, CAST(:query_type AS query_type_enum), :query_text)
+        ON CONFLICT (persona_id, query_type)
+        DO UPDATE SET query_text = EXCLUDED.query_text
+        RETURNING search_query_id, query_type, query_text
+    """)
+
+    query_map = {
+        "need": request.need,
+        "preference": request.preference,
+        "retrieval": request.retrieval,
+        "persona": request.persona,
+    }
+    saved = {}
+    for query_type, query_text in query_map.items():
+        row = db.execute(upsert_sql, {"persona_id": request.persona_id, "query_type": query_type, "query_text": query_text}).fetchone()
+        saved[row[1]] = {"query_id": row[0], "text": row[2]}
+    db.commit()
+
+    return ProductSearchQueryResponse(
+        need=QueryItem(**saved["need"]),
+        preference=QueryItem(**saved["preference"]),
+        retrieval=QueryItem(**saved["retrieval"]),
+        persona=QueryItem(**saved["persona"]),
+    )
+
+
+@router.post("/product-search-queries/get", response_model=ProductSearchQueryResponse, summary="상품 검색 쿼리 조회")
+async def get_product_search_queries(request: ProductSearchQueryGetRequest, db: Session = Depends(get_db)):
+    from core.models import Persona
+
+    persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
+    if not persona:
+        raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    result = db.execute(
+        sa_text("SELECT search_query_id, query_type, query_text FROM search_queries WHERE persona_id = :persona_id"),
+        {"persona_id": request.persona_id}
+    )
+    rows = {row[1]: {"query_id": row[0], "text": row[2]} for row in result.fetchall()}
+
+    required = {"need", "preference", "retrieval", "persona"}
+    missing = required - rows.keys()
+    if missing:
+        raise HTTPException(status_code=404, detail=f"검색 쿼리가 없습니다: {', '.join(sorted(missing))}")
+
+    return ProductSearchQueryResponse(
+        need=QueryItem(**rows["need"]),
+        preference=QueryItem(**rows["preference"]),
+        retrieval=QueryItem(**rows["retrieval"]),
+        persona=QueryItem(**rows["persona"]),
+    )
 
 
 @router.post("/products", response_model=ProductResponse, summary="상품 생성")

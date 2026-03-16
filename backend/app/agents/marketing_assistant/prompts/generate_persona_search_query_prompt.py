@@ -2,7 +2,7 @@ import json
 from typing import Dict, Union
 
 
-def build_generate_persona_search_query_prompt(persona_info: Union[dict, str]) -> Dict:
+def build_generate_product_search_query_from_persona_prompt(persona_info: Union[dict, str]) -> Dict:
     if isinstance(persona_info, dict):
         persona_str = json.dumps(persona_info, ensure_ascii=False, indent=2)
     else:
@@ -83,10 +83,10 @@ def build_generate_persona_search_query_prompt(persona_info: Union[dict, str]) -
 
 출력 형식 (JSON만 출력, 설명 없음)
 {{
-  "user_need_query": "",
-  "user_preference_query": "",
-  "retrieval_query": "",
-  "persona_query": ""
+  "need": "",
+  "preference": "",
+  "retrieval": "",
+  "persona": ""
 }}
 
 Persona:
