@@ -1,0 +1,153 @@
+from generate_product_document_prompts import build_generate_base_product_document_prompt
+from typing import List
+
+def _build_inner_beauty_extra_prompt():
+    inner_beauty_extra = """
+------------------------------------------------
+[기능성 이너뷰티 추가 필드]
+------------------------------------------------
+
+19. inner_product_type
+    - 제품 세부 타입
+    - "앰플" | "젤리" | "분말" | "캡슐" | "정" | "음료"
+    - 섭취 가능한 영양제·식품이 아닌 경우(운동기구, 의류, 도구 등) null
+
+20. daily_intake
+    - 1일 섭취 방법 및 용량 (명시된 경우만)
+    - 예: "1일 1포", "1일 2캡슐 물과 함께"
+    - 언급 없으면 null
+
+21. key_nutrients
+    - 핵심 영양 성분
+    - 예: ["콜라겐", "히알루론산", "비타민C", "CoQ10", "글루타치온"]
+    - 섭취 가능한 영양제·식품이 아닌 경우 빈 리스트
+
+22. function_claim
+    - 기능성 효능 (명시된 경우만)
+    - 반드시 아래 선택지 중에서만 고르세요 (복수 선택 가능):
+      "피부 탄력" | "보습" | "미백/브라이트닝" | "항산화" | "피로 회복" |
+      "면역력 강화" | "장 건강" | "혈행 개선" | "눈 건강" | "관절 건강" |
+      "수면 개선" | "모발·손톱 강화" | "체지방 감소" | "혈당 조절"
+    - 문서 근거 없이 추측하여 작성하지 마세요
+    - 언급 없으면 빈 리스트
+
+23. slimming_function
+    - 슬리밍 전용: 다이어트 기능 (명시된 경우만)
+    - 반드시 아래 선택지 중에서만 고르세요 (복수 선택 가능):
+      "체지방 감소" | "식욕 억제" | "대사 촉진" | "부종 완화" |
+      "혈당 상승 억제" | "지방 흡수 저감" | "탄수화물 컷"
+    - 섭취 가능한 슬리밍 보조제가 아닌 경우(운동기구, 의류 등) null
+    - 슬리밍 보조제가 아닌 이너뷰티 상품도 null
+
+24. certification
+    - 인증 여부 (명시된 경우만)
+    - 예: ["건강기능식품 인증", "GMP 인증", "비건 인증"]
+    - 언급 없으면 빈 리스트
+
+25. allergen_free
+    - 무함유 알레르기/성분 기준 (명시된 경우만)
+    - 예: ["글루텐프리", "무설탕", "무방부제", "유당프리"]
+    - 언급 없으면 빈 리스트
+
+26. taste
+    - 맛/향 특성 (명시된 경우만)
+    - 예: ["달콤한", "무맛", "과일향"]
+    - 언급 없으면 빈 리스트
+
+------------------------------------------------
+[출력 형식 추가]
+------------------------------------------------
+"inner_product_type": null,
+"daily_intake": null,
+"key_nutrients": [],
+"function_claim": [],
+"slimming_function": null,
+"certification": [],
+"allergen_free": [],
+"taste": []
+"""
+    return inner_beauty_extra
+
+def _build_tea_extra_prompt():
+    tea_extra = """
+------------------------------------------------
+[음료/차 추가 필드]
+------------------------------------------------
+
+19. tea_product_type
+    - 제품 세부 타입
+    - "티백" | "루즈 티" | "분말" | "농축액" | "RTD 음료"
+    - 음용 가능한 차·음료가 아닌 경우(티팟, 찻잔, 다기 등 도구) null
+
+20. tea_blend
+    - 블렌딩 재료 (명시된 경우만)
+    - 예: ["캐모마일", "히비스커스", "로즈힙", "레몬밸런", "페퍼민트"]
+    - 차 도구인 경우 빈 리스트
+    - 언급 없으면 빈 리스트
+
+21. function_claim
+    - 기능성 효능 (명시된 경우만)
+    - 반드시 아래 선택지 중에서만 고르세요 (복수 선택 가능):
+      "피부 보습" | "항산화" | "릴랙싱" | "숙면" | "소화 촉진" |
+      "디톡스" | "면역력" | "피로 회복" | "혈행 개선" | "다이어트"
+    - 문서 근거 없이 추측하여 작성하지 마세요
+    - 언급 없으면 빈 리스트
+
+22. key_nutrients
+    - 핵심 영양 성분 (명시된 경우만)
+    - 예: ["콜라겐", "비타민C", "폴리페놀"]
+    - 언급 없으면 빈 리스트
+
+23. caffeine
+    - 카페인 여부 (명시된 경우만)
+    - "카페인 함유" | "저카페인" | "카페인프리"
+    - 문서에 명시가 없더라도 tea_blend 성분을 근거로 추론하세요:
+      · 녹차, 말차, 홍차, 우롱차, 보이차, 후발효차 포함 → "카페인 함유"
+      · 루이보스, 히비스커스, 캐모마일, 페퍼민트, 로즈힙, 레몬그라스, 생강, 유자, 배 등 허브/과일만 → "카페인프리"
+      · 디카페인 표기 → "카페인프리"
+      · 카페인 함유 성분과 허브 혼합(예: 녹차+캐모마일) → "카페인 함유"
+    - 추론 근거가 전혀 없으면 null
+
+24. taste
+    - 맛/향 특성 (명시된 경우만)
+    - 예: ["달콤한", "상큼한", "쌉쌀한", "플로럴", "허브향"]
+    - 언급 없으면 빈 리스트
+
+25. brewing_method
+    - 우리는 방법 (명시된 경우만)
+    - 예: "뜨거운 물 200ml에 3~5분 우리기"
+    - 언급 없으면 null
+
+26. included_items
+    - 차세트 전용: 세트 구성 품목
+    - 예: ["캐모마일 티 10입", "페퍼민트 티 10입", "로즈힙 티 10입"]
+    - 단품은 null
+
+27. allergen_free
+    - 무함유 성분 기준 (명시된 경우만)
+    - 예: ["글루텐프리", "무설탕", "무방부제"]
+    - 언급 없으면 빈 리스트
+
+------------------------------------------------
+[출력 형식 추가]
+------------------------------------------------
+"tea_product_type": null,
+"tea_blend": [],
+"function_claim": [],
+"key_nutrients": [],
+"caffeine": null,
+"taste": [],
+"brewing_method": null,
+"included_items": null,
+"allergen_free": []
+"""
+    return tea_extra
+
+def build_inner_beauty_category_product_prompt(extra_category: str, product_document: str, category_list: List[str]) -> str:
+    extra_prompts = {
+        "inner_beauty": _build_inner_beauty_extra_prompt,
+        "tea": _build_tea_extra_prompt
+    }
+    extra_prompt = extra_prompts[extra_category]()
+    base_prompt = build_generate_base_product_document_prompt(product_document, category_list)
+    return base_prompt + extra_prompt

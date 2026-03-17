@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from genereate_prompt_document_color_prompts import build_color_tone_prompts
+from get_data_history.product_document.document_color_prompts import build_color_tone_prompts
 from backend.app.core.llm_factory import get_llm
 from backend.app.config.settings import Settings
 from langchain_core.messages import HumanMessage
