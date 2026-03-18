@@ -17,34 +17,31 @@ STRUCTURED_TEXT_FIELDS = [
 ]
 STRUCTURED_KEYWORD_FIELDS = [
     'suitable_for', 'body_area',
-    # 네일 전용
-    'tool_type', 'compatible_with', 'grit_level', 'material',
+    # 이너뷰티 전용
+    'inner_product_type', 'daily_intake', 'key_nutrients', 'function_claim',
+    'slimming_function', 'certification', 'allergen_free', 'taste',
+    'tea_product_type', 'tea_blend', 'brewing_method', 'caffeine',
 ]
-# 네일 전용 boolean 필드 (null 가능)
-STRUCTURED_BOOL_FIELDS = [
-    'professional_grade',
-    
-]
-# 네일 전용 object 필드 — 값이 있으면 JSON 문자열로 변환
+# dict/list-of-dict 구조 — 문자열로 변환해서 저장
 STRUCTURED_OBJECT_FIELDS = [
     'included_items',
 ]
 
 
-def get_nail_new_field_mappings():
-    """기존 인덱스에 없는 네일 전용 필드 매핑"""
+def get_inner_beauty_new_field_mappings():
+    """기존 인덱스에 없는 이너뷰티 전용 필드 매핑"""
     keyword_fields = [
-        'tool_type', 'compatible_with', 'grit_level', 'material',
+        'inner_product_type', 'daily_intake', 'key_nutrients', 'function_claim',
+        'slimming_function', 'certification', 'allergen_free', 'taste',
+        'tea_product_type', 'tea_blend', 'brewing_method', 'caffeine',
     ]
     properties = {field: {"type": "keyword"} for field in keyword_fields}
-    properties["professional_grade"] = {"type": "boolean"}
-    properties["included_items"] = {"type": "text"}
     return properties
 
 
 def update_index_mapping(client, index_name: str):
-    """기존 인덱스에 네일 전용 필드 매핑 추가"""
-    new_properties = get_nail_new_field_mappings()
+    """기존 인덱스에 이너뷰티 전용 필드 매핑 추가"""
+    new_properties = get_inner_beauty_new_field_mappings()
     try:
         client.client.indices.put_mapping(
             index=index_name,
@@ -59,13 +56,15 @@ def update_index_mapping(client, index_name: str):
 
 def load_and_prepare_documents(jsonl_file_path):
     """
-    nail JSONL에서 문서를 로드하고 색인할 필드만 추출합니다.
+    inner_beauty JSONL에서 문서를 로드하고 색인할 필드만 추출합니다.
     structured 필드를 최상위로 펼쳐서 저장합니다.
     """
     documents = []
 
     base_fields = [
-        'product_id', '태그', '브랜드', '상품명',
+        'product_id', '카테고리', '태그', '브랜드', '상품명', '피부타입',
+        '고민키워드', '선호포인트색상', '선호성분', '기피성분',
+        '선호향', '가치관', '전용제품', '퍼스널컬러', '피부호수',
     ]
 
     try:
@@ -86,15 +85,10 @@ def load_and_prepare_documents(jsonl_file_path):
                     persona = data.get('페르소나태그', {})
                     for field in ['피부타입', '고민키워드', '선호포인트색상', '선호성분',
                                   '기피성분', '선호향', '가치관', '전용제품']:
-                        if field in persona:
+                        if field not in filtered_doc and field in persona:
                             filtered_doc[field] = persona[field]
 
                     structured = data.get('structured', {})
-
-                    # 카테고리 (structured 내부)
-                    category = structured.get('category')
-                    if category:
-                        filtered_doc['카테고리'] = category
 
                     for field in STRUCTURED_TEXT_FIELDS:
                         val = structured.get(field)
@@ -102,11 +96,6 @@ def load_and_prepare_documents(jsonl_file_path):
                             filtered_doc[field] = val if val != [] else None
 
                     for field in STRUCTURED_KEYWORD_FIELDS:
-                        val = structured.get(field)
-                        if val is not None:
-                            filtered_doc[field] = val
-
-                    for field in STRUCTURED_BOOL_FIELDS:
                         val = structured.get(field)
                         if val is not None:
                             filtered_doc[field] = val
@@ -138,7 +127,7 @@ def load_and_prepare_documents(jsonl_file_path):
         return []
 
 
-def index_nail_to_opensearch(
+def index_inner_beauty_to_opensearch(
     jsonl_file_path,
     index_name="product_index_v2",
     recreate_index=False
@@ -153,13 +142,13 @@ def index_nail_to_opensearch(
         logging.info(f"기존 '{index_name}' 인덱스 삭제 중...")
         client.delete_index(index_name)
 
-    # 인덱스가 없으면 에러
+    # 인덱스가 없으면 에러, 있으면 매핑만 업데이트
     index_exists = client.client.indices.exists(index=index_name)
     if not index_exists:
         logging.error(f"'{index_name}' 인덱스가 존재하지 않습니다. 먼저 스킨케어 색인을 실행하세요.")
         return False
 
-    logging.info(f"'{index_name}' 인덱스에 네일 전용 필드 매핑 추가 중...")
+    logging.info(f"'{index_name}' 인덱스에 이너뷰티 전용 필드 매핑 추가 중...")
     if not update_index_mapping(client, index_name):
         return False
 
@@ -214,19 +203,19 @@ def index_nail_to_opensearch(
 
 
 if __name__ == "__main__":
-    JSONL_FILE = get_absolute_path("data", "product_data_structured_nail.jsonl")
+    JSONL_FILE = get_absolute_path("data", "product_data_structured_inner_beauty.jsonl")
     INDEX_NAME = "product_index_v2"
     RECREATE_INDEX = False  # 기존 인덱스에 추가
 
     print("=" * 60)
-    print("네일 상품 데이터 OpenSearch 색인 시작")
+    print("이너뷰티 상품 데이터 OpenSearch 색인 시작")
     print("=" * 60)
     print(f"JSONL 파일: {JSONL_FILE}")
     print(f"인덱스 이름: {INDEX_NAME}")
     print(f"인덱스 재생성: {RECREATE_INDEX}")
     print("=" * 60)
 
-    success = index_nail_to_opensearch(
+    success = index_inner_beauty_to_opensearch(
         jsonl_file_path=JSONL_FILE,
         index_name=INDEX_NAME,
         recreate_index=RECREATE_INDEX
