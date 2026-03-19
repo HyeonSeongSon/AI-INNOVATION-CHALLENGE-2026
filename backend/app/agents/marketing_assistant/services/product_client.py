@@ -3,6 +3,7 @@ from ....core.langsmith_config import traced
 from ....core.logging import get_logger
 from ....config.settings import settings
 import httpx
+import asyncio
 
 logger = get_logger("recommend_products")
 
@@ -51,3 +52,201 @@ class ProductClient:
         except Exception as e:
             logger.error("products_filter_failed", error=str(e), exc_info=True)
             raise
+        
+    @traced(name="search_combined_vector", run_type="retriever")
+    async def search_by_combined_vector(
+        self,
+        retrieval_query: str,
+        product_ids: List[str],
+        top_k: int = 10
+    ):
+        """
+        combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색
+
+        Args:
+            retrieval_query: 검색 쿼리 텍스트
+            product_ids: 검색 범위를 제한할 상품 ID 리스트
+            top_k: 반환할 최대 결과 수
+        """
+        if not product_ids:
+            logger.warning("search_by_combined_vector.no_product_ids")
+            return []
+
+        try:
+            response = await self.http_client.post(
+                f"{self.vector_db_api_url}/api/search/combined",
+                json={
+                    "index_name": "product_index_v2",
+                    "pipeline_id": "hybrid-minmax-pipeline",
+                    "product_ids": product_ids,
+                    "query": retrieval_query,
+                    "top_k": top_k,
+                },
+            )
+            response.raise_for_status()
+            api_response = response.json()
+
+            if isinstance(api_response, dict) and "results" in api_response:
+                return api_response["results"]
+            return api_response
+
+        except Exception as e:
+            logger.error("search_by_combined_vector.failed", error=str(e), exc_info=True)
+            return []
+
+    @traced(name="search_opensearch", run_type="retriever")
+    async def search_with_multi_queries(
+        self,
+        queries: List[str],
+        product_ids: List[str],
+        top_k: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        멀티 쿼리로 벡터 검색 수행 및 결과 병합 (asyncio.gather 병렬 실행)
+
+        Args:
+            queries: 검색 쿼리 리스트
+            product_ids: 검색 범위를 제한할 상품 ID 리스트 (get_filtered_products 결과)
+            top_k: 쿼리당 반환할 최대 결과 수
+        """
+        if not product_ids:
+            logger.warning("no_filtered_products")
+            return []
+
+        all_query_results = await asyncio.gather(
+            *[self.search_single(q, i) for i, q in enumerate(queries, 1)]
+        )
+        return all_query_results
+
+    async def _search_by_field(
+        self,
+        query: str,
+        bm25_field: str,
+        vector_field: str,
+        product_ids: List[str],
+        top_k: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """단일 필드 하이브리드 검색 (내부용)"""
+        try:
+            response = await self.http_client.post(
+                f"{self.vector_db_api_url}/api/search/by-field",
+                json={
+                    "query": query,
+                    "bm25_field": bm25_field,
+                    "vector_field": vector_field,
+                    "product_ids": product_ids,
+                    "index_name": "product_index_v2",
+                    "pipeline_id": "hybrid-minmax-pipeline",
+                    "top_k": top_k,
+                },
+            )
+            response.raise_for_status()
+            api_response = response.json()
+            return api_response.get("results", [])
+        except Exception as e:
+            logger.error(
+                "search_by_field.failed",
+                bm25_field=bm25_field,
+                error=str(e),
+                exc_info=True,
+            )
+            return []
+
+    @traced(name="search_persona_dimensions", run_type="retriever")
+    async def search_persona_dimensions(
+        self,
+        queries: Dict[str, str],
+        product_ids: List[str],
+        top_k: int = 50,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        페르소나 3개 차원을 독립적으로 병렬 하이브리드 검색
+
+        매핑:
+          need       → function_desc  / function_desc_vector
+          preference → attribute_desc / attribute_desc_vector
+          persona    → target_user    / target_user_vector
+
+        Args:
+            queries: get_product_search_queries 반환값
+            product_ids: product_retriever로 추려진 상품 ID 리스트
+            top_k: 차원별 반환 결과 수
+
+        Returns:
+            {
+                "need":       [{"score": float, "product_id": str}, ...],
+                "preference": [...],
+                "persona":    [...],
+            }
+        """
+        if not product_ids:
+            logger.warning("search_persona_dimensions.no_product_ids")
+            return {"need": [], "preference": [], "persona": []}
+
+        need_result, preference_result, persona_result = await asyncio.gather(
+            self._search_by_field(
+                query=queries["user_need_query"],
+                bm25_field="function_desc",
+                vector_field="function_desc_vector",
+                product_ids=product_ids,
+                top_k=top_k,
+            ),
+            self._search_by_field(
+                query=queries["user_preference_query"],
+                bm25_field="attribute_desc",
+                vector_field="attribute_desc_vector",
+                product_ids=product_ids,
+                top_k=top_k,
+            ),
+            self._search_by_field(
+                query=queries["persona"],
+                bm25_field="target_user",
+                vector_field="target_user_vector",
+                product_ids=product_ids,
+                top_k=top_k,
+            ),
+        )
+
+        logger.info(
+            "search_persona_dimensions.done",
+            need_count=len(need_result),
+            preference_count=len(preference_result),
+            persona_count=len(persona_result),
+        )
+
+        return {
+            "need": need_result,
+            "preference": preference_result,
+            "persona": persona_result,
+        }
+
+    @traced(name="get_products_by_ids", run_type="retriever")
+    async def get_products_by_ids(
+        self,
+        product_ids: List[str],
+        index_name: str = "product_index_v2",
+    ) -> List[Dict[str, Any]]:
+        """
+        product_id 리스트의 상품 정보를 병렬 조회
+
+        Args:
+            product_ids: 조회할 상품 ID 리스트 (RRF 순위 순)
+            index_name: 검색할 인덱스 이름
+
+        Returns:
+            List[Dict]: 상품 문서 리스트 (입력 순서 보장)
+        """
+        async def _fetch_one(product_id: str) -> Optional[Dict[str, Any]]:
+            try:
+                response = await self.http_client.get(
+                    f"{self.vector_db_api_url}/api/product/{product_id}",
+                    params={"index_name": index_name},
+                )
+                response.raise_for_status()
+                return response.json().get("document", {})
+            except Exception as e:
+                logger.error("get_product_by_id.failed", product_id=product_id, error=str(e))
+                return None
+
+        results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
+        return [r for r in results if r is not None]

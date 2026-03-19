@@ -14,7 +14,8 @@ class Settings:
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
 
     # Model
-    chatgpt_model_name: str = os.getenv("CHATGPT_MODEL_NAME", "gpt-4o-mini")
+    chatgpt_model_name: str = os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
+    parser_model_name: str = os.getenv("PARSER_MODEL_NAME", "gpt-5-nano")
 
     # External APIs
     opensearch_api_url: str = os.getenv("OPENSEARCH_API_URL", "http://localhost:8010")
