@@ -6,6 +6,13 @@ def build_orchestrator_prompt(messages):
 
 ## 담당 에이전트
 
+### rommend_products_node
+페르소나 기반 상품 추천을 담당합니다.
+다음과 같은 요청일 때 호출합니다:
+- 특정 페르소나에게 맞는 상품 추천 요청
+- 브랜드·카테고리 조건에 따른 맞춤 상품 추천 요청
+- 메시지 생성 없이 추천 상품 목록만 필요한 요청
+
 ### crm_message_node
 페르소나 기반 CRM 마케팅 메시지 생성을 담당합니다.
 다음과 같은 요청일 때 호출합니다:
@@ -19,7 +26,5 @@ def build_orchestrator_prompt(messages):
 다음과 같은 요청일 때 호출합니다:
 - 메시지 생성 없이 순수하게 고객 페르소나 정보만 조회하는 요청
 - 메시지 생성 없이 순수하게 상품 정보만 검색/조회하는 요청
-
-
 """
     return [SystemMessage(content=system_prompt)] + messages

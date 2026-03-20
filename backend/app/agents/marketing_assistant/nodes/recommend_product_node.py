@@ -1,6 +1,9 @@
 from ..services.recommend_product import ProductRecommender
 from ..services.parse_crm_request import MultiValueParser
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import AIMessage
+from langgraph.types import Command
+from langgraph.graph import END
 from ..state import MarketingAssistantState
 from ....core.logging import AgentLogger
 from ....config.settings import settings
@@ -21,7 +24,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     messages = state.get("messages")
     parser_llm = get_llm(settings.parser_model_name, temperature=0.7)
 
-    # messages[-1]은 AnyMessage 객체이므로 .content로 문자열 추출
+    # 사용자 입력에서 필요한 필드 추출
     parsed_json = await _parser.parse(messages[-1].content, parser_llm)
     parsed_data = json.loads(parsed_json)
 
@@ -33,7 +36,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
         categories=parsed_data.get("product_categories"),
     )
 
-    # 페르소나 기반 검색 쿼리 조회 (Dict: user_need_query, user_preference_query, retrieval, persona)
+    # 페르소나 기반 검색 쿼리 조회
     search_queries = await _recommender.get_product_search_queries(
         persona_id=parsed_data.get("persona_id")
     )
@@ -60,6 +63,10 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
 
     # 3차원 하이브리드 검색 + RRF로 최종 추천 상품 선정
     recommended_products = await _recommender.recommend(search_queries, retrieval_product_ids)
+    recommended_products = [
+        {k: v for k, v in p.items() if not k.endswith("_vector")}
+        for p in recommended_products
+    ]
 
     logger.info(
         "recommend_done",
@@ -67,11 +74,19 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
         product_count=len(recommended_products),
     )
 
-    return {
-        "search_queries": search_queries,
-        "recommended_products": recommended_products,
-        "logs": logger.get_user_logs(),
-    }
+    product_summary = "\n".join(
+        f"- [{p.get('브랜드')}] {p.get('상품명')} ({p.get('태그')}): {p.get('summary')}"
+        for p in recommended_products
+    )
+    return Command(
+        update={
+            "messages": [AIMessage(content=f"추천 상품 목록:\n{product_summary}")],
+            "search_queries": search_queries,
+            "recommended_products": recommended_products,
+            "logs": logger.get_user_logs(),
+        },
+        goto=END,
+    )
 
 
 

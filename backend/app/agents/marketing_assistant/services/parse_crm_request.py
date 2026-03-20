@@ -4,7 +4,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..prompts.crm_parse_prompt import build_crm_parse_prompt
 from ....core.logging import get_logger
-from ....config.settings import settings
 import os
 import json
 
@@ -13,13 +12,11 @@ logger = get_logger("parse_crm_request")
 # 카테고리 목록 로드
 def load_categories():
     """categories.json에서 카테고리 목록 로드"""
-    if settings.app_root:
-        # Docker/배포 환경: APP_ROOT 환경변수 사용
-        categories_path = os.path.join(settings.app_root, "data/categories.json")
-    else:
-        # 로컬 개발 환경: 상대 경로 사용
-        current_dir = os.path.dirname(__file__)
-        categories_path = os.path.join(current_dir, "../../../../../data/categories.json")
+    current_dir = os.path.dirname(__file__)
+    docker_path = "/app/data/categories.json"
+    local_path = os.path.join(current_dir, "../../../../../data/categories.json")
+
+    categories_path = docker_path if os.path.exists(docker_path) else local_path
 
     with open(categories_path, 'r', encoding='utf-8') as f:
         data = json.load(f)

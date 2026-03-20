@@ -36,11 +36,18 @@ class ProductRecommender:
             # 기존 검색 쿼리 없으면 상품 검색 쿼리 생성
             logger.info("product_search_queries.generating", persona_id=persona_id)
             persona_info = await _persona_client.get_persona_info(persona_id)
-            search_queries = await generate_product_search_query_from_persona(self.llm, persona_info)
+            raw_queries = await generate_product_search_query_from_persona(self.llm, persona_info)
 
             # DB저장
-            await _persona_client.save_product_search_query(persona_id, search_queries)
+            await _persona_client.save_product_search_query(persona_id, raw_queries)
             logger.info("product_search_queries.saved", persona_id=persona_id)
+
+            search_queries = {
+                "user_need_query": raw_queries["need"],
+                "user_preference_query": raw_queries["preference"],
+                "retrieval": raw_queries["retrieval"],
+                "persona": raw_queries["persona"],
+            }
 
         logger.info("product_search_queries.done", persona_id=persona_id, query_keys=list(search_queries.keys()))
         return search_queries
@@ -51,52 +58,44 @@ class ProductRecommender:
             products: Optional[List[str]],
             avoided_ingredients: Optional[List[str]]
         ):
-        with logger.track_duration("get_filtered_products", user_message="필터링된 상품 조회 중..."):
-            # 레벨 1: brands + categories + avoided_ingredients(EXCLUDE)
+        # 레벨 1: brands + categories + avoided_ingredients(EXCLUDE)
+        filtered_products = await _product_client.get_filtered_products(
+            brands=brands if brands else None,
+            product_categories=products if products else None,
+            avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
+        )
+
+        # 레벨 2: brands 제거 (카테고리 + EXCLUDE)
+        if len(filtered_products) < settings.min_filtered_products and brands:
+            logger.warning(
+                "filter_fallback_level2",
+                current_count=len(filtered_products),
+            )
             filtered_products = await _product_client.get_filtered_products(
-                brands=brands if brands else None,
+                brands=None,
                 product_categories=products if products else None,
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
             )
-            filter_level = 1
 
-            # 레벨 2: brands 제거 (카테고리 + EXCLUDE)
-            if len(filtered_products) < settings.min_filtered_products and brands:
-                logger.warning(
-                    "filter_fallback_level2",
-                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 브랜드 필터 제거 후 재시도",
-                    current_count=len(filtered_products),
-                )
-                filtered_products = await _product_client.get_filtered_products(
-                    brands=None,
-                    product_categories=products if products else None,
-                    avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
-                )
-                filter_level = 2
+        # 레벨 3: 카테고리도 제거 (EXCLUDE만)
+        if len(filtered_products) < settings.min_filtered_products and products:
+            logger.warning(
+                "filter_fallback_level3",
+                current_count=len(filtered_products),
+            )
+            filtered_products = await _product_client.get_filtered_products(
+                brands=None,
+                product_categories=None,
+                avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
+            )
 
-            # 레벨 3: 카테고리도 제거 (EXCLUDE만)
-            if len(filtered_products) < settings.min_filtered_products and products:
-                logger.warning(
-                    "filter_fallback_level3",
-                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 카테고리 필터도 제거 후 재시도",
-                    current_count=len(filtered_products),
-                )
-                filtered_products = await _product_client.get_filtered_products(
-                    brands=None,
-                    product_categories=None,
-                    avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
-                )
-                filter_level = 3
-
-            # 레벨 4: 필터 전체 제거 (전체 상품)
-            if len(filtered_products) < settings.min_filtered_products:
-                logger.warning(
-                    "filter_fallback_level4",
-                    user_message=f"필터 결과 부족({len(filtered_products)}개) → 전체 상품 대상으로 재시도",
-                    current_count=len(filtered_products),
-                )
-                filtered_products = await _product_client.get_filtered_products()
-                filter_level = 4
+        # 레벨 4: 필터 전체 제거 (전체 상품)
+        if len(filtered_products) < settings.min_filtered_products:
+            logger.warning(
+                "filter_fallback_level4",
+                current_count=len(filtered_products),
+            )
+            filtered_products = await _product_client.get_filtered_products()
 
         product_ids = [p["product_id"] for p in filtered_products]
         return product_ids
@@ -109,12 +108,11 @@ class ProductRecommender:
             avoided_ingredients: Optional[List[str]]
         ):
 
-        filtered_products = await self.filtered_products(
-            brands=brands if brands else None, 
-            product_categories=product_tag if product_tag else None,
+        filtered_product_ids = await self.filtered_products(
+            brands=brands if brands else None,
+            products=product_tag if product_tag else None,
             avoided_ingredients=avoided_ingredients if avoided_ingredients else None
         )
-        filtered_product_ids = [p['product_id'] for p in filtered_products]
 
         retrieval_result = await _product_client.search_by_combined_vector(retrieval_query, filtered_product_ids, top_k=100)
         retrieval_result_ids = [p['product_id'] for p in retrieval_result]
@@ -198,20 +196,26 @@ class ProductRecommender:
 
         # RRF로 최종 순위 결정
         ranked = self._apply_rrf(dimension_results)
-        top_ids = [pid for pid, _ in ranked[:top_n]]
+        top_ranked = ranked[:top_n]
+        top_ids = [pid for pid, _ in top_ranked]
+        score_map = {pid: round(score, 4) for pid, score in top_ranked}
 
         logger.info(
             "recommend.rrf_done",
             top_ids=top_ids,
-            rrf_scores={pid: round(score, 4) for pid, score in ranked[:top_n]},
+            rrf_scores=score_map,
         )
 
         # 상품 상세 정보 병렬 조회
         products = await _product_client.get_products_by_ids(top_ids)
 
-        # RRF 순위 보장
+        # RRF 순위 보장 + 스코어 삽입
         id_to_product = {p.get("product_id"): p for p in products}
-        return [id_to_product[pid] for pid in top_ids if pid in id_to_product]
+        return [
+            {**id_to_product[pid], "rrf_score": score_map[pid]}
+            for pid in top_ids
+            if pid in id_to_product
+        ]
 
 
 if __name__ == "__main__":

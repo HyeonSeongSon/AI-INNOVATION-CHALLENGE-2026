@@ -75,9 +75,11 @@ class PersonaClient:
             response.raise_for_status()
             results = response.json()
 
-            if results and len(results) > 0:
+            if not results:
+                return None
+            if isinstance(results, list):
                 return results[0]
-            return None
+            return results
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:

@@ -13,6 +13,7 @@ from typing import Optional, Literal, List, Dict, Any
 from sqlalchemy.orm.attributes import flag_modified
 
 from ..agents.supervisor.marketing_agent import MarketingAgent
+from ..agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
 from ..core.models import Conversation, GeneratedMessage
@@ -24,6 +25,10 @@ router = APIRouter(prefix="/api/marketing", tags=["Marketing"])
 
 def get_agent(request: Request) -> MarketingAgent:
     return request.app.state.agent
+
+
+def get_agent_v2(request: Request) -> MarketingAssistantAgent:
+    return request.app.state.agent_v2
 
 
 # ============================================================
@@ -280,6 +285,102 @@ async def chat(
 
     except Exception as e:
         logger.error("chat_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/v2")
+async def chat_v2(
+    request: ChatRequest,
+    req: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    대화 처리 v2 (interrupt 없는 새 추천 방식)
+
+    기존 /chat 대비 추천 성능 비교용 엔드포인트.
+    """
+    try:
+        agent = get_agent_v2(req)
+
+        history = _load_conversation_messages(request.conversation_id)
+
+        result = await agent.chat(
+            user_input=request.user_input,
+            session_id=request.session_id,
+            user_id=user_id,
+            history=history,
+            model=request.model,
+        )
+
+        conv_id = request.conversation_id
+        if not conv_id:
+            conv_id = str(uuid.uuid4())
+            db = SessionLocal()
+            try:
+                conv = Conversation(
+                    id=conv_id,
+                    user_id=user_id,
+                    thread_id=result["thread_id"],
+                    session_id=result["session_id"],
+                    title="새 대화 (v2)",
+                    messages=[],
+                )
+                db.add(conv)
+                db.commit()
+            finally:
+                db.close()
+        else:
+            db = SessionLocal()
+            try:
+                conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+                if conv:
+                    conv.thread_id = result["thread_id"]
+                    db.commit()
+            finally:
+                db.close()
+
+        result["conversation_id"] = conv_id
+
+        thread_id = result["thread_id"]
+        now = datetime.now(timezone.utc).isoformat()
+        status = result.get("status")
+
+        new_entries = [
+            {
+                "role": "user",
+                "content": request.user_input,
+                "type": "text",
+                "timestamp": now,
+                "thread_id": thread_id,
+            }
+        ]
+
+        if status == "completed":
+            ai_messages = result.get("messages", [])
+            content = ai_messages[0].get("content", "") if ai_messages else ""
+            new_entries.append({
+                "role": "assistant",
+                "content": content,
+                "type": "text",
+                "timestamp": now,
+                "thread_id": thread_id,
+            })
+
+        _save_conversation_messages(conv_id, new_entries)
+
+        logger.info(
+            "chat_v2_completed",
+            status=status,
+            thread_id=thread_id,
+            session_id=request.session_id,
+            user_id=user_id,
+            conversation_id=conv_id,
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error("chat_v2_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
