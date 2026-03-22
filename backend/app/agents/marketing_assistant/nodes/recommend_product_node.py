@@ -1,5 +1,5 @@
 from ..services.recommend_product import ProductRecommender
-from ..services.parse_crm_request import MultiValueParser
+from ..services.parse_request import MultiValueParser
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
 from langgraph.types import Command
@@ -25,7 +25,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     parser_llm = get_llm(settings.parser_model_name, temperature=0.7)
 
     # 사용자 입력에서 필요한 필드 추출
-    parsed_json = await _parser.parse(messages[-1].content, parser_llm)
+    parsed_json = await _parser.recommend_product_parser(messages[-1].content, parser_llm)
     parsed_data = json.loads(parsed_json)
 
     logger.info(

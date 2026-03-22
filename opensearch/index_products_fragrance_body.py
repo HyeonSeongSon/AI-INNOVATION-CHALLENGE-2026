@@ -72,6 +72,7 @@ def load_and_prepare_documents(jsonl_file_path):
 
     base_fields = [
         'product_id', '태그', '브랜드', '상품명',
+        '상품이미지', 'product_url',
     ]
 
     try:

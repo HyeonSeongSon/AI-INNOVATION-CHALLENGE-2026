@@ -630,6 +630,17 @@ def _to_product_detail(p) -> ProductDetailResponse:
     )
 
 
+@router.get("/products/{product_id}", response_model=ProductDetailResponse, summary="product_id로 상품 상세 조회")
+async def get_product_by_id(product_id: str, db: Session = Depends(get_db)):
+    from core.models import Product
+
+    product = db.query(Product).filter(Product.product_id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product with ID '{product_id}' not found")
+
+    return _to_product_detail(product)
+
+
 @router.post("/products/by-tag", response_model=List[ProductDetailResponse], summary="상품종류(태그)로 상품 조회")
 async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depends(get_db)):
     from core.models import Product

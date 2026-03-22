@@ -15,7 +15,7 @@ class ProductRecommender:
     def __init__(self):
         self.vector_db_api_url = settings.opensearch_api_url
         self.db_api_url = settings.database_api_url
-        self.llm = get_llm(settings.chatgpt_model_name, temperature=0.7)
+        self.llm = get_llm(settings.chatgpt_model_name, temperature=0)
     
     async def get_product_search_queries(self, persona_id):
         logger.info("product_search_queries.start", persona_id=persona_id)

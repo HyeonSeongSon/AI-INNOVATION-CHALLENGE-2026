@@ -220,6 +220,26 @@ class ProductClient:
             "persona": persona_result,
         }
 
+    @traced(name="get_products_detail_from_db", run_type="tool")
+    async def get_products_detail_from_db(
+        self,
+        product_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """정형 DB에서 product_id 리스트로 상품 상세 정보 병렬 조회 (가격, 할인율 등)"""
+        async def _fetch_one(product_id: str) -> Optional[Dict[str, Any]]:
+            try:
+                response = await self.http_client.get(
+                    f"{self.db_api_url}/api/products/{product_id}",
+                )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                logger.error("get_products_detail_from_db.failed", product_id=product_id, error=str(e))
+                return None
+
+        results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
+        return [r for r in results if r is not None]
+
     @traced(name="get_products_by_ids", run_type="retriever")
     async def get_products_by_ids(
         self,

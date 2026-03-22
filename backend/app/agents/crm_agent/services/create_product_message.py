@@ -11,6 +11,7 @@ from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from langchain_core.messages import HumanMessage, AIMessage
 import os
 import yaml
 import httpx
@@ -380,7 +381,6 @@ class ProductMessageGenerator:
             "피부타입/고민 강조 소개": build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": build_purpose_lifestyle_and_age_point_prompt
         }
-        from langchain_core.messages import HumanMessage, AIMessage
 
         build_func = PURPOSE_PROMPT_MAP.get(purpose)
         prompt_text = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)

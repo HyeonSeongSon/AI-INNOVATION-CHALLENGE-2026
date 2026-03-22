@@ -78,6 +78,7 @@ def load_and_prepare_documents(jsonl_file_path):
         'product_id', '카테고리', '태그', '브랜드', '상품명', '피부타입',
         '고민키워드', '선호포인트색상', '선호성분', '기피성분',
         '선호향', '가치관', '전용제품', '퍼스널컬러', '피부호수',
+        '상품이미지', 'product_url',
     ]
 
     try:
