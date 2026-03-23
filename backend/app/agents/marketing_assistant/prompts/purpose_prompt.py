@@ -1,6 +1,7 @@
 from typing import Dict
 class PurPosePrompts:
     def build_purpose_introduction_prompt(
+            self,
             product_data: Dict,
             brand_tone: str
             ) -> str:
@@ -101,13 +102,16 @@ class PurPosePrompts:
         - "피부톤 정돈" (○) vs "미백" (✗)
 
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내 제목]
-        메시지: [350자 이내 메시지 본문]"""
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
+        """
 
     def build_purpose_new_products_prompt(
+            self,
             product_data: Dict,
             brand_tone: str
             ) -> str:
@@ -213,14 +217,16 @@ class PurPosePrompts:
         - "출시 기념 한정 혜택" (○) vs "절대 다시 없는 기회" (✗)
         - "기존 제품 대비 2배 농축" (○) vs "기존 제품보다 압도적" (✗)
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 런칭 키워드 포함 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """
 
     def build_purpose_bestseller_prompt(
+            self,
             product_data: Dict,
             brand_tone: str, 
             ) -> str:
@@ -367,14 +373,16 @@ class PurPosePrompts:
         - "리뷰 평점 [실제 점수]" (○) vs "완벽한 만족도" (✗)
         - "[플랫폼] 베스트" (○) vs "업계 1위" (✗)
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 할인율/혜택 명시 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """
 
     def build_purpose_promotion_and_evnet_prompt(
+            self,
             product_data: Dict,
             brand_tone: str, 
 
@@ -535,14 +543,16 @@ class PurPosePrompts:
         - "시즌오프 세일" (○) vs "재고 떨이" (✗)
         - "선착순 [숫자]명" (○) vs "조기 품절 확실" (✗)
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 할인율/혜택 명시 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """
 
     def build_purpose_ingredient_efficacy_point_prompt(
+            self,
             product_data: Dict,
             brand_tone: str, 
             ) -> str:
@@ -735,14 +745,16 @@ class PurPosePrompts:
         - "피부 진정" (○) vs "염증 치료" (✗)
         - "[성분] 함유" (○) vs "[성분]으로 치료" (✗)
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 핵심 성분 또는 효능 명시 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """
 
     def build_purpose_skintype_and_concern_point_prompt(
+            self,
             product_data: Dict,
             brand_tone: str
             ) -> str:
@@ -960,14 +972,16 @@ class PurPosePrompts:
         - 성분: 센텔라, 판테놀, 알로에 등 진정 성분
         - 텍스처: 모든 제형 가능하나 "순한" 강조
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 페르소나 피부 고민 반영 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """
 
     def build_purpose_lifestyle_and_age_point_prompt(
+            self,
             product_data: Dict,
             brand_tone: str
             ) -> str:
@@ -1360,9 +1374,10 @@ class PurPosePrompts:
         - "시간 효율적" (○) vs "1초도 낭비 말고" (✗)
         - "육아 중에도" (○) vs "애 키우느라 힘들죠" (✗)
 
-        # 출력 형식
-        반드시 아래 형식으로만 출력하세요. 다른 설명이나 분석은 포함하지 마세요.
-
-        제목: [40자 이내, 라이프스타일/연령 키워드 포함 제목]
-        메시지: [350자 이내 메시지 본문]
+        # 출력 형식 (JSON만 출력, 설명 없음)
+        
+        {{
+            "title": "제목: [40자 이내 제목]",
+            "message": "메시지: [350자 이내 메시지 본문]"
+        }}
         """

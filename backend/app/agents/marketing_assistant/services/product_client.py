@@ -114,7 +114,7 @@ class ProductClient:
             return []
 
         all_query_results = await asyncio.gather(
-            *[self.search_single(q, i) for i, q in enumerate(queries, 1)]
+            *[self.search_by_combined_vector(q, product_ids, top_k) for q in queries]
         )
         return all_query_results
 

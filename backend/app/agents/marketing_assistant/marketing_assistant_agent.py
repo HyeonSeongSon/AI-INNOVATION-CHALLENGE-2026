@@ -49,16 +49,24 @@ class MarketingAgent:
 
     def _extract_response_messages(self, result: Dict) -> list:
         """
-        CRM 플로우: intermediate["message"]["messages"]
-        search_node 플로우: LangGraph messages에서 name=="search_node"인 마지막 AIMessage
+        crm_message_node 플로우: generated_tasks의 message content
+        그 외: state messages에서 마지막 AIMessage
         """
-        intermediate = result.get("intermediate", {})
-        crm_messages = intermediate.get("message", {}).get("messages", [])
-        if crm_messages:
-            return crm_messages
+        generated_tasks = result.get("generated_tasks", [])
+        if generated_tasks:
+            return [
+                {
+                    "role": "assistant",
+                    "product_id": t["product_id"],
+                    "brand": t["brand"],
+                    "purpose": t["purpose"],
+                    "content": t["message"].content if hasattr(t["message"], "content") else str(t["message"]),
+                }
+                for t in generated_tasks
+            ]
 
         for msg in reversed(result.get("messages", [])):
-            if getattr(msg, "name", None) == "search_node":
+            if isinstance(msg, AIMessage):
                 return [{"role": "assistant", "content": msg.content}]
         return []
 
@@ -115,6 +123,7 @@ class MarketingAgent:
                 "session_id": session_id,
                 "recommended_products": result.get("recommended_products", []),
                 "messages": self._extract_response_messages(result),
+                "generated_tasks": result.get("generated_tasks", []),
                 "regeneration_history": intermediate.get("quality_check", {}).get("regeneration_history", []),
                 "logs": result.get("logs", []),
                 "error": result.get("error"),

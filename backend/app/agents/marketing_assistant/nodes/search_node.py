@@ -1,6 +1,7 @@
 from ..state import MarketingAssistantState
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
+from ....config.settings import settings
 from langgraph.graph import END
 from ...tools.search_tools import (
     get_all_personas,
@@ -16,7 +17,6 @@ from ...tools.prompts.search_tools_prompt import build_search_node_prompt
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
-import os
 
 _logger = get_logger("search_node")
 
@@ -27,7 +27,7 @@ _TOOL_MAP = {t.name: t for t in _TOOLS}
 async def search_node(state: MarketingAssistantState, config: RunnableConfig):
     try:
         messages = state.get("messages", [])
-        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0)
         llm_with_tools = llm.bind_tools(_TOOLS)
 

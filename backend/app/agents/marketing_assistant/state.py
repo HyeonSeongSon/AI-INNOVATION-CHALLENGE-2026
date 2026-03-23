@@ -15,3 +15,8 @@ class MarketingAssistantState(BaseState):
     # -------------------------
     search_queries: Dict[str, str]              # 페르소나 기반 검색 쿼리 (user_need_query, user_preference_query, retrieval, persona)
     recommended_products: List[Dict[str, Any]]  # 추천 상품 목록
+
+    # -------------------------
+    # CRM 메시지 생성
+    # -------------------------
+    generated_tasks: List[Dict[str, Any]]       # 생성된 CRM 메시지 및 품질 검사용 데이터 (product_id, brand, purpose, product_info, message)

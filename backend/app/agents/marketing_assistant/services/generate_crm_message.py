@@ -4,7 +4,7 @@ from pathlib import Path
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
 from .product_client import ProductClient
-from typing import Dict, Any
+from typing import Dict, Any, List
 from ..prompts.purpose_prompt import PurPosePrompts
 
 _purpose = PurPosePrompts()
@@ -52,7 +52,7 @@ class CRMMessageGenerator:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
                 return data
-        except Exception as e:
+        except Exception:
             return {}
 
     def _get_brand_tone(self, brand_name: str) -> str:
@@ -89,42 +89,44 @@ class CRMMessageGenerator:
         # 정형 DB가 베이스, 벡터 DB가 우선 (같은 키면 벡터 DB 값 사용)
         return {**db_clean, **vector_clean}
     
-    async def get_product_info(self, data: Dict) -> Dict:
-        task_list = data.get("tasks", [])
-        fetch_tasks = [self._get_product_info(item["product_id"]) for item in task_list]
+    async def get_product_info(self, tasks: List[Dict]) -> List[Dict]:
+        fetch_tasks = [self._get_product_info(item["product_id"]) for item in tasks]
         results = await asyncio.gather(*fetch_tasks)
 
-        result_tasks = []
-        for item, product_info in zip(task_list, results):
-            enriched_item = {**item}
-            if product_info:
-                enriched_item["product_info"] = product_info
-            result_tasks.append(enriched_item)
+        return [
+            {**item, "product_info": product_info}
+            for item, product_info in zip(tasks, results)
+            if product_info
+        ]
 
-        return {**data, "tasks": result_tasks}
-    
-    async def get_crm_prompt(self, data: Dict) -> Dict:
-        task_list = data.get("tasks", [])
-        fetch_tasks = [_PURPOSE_PROMPT_MAP[item["purpose"]]() for item in task_list]
+    async def get_brand_tone(self, tasks: List[Dict]) -> List[Dict]:
+        return [
+            {**item, "brand_tone": brand_tone}
+            for item in tasks
+            if (brand_tone := self._get_brand_tone(item["product_info"]["brand"]))
+        ]
+
+    async def get_crm_prompt(self, tasks: List[Dict]) -> List[Dict]:
+        return [
+            {**item, "prompt": _PURPOSE_PROMPT_MAP[item["purpose"]](item["product_info"], item["brand_tone"])}
+            for item in tasks
+        ]
+
+    async def generate_crm_message(self, tasks: List[Dict], llm) -> List[Dict]:
+        fetch_tasks = [llm.ainvoke(item["prompt"]) for item in tasks]
         results = await asyncio.gather(*fetch_tasks)
 
-        result_tasks = []
-        for item, prompt in zip(task_list, results):
-            enriched_item = {**item}
-            if prompt:
-                enriched_item["prompt"] = prompt
-            result_tasks.append(enriched_item)
-
-        return {**data, "tasks": result_tasks}
-
+        return [
+            {**item, "message": message}
+            for item, message in zip(tasks, results)
+            if message
+        ]
+        
 if __name__=="__main__":
     cmg = CRMMessageGenerator()
-    test_data = {
-        "parallel": True,
-        "tasks": [
-            {"product_id": "A20251200289", "purpose": "베스트셀러 제품 소개"},
-            {"product_id": "A20251200230", "purpose": "신제품 홍보"},
-        ],
-    }
-    result = asyncio.run(cmg.get_product_info(test_data))
+    test_tasks = [
+        {"product_id": "A20251200289", "purpose": "베스트셀러 제품 소개"},
+        {"product_id": "A20251200230", "purpose": "신제품 홍보"},
+    ]
+    result = asyncio.run(cmg.get_product_info(test_tasks))
     print(result)

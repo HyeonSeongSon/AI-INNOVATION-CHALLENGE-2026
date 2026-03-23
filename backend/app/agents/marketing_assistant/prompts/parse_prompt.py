@@ -47,13 +47,13 @@ def build_crm_message_parse_prompt() -> str:
 
 **예시:**
 입력: "p001 상품으로 프로모션 메시지 작성해줘"
-출력: {"tasks": [{"product_id": "p001", "purpose": "프로모션"}]}
+출력: {"tasks": [{"product_id": "p001", "purpose": "프로모션/이벤트 소개"}]}
 
 입력: "p001, p002 상품으로 프로모션 메시지 작성해줘"
-출력: {"tasks": [{"product_id": "p001", "purpose": "프로모션"}, {"product_id": "p002", "purpose": "프로모션"}]}
+출력: {"tasks": [{"product_id": "p001", "purpose": "프로모션/이벤트 소개"}, {"product_id": "p002", "purpose": "프로모션/이벤트 소개"}]}
 
-입력: "p001 상품으로 프로모션 메시지를, p002 상품으로 베스트셀러 홍보 메시지를 작성해줘"
-출력: {"tasks": [{"product_id": "p001", "purpose": "프로모션"}, {"product_id": "p002", "purpose": "베스트셀러 홍보"}]}
+입력: "p001 상품으로 성분강조 메시지를, p002 상품으로 베스트셀러 홍보 메시지를 작성해줘"
+출력: {"tasks": [{"product_id": "p001", "purpose": "성분/효능 강조 소개"}, {"product_id": "p002", "purpose": "베스트셀러 제품 소개"}]}
 """
 
 

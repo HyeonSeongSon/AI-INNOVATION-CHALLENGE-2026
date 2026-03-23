@@ -73,7 +73,7 @@ class MultiValueParser:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
             return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
         
-    async def crm_message_parser(self, user_input: str, llm: BaseChatModel) -> str:
+    async def crm_message_parser(self, user_input: str, llm: BaseChatModel) -> List[Dict[str, Any]]:
         """자연어 → product_id/purpose 파싱. 여러 상품이 언급된 경우 parallel 플래그와 함께 반환.
 
         Args:
@@ -92,14 +92,10 @@ class MultiValueParser:
         ]
         try:
             response = await parser.ainvoke(messages)
-            output = {
-                "parallel": len(response.tasks) > 1,
-                "tasks": [t.model_dump() for t in response.tasks]
-            }
-            return json.dumps(output, ensure_ascii=False, indent=2)
+            return [t.model_dump() for t in response.tasks]
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
-            return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
+            raise
         
 if __name__ == "__main__":
     import asyncio
