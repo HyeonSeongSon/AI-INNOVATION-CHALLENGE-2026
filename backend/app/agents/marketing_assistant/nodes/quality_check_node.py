@@ -24,12 +24,13 @@ async def quality_check_node(state: MarketingAssistantState, config: RunnableCon
         )
         return {**task, "quality_check": result}
 
-    checked_tasks = await asyncio.gather(*[check_one(t) for t in tasks])
+    check_tasks = list(await asyncio.gather(*[check_one(t) for t in tasks]))
+    failed_task_ids = [t["product_id"] for t in check_tasks if not t["quality_check"]["passed"]]
 
-    passed_data = [t for t in checked_tasks if t["quality_check"]["passed"]]
-    failed_data  = [t for t in checked_tasks if not t["quality_check"]["passed"]]
-    
-    if failed_data:
-        return Command(goto="message_feedback_node", update={"passed_tasks": passed_data, "failed_tasks": failed_data})
-    else:
-        return Command(goto=END, update={"passed_tasks": passed_data, "failed_tasks": []})
+    return Command(
+        goto="message_feedback_node" if failed_task_ids else END,
+        update={
+            "generated_tasks": check_tasks,
+            "failed_task_ids": failed_task_ids,
+        },
+    )

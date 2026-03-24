@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional
 from ....config.settings import settings
 from .generate_product_search_query_from_persona import generate_product_search_query_from_persona
 from .persona_client import PersonaClient
@@ -216,14 +216,3 @@ class ProductRecommender:
             for pid in top_ids
             if pid in id_to_product
         ]
-
-
-if __name__ == "__main__":
-    import asyncio
-    # persona_id = "PERSONA_6E6354965AB9"
-    pr = ProductRecommender()
-    # queries = asyncio.run(pr.get_product_search_queries(persona_id))
-
-    retrieval_query="수분 부족 지성 피부에 트러블 흉터 고민을 가지고 있음"
-    result = asyncio.run(pr.product_retriever(retrieval_query=retrieval_query, brands=["이니스프리"], product_tag=None, avoided_ingredients=None))
-    print(result)

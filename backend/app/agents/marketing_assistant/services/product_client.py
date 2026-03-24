@@ -220,6 +220,44 @@ class ProductClient:
             "persona": persona_result,
         }
 
+    # 벡터 DB의 한국어 키와 중복되거나 내부용인 DB 필드
+    _DB_EXCLUDE_KEYS = {
+        "vectordb_id", "product_created_at",
+        "product_name", "brand", "product_tag",
+        "skin_type", "preferred_ingredients", "avoided_ingredients",
+        "preferred_scents", "values", "preferred_colors", "exclusive_product",
+    }
+
+    def merge_product_data(self, db_product: Dict[str, Any], vector_product: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        벡터 DB 데이터를 기반으로 DB의 비중복 필드를 추가해 병합.
+
+        - 벡터 DB: 전체 포함 (_vector 필드, URL 필드 제외)
+        - DB: 벡터 DB에 없는 키만 추가 (내부 필드, URL 필드 제외)
+        """
+        def _is_url_field(key: str) -> bool:
+            return "url" in key.lower() or key == "상품이미지"
+
+        vector_clean = {
+            k: v for k, v in vector_product.items()
+            if "_vector" not in k and not _is_url_field(k)
+        }
+        db_extra = {
+            k: v for k, v in db_product.items()
+            if k not in vector_clean and k not in self._DB_EXCLUDE_KEYS and not _is_url_field(k)
+        }
+        return {**vector_clean, **db_extra}
+
+    async def get_merged_product_info(self, product_id: str) -> Dict[str, Any]:
+        """DB + 벡터 DB 상품 정보를 병합하여 반환."""
+        vector_products, db_products = await asyncio.gather(
+            self.get_products_by_ids([product_id]),
+            self.get_products_detail_from_db([product_id]),
+        )
+        vector_product = vector_products[0] if vector_products else {}
+        db_product = db_products[0] if db_products else {}
+        return self.merge_product_data(db_product, vector_product)
+
     @traced(name="get_products_detail_from_db", run_type="tool")
     async def get_products_detail_from_db(
         self,

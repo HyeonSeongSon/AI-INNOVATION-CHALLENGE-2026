@@ -1,9 +1,8 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....config.settings import settings
 import httpx
-import json
 
 logger = get_logger("recommend_products")
 

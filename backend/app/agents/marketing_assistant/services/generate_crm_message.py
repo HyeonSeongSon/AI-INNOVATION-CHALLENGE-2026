@@ -1,10 +1,9 @@
 import asyncio
-import yaml
-from pathlib import Path
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
+from ....core.data_loader import get_brand_tones
 from .product_client import ProductClient
-from typing import Dict, Any, List
+from typing import Dict, List
 from ..prompts.purpose_prompt import PurPosePrompts
 
 _purpose = PurPosePrompts()
@@ -43,21 +42,10 @@ class CRMMessageGenerator:
         self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=0.7)
         self.vector_db_api_url = settings.opensearch_api_url
         self.db_api_url = settings.database_api_url
-        _brand_tone_path = Path(__file__).parent.parent / "prompts" / "brand_tone.yaml"
-        self.brand_tones = self._load_yaml(str(_brand_tone_path))
-
-    def _load_yaml(self, file_path: str) -> Dict[str, Any]:
-        """YAML 파일 로드"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-                return data
-        except Exception:
-            return {}
 
     def _get_brand_tone(self, brand_name: str) -> str:
         """브랜드톤 가져오기"""
-        brand_tones = self.brand_tones.get('brand_ton_prompt', {})
+        brand_tones = get_brand_tones().get('brand_ton_prompt', {})
 
         # 정확한 브랜드명으로 검색
         if brand_name in brand_tones:
@@ -121,12 +109,3 @@ class CRMMessageGenerator:
             for item, message in zip(tasks, results)
             if message
         ]
-        
-if __name__=="__main__":
-    cmg = CRMMessageGenerator()
-    test_tasks = [
-        {"product_id": "A20251200289", "purpose": "베스트셀러 제품 소개"},
-        {"product_id": "A20251200230", "purpose": "신제품 홍보"},
-    ]
-    result = asyncio.run(cmg.get_product_info(test_tasks))
-    print(result)

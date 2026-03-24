@@ -4,23 +4,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..prompts.parse_prompt import build_crm_parse_prompt, build_crm_message_parse_prompt
 from ....core.logging import get_logger
-import os
+from ....core.data_loader import get_categories
 import json
 
 logger = get_logger("parse_crm_request")
-
-# 카테고리 목록 로드
-def load_categories():
-    """categories.json에서 카테고리 목록 로드"""
-    current_dir = os.path.dirname(__file__)
-    docker_path = "/app/data/categories.json"
-    local_path = os.path.join(current_dir, "../../../../../data/categories.json")
-
-    categories_path = docker_path if os.path.exists(docker_path) else local_path
-
-    with open(categories_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    return data['category_type']
 
 class RecommendProductRequest(BaseModel):
     """다중 값을 지원하는 상품 추천 메시지 요청"""
@@ -63,7 +50,7 @@ class MultiValueParser:
         """
         parser = llm.with_structured_output(RecommendProductRequest)
         messages = [
-            SystemMessage(content=build_crm_parse_prompt(load_categories())),
+            SystemMessage(content=build_crm_parse_prompt(get_categories())),
             HumanMessage(content=user_input)
         ]
         try:
@@ -96,14 +83,3 @@ class MultiValueParser:
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
             raise
-        
-if __name__ == "__main__":
-    import asyncio
-    from ....core.llm_factory import get_llm
-    from ....config.settings import Settings
-    llm = get_llm(model_name="gpt-5-nano", temperature=0.7)
-    parser = MultiValueParser()
-    settings = Settings()
-    user_input = "A20251200289, A20251200418, A20251200288, A20251207488 상품으로 베스트셀러 홍보 메시지를 만들고, A20251707488 상품으로 신제품 홍보 메시지를 만들어줘"
-    result = asyncio.run(parser.crm_message_parser(user_input, llm))
-    print(result)
