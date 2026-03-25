@@ -1,6 +1,7 @@
 import asyncio
 from ..state import MarketingAssistantState
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import AIMessage
 from langgraph.graph import END
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
@@ -27,8 +28,27 @@ async def quality_check_node(state: MarketingAssistantState, config: RunnableCon
     check_tasks = list(await asyncio.gather(*[check_one(t) for t in tasks]))
     failed_task_ids = [t["product_id"] for t in check_tasks if not t["quality_check"]["passed"]]
 
+    if not failed_task_ids:
+        lines = ["CRM 메시지 생성이 완료되었습니다.\n"]
+        for t in check_tasks:
+            msg = t["message"]
+            lines.append(
+                f"[상품ID: {t['product_id']} | 브랜드: {t['brand']} | 목적: {t['purpose']}]\n"
+                f"제목: {msg['title']}\n"
+                f"내용: {msg['message']}"
+            )
+        ai_message = AIMessage(content="\n\n".join(lines))
+        return Command(
+            goto=END,
+            update={
+                "generated_tasks": check_tasks,
+                "failed_task_ids": failed_task_ids,
+                "messages": [ai_message],
+            },
+        )
+
     return Command(
-        goto="message_feedback_node" if failed_task_ids else END,
+        goto="message_feedback_node",
         update={
             "generated_tasks": check_tasks,
             "failed_task_ids": failed_task_ids,

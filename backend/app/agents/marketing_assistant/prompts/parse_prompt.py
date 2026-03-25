@@ -57,6 +57,35 @@ def build_crm_message_parse_prompt() -> str:
 """
 
 
+def build_user_feedback_parse_prompt() -> str:
+    """대화 히스토리를 읽어 피드백 요청을 파싱하는 프롬프트."""
+    return """대화 히스토리를 보고 사용자의 피드백 요청을 파싱하세요.
+
+**추출 방법:**
+- title, message, product_id: 대화 히스토리에서 AI가 생성한 CRM 메시지에서 추출
+  (예: "[상품ID: p001 | 브랜드: ... | 목적: ...]\\n제목: ...\\n내용: ..." 형식)
+- feedback: 마지막 사용자 메시지에서 수정 요청 내용 추출
+- purpose: AI 메시지의 "목적:" 항목 또는 마지막 사용자 메시지에서 추출 (명시 없으면 null)
+
+**출력 필드:**
+- title: 기존 메시지 제목 (str)
+- message: 기존 메시지 내용 (str)
+- product_id: 상품 ID (str, 예: "p001")
+- feedback: 반영할 피드백 내용 (str)
+- purpose: 메시지 목적 (str | null)
+
+**purpose 허용값 (7가지 중 하나, 명시되지 않으면 null):**
+"브랜드/제품 첫소개", "신제품 홍보", "베스트셀러 제품 소개",
+"프로모션/이벤트 소개", "성분/효능 강조 소개", "피부타입/고민 강조 소개",
+"라이프스타일/연령대 강조 소개"
+
+**규칙:**
+- title, message, product_id, feedback 는 반드시 추출
+- purpose가 명시되지 않으면 null 반환
+- 여러 상품이 있는 경우 마지막 사용자 메시지가 언급하는 상품의 메시지를 추출
+"""
+
+
 def build_crm_parse_prompt(categories) -> str:
     """
     사용자 요청에서 페르소나id, 브랜드, 상품 카테고리를 파싱하는 프롬프트

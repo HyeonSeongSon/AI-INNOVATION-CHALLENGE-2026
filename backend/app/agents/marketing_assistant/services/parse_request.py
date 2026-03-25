@@ -1,8 +1,8 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
-from ..prompts.parse_prompt import build_crm_parse_prompt, build_crm_message_parse_prompt
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
+from ..prompts.parse_prompt import build_crm_parse_prompt, build_crm_message_parse_prompt, build_user_feedback_parse_prompt
 from ....core.logging import get_logger
 from ....core.data_loader import get_categories
 import json
@@ -36,7 +36,17 @@ class CRMMessageTask(BaseModel):
 class CRMMessageParseResult(BaseModel):
     """CRM 메시지 파싱 결과 — 여러 상품이 언급된 경우 각각 별도 task"""
     tasks: List[CRMMessageTask] = Field(default_factory=list)
-    
+
+
+class UserFeedbackInput(BaseModel):
+    """사용자 직접 피드백 입력 — 오케스트레이터에서 message_feedback_node로 진입 시 파싱"""
+    title: str = Field(description="기존 메시지 제목")
+    message: str = Field(description="기존 메시지 내용")
+    product_id: str = Field(description="상품 ID (예: 'p001')")
+    feedback: str = Field(description="반영할 피드백 내용")
+    purpose: Optional[str] = Field(default=None, description="메시지 목적 (7가지 허용값 중 하나, 없으면 null)")
+
+
 class MultiValueParser:
     def __init__(self):
         logger.info("parser_initialized")
@@ -80,6 +90,25 @@ class MultiValueParser:
         try:
             response = await parser.ainvoke(messages)
             return [t.model_dump() for t in response.tasks]
+        except Exception as e:
+            logger.error("llm_parse_failed", error=str(e), exc_info=True)
+            raise
+
+    async def user_feedback_parser(self, messages: List[AnyMessage], llm: BaseChatModel) -> Dict[str, Any]:
+        """사용자 직접 피드백 입력 파싱 — 대화 히스토리에서 title, message, product_id, feedback, purpose 추출.
+
+        Args:
+            messages: 전체 대화 메시지 리스트 (AIMessage에 기존 CRM 내용 포함)
+            llm: 노드에서 생성된 LLM 인스턴스 (BaseChatModel)
+
+        Returns:
+            UserFeedbackInput 필드로 구성된 dict
+        """
+        parser = llm.with_structured_output(UserFeedbackInput)
+        prompt_messages = [SystemMessage(content=build_user_feedback_parse_prompt()), *messages]
+        try:
+            response = await parser.ainvoke(prompt_messages)
+            return response.model_dump()
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
             raise
