@@ -30,7 +30,7 @@ TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
     "이너뷰티": "inner_beauty",
     "영양보충": "inner_beauty",
     # 음료/차 그룹
-    "브렌딩티/차": "tea",
+    "차/간식": "tea_snack",
     "차세트":      "tea",
 }
 
