@@ -28,7 +28,7 @@ from path_utils import get_absolute_path
 from index_products_skincare import index_products_to_opensearch
 from index_products_color_tone import index_color_tone_to_opensearch
 from index_products_hair import index_hair_to_opensearch
-from index_products_nail import index_nail_to_opensearch
+from index_products_living_supplies import index_living_supplies_to_opensearch
 from index_products_fragrance_body import index_fragrance_body_to_opensearch
 from index_products_inner_beauty import index_inner_beauty_to_opensearch
 from index_products_beauty_tool import index_beauty_tool_to_opensearch
@@ -44,43 +44,42 @@ PIPELINE_STEPS = [
     {
         "name": "스킨케어",
         "func": index_products_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_skincare.jsonl"),
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_skincare.jsonl"),
         "recreate_index": True,   # 인덱스 생성
+    },
+    {
+        "name": "뷰티툴",
+        "func": index_beauty_tool_to_opensearch,
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_beauty_tool.jsonl"),
+        "recreate_index": False,
     },
     {
         "name": "색조",
         "func": index_color_tone_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_color_tone.jsonl"),
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_color_tone.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "헤어",
         "func": index_hair_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_hair.jsonl"),
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_hair.jsonl"),
         "recreate_index": False,
     },
     {
-        "name": "네일",
-        "func": index_nail_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_nail.jsonl"),
-        "recreate_index": False,
+        "name": "생활도구",
+        "func": index_living_supplies_to_opensearch,
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_living_supplies.jsonl"),
     },
     {
         "name": "향수/바디",
         "func": index_fragrance_body_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_fragrance_body.jsonl"),
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_fragrance_body.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "이너뷰티",
         "func": index_inner_beauty_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_inner_beauty.jsonl"),
-        "recreate_index": False,
-    },
-    {
-        "name": "뷰티툴",
-        "func": index_beauty_tool_to_opensearch,
-        "jsonl": get_absolute_path("data", "product_data_structured_beauty_tool.jsonl"),
+        "jsonl": get_absolute_path("data", "v2_product_data_structured_inner_beauty.jsonl"),
         "recreate_index": False,
     },
 ]
@@ -102,11 +101,10 @@ def run_pipeline():
         print(f"\n[{i}/{total}] {name} 색인 시작...")
         step_start = time.time()
 
-        success = step["func"](
-            jsonl_file_path=step["jsonl"],
-            index_name=INDEX_NAME,
-            recreate_index=step["recreate_index"],
-        )
+        kwargs = {"jsonl_file_path": step["jsonl"], "index_name": INDEX_NAME}
+        if "recreate_index" in step:
+            kwargs["recreate_index"] = step["recreate_index"]
+        success = step["func"](**kwargs)
 
         elapsed = time.time() - step_start
         status = "성공" if success else "실패"

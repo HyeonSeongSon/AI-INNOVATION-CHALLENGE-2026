@@ -1,8 +1,6 @@
 """
 이너뷰티 데이터 대상 항목 재처리
-- 스킨케어로 잘못 구조화 1건 (fallback): A20251200264 — 슈퍼콜라겐 프리미엄(28일)
-- concern/ingredient 빈값 1건 (기존 문서): A20251200245 — 메타그린 칼로리컷 젤리
-- concern/ingredient/nutrients 전부 빈값 1건 (fallback): A20251200263 — 명작수 골드(100일)
+- structured 빈값 1건 (400 에러, fallback): A20251200829
 """
 import json
 import asyncio
@@ -16,33 +14,24 @@ from backend.app.core.llm_factory import get_llm
 from backend.app.config.settings import Settings
 from langchain_core.messages import HumanMessage
 
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_inner_beauty_v.jsonl"
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_inner_beauty.jsonl"
 CONCURRENCY = 5
+MAX_RETRIES = 3
 
-_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
+_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "category.json"
 with open(_CATEGORIES_FILE, encoding="utf-8") as _f:
-    _INNER_BEAUTY_CATEGORIES: list[str] = json.load(_f)["category_type"]["이너뷰티"]
-
-TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
-    "이너뷰티":     "inner_beauty",
-    "슬리밍":       "inner_beauty",
-    "영양보충":     "inner_beauty",
-    "건강기능식품": "inner_beauty",
-    "브렌딩티/차":  "tea",
-    "차세트":       "tea",
-}
+    _inner_beauty_raw = json.load(_f)["categories"]["이너뷰티"]
+    _INNER_BEAUTY_CATEGORIES: list[str] = [v for vals in _inner_beauty_raw.values() for v in vals]
 
 llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 
-# 스킨케어로 잘못 구조화 or concern/ingredient 전부 빈값 → fallback 사용
-FALLBACK_PRODUCT_IDS = {
-    "A20251200264",  # 슈퍼콜라겐 프리미엄(28일) — 스킨케어로 잘못 구조화
-    "A20251200263",  # 명작수 골드(100일) — concern/ingredient/nutrients 전부 빈값
+# 태그 → 이너뷰티 그룹 매핑
+TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
+    "기능성이너뷰티": "functional_subtags",
+    "이너뷰티푸드": "food_subtags"
 }
 
-TARGET_PRODUCT_IDS = FALLBACK_PRODUCT_IDS | {
-    "A20251200245",  # 메타그린 칼로리컷 젤리 — concern/ingredient 빈값 (기존 문서 재처리)
-}
+TARGET_PRODUCT_IDS = {"A20251200829"}
 
 
 def build_fallback_document(product: dict) -> str:
@@ -55,9 +44,8 @@ def build_fallback_document(product: dict) -> str:
 
 
 def build_prompt(product: dict) -> str:
-    pid = product.get("product_id", "")
     tag = product.get("태그", "")
-    document = build_fallback_document(product) if pid in FALLBACK_PRODUCT_IDS else product.get("문서", "")
+    document = build_fallback_document(product)
     extra_category = TAG_TO_EXTRA_CATEGORY.get(tag, "inner_beauty")
     return build_inner_beauty_category_product_prompt(extra_category, document, _INNER_BEAUTY_CATEGORIES)
 
@@ -77,19 +65,21 @@ async def process_product(product: dict, semaphore: asyncio.Semaphore, idx: int,
     async with semaphore:
         name = product.get("상품명", "?")
         tag = product.get("태그", "?")
-        pid = product.get("product_id", "?")
-        fallback = pid in FALLBACK_PRODUCT_IDS
-        print(f"[{idx}/{total}] [{tag}] {name[:35]} {'(fallback)' if fallback else ''} 처리 중...")
+        print(f"[{idx}/{total}] [{tag}] {name[:35]} (fallback) 처리 중...")
         prompt = build_prompt(product)
-        try:
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            structured = parse_llm_json(response.content)
-            val = structured.get("value", [])
-            print(f"[{idx}/{total}] 완료 | value={val[:3]}")
-        except Exception as e:
-            structured = product.get("structured", {})
-            print(f"[{idx}/{total}] 실패(기존값 유지) — {e}")
-        return {**product, "structured": structured}
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = await llm.ainvoke([HumanMessage(content=prompt)])
+                structured = parse_llm_json(response.content)
+                val = structured.get("value", [])
+                print(f"[{idx}/{total}] 완료 (시도 {attempt}) | value={val[:3]}")
+                return {**product, "structured": structured}
+            except Exception as e:
+                print(f"[{idx}/{total}] 시도 {attempt}/{MAX_RETRIES} 실패 — {e}")
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(1)
+        print(f"[{idx}/{total}] 모든 재시도 실패 — 기존값 유지")
+        return product
 
 
 async def main():
@@ -103,9 +93,7 @@ async def main():
     total = len(target_indices)
     print(f"재처리 대상 {total}개 (동시 {CONCURRENCY}개)")
     for _, p in target_indices:
-        pid = p.get("product_id")
-        flag = "(fallback)" if pid in FALLBACK_PRODUCT_IDS else "(기존 문서)"
-        print(f"  [{p.get('태그')}] {p.get('상품명')} {flag}")
+        print(f"  [{p.get('태그')}] {p.get('상품명')}")
 
     semaphore = asyncio.Semaphore(CONCURRENCY)
     tasks = [

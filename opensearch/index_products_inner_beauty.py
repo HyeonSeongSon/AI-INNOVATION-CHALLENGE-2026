@@ -40,8 +40,23 @@ def get_inner_beauty_new_field_mappings():
 
 
 def update_index_mapping(client, index_name: str):
-    """기존 인덱스에 이너뷰티 전용 필드 매핑 추가"""
+    """기존 인덱스에 이너뷰티 전용 필드 매핑 추가 (이미 존재하는 필드는 건너뜀)"""
     new_properties = get_inner_beauty_new_field_mappings()
+
+    try:
+        existing = client.client.indices.get_mapping(index=index_name)
+        existing_props = existing[index_name]["mappings"].get("properties", {})
+        skipped = [k for k in new_properties if k in existing_props]
+        new_properties = {k: v for k, v in new_properties.items() if k not in existing_props}
+        if skipped:
+            logging.info(f"이미 존재하는 필드 건너뜀: {skipped}")
+    except Exception as e:
+        logging.warning(f"기존 매핑 조회 실패, 전체 업데이트 시도: {e}")
+
+    if not new_properties:
+        logging.info("추가할 새 필드가 없습니다.")
+        return True
+
     try:
         client.client.indices.put_mapping(
             index=index_name,
@@ -204,8 +219,8 @@ def index_inner_beauty_to_opensearch(
 
 
 if __name__ == "__main__":
-    JSONL_FILE = get_absolute_path("data", "product_data_structured_inner_beauty.jsonl")
-    INDEX_NAME = "product_index_v2"
+    JSONL_FILE = get_absolute_path("data", "v2_product_data_structured_inner_beauty.jsonl")
+    INDEX_NAME = "product_index_v3"
     RECREATE_INDEX = False  # 기존 인덱스에 추가
 
     print("=" * 60)

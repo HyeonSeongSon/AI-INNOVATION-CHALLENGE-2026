@@ -13,8 +13,8 @@ from langchain_core.messages import HumanMessage
 # ──────────────────────────────────────────────
 # 설정
 # ──────────────────────────────────────────────
-INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_251231.jsonl"
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_hair.jsonl"
+INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data.jsonl"
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_hair.jsonl"
 CONCURRENCY = 10  # 동시 LLM 호출 수
 
 _CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
@@ -26,15 +26,11 @@ llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 # 태그 → 헤어 서브 카테고리 매핑
 # 세정 그룹
 TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
-    "샴푸":             "hair_cleansing",
-    "린스&컨디셔너":    "hair_cleansing",
-    # 트리트먼트 그룹
-    "트리트먼트&팩":    "hair_treatment",
-    "에센스&세럼&오일": "hair_treatment",
-    # 스타일링 그룹
-    "스타일링":         "hair_styling_",   # document_hair_prompt.py 키와 일치
-    # 헤어컬러 그룹
-    "헤어컬러":         "hair_color",
+    "세정": "hair_cleansing",
+    "모발케어": "hair_treatment",
+    "두피케어": "scalp_care",
+    "스타일링": "hair_styling_", 
+    "헤어컬러": "hair_color",
 }
 
 

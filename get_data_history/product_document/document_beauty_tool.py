@@ -13,8 +13,8 @@ from langchain_core.messages import HumanMessage
 # ──────────────────────────────────────────────
 # 설정
 # ──────────────────────────────────────────────
-INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_251231.jsonl"
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_beauty_tool.jsonl"
+INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_filtered.jsonl"
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_beauty_tool.jsonl"
 CONCURRENCY = 10  # 동시 LLM 호출 수
 
 _CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
@@ -25,21 +25,15 @@ llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 
 # 태그 → 뷰티 툴 그룹 매핑
 TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
-    # 메이크업 도구 그룹
-    "스펀지&퍼프":  "makeup_tool",
-    "화장솜":       "makeup_tool",
-    "속눈썹":       "makeup_tool",
-    # 브러쉬 그룹
-    "얼굴브러쉬":   "brush",
-    "치크브러쉬":   "brush",
-    "눈브러쉬":     "brush",
-    "입술브러쉬":   "brush",
-    "브러쉬세트":   "brush",
-    # 소품/용기 그룹
-    "용기&수저":    "beauty_accessory",
-    "소품&도구":    "beauty_accessory",
-    # 디바이스 그룹
-    "뷰티디바이스": "beauty_device_extra",
+    "메이크업툴": "makeup_tool",
+    "브러쉬": "brush",
+    "소품/도구": "beauty_accessory",
+    "헤어기기": "beauty_device_extra",
+    "피부관리": "beauty_device_extra",
+    "기타디바이스": "beauty_device_extra",
+    "마사지/전동케어": "beauty_device_extra",
+    "수동마사지도구": "manual_massage_tool",
+    "뷰티툴케어": "beauty_tool_care"
 }
 
 

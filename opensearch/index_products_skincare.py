@@ -412,12 +412,12 @@ def index_products_to_opensearch(
 
 
 if __name__ == "__main__":
-    JSONL_FILE = get_absolute_path("data", "product_data_structured_skincare.jsonl")
-    INDEX_NAME = "product_index_v2"
+    JSONL_FILE = get_absolute_path("data", "v2_product_data_structured_skincare.jsonl")
+    INDEX_NAME = "product_index_v3"
     RECREATE_INDEX = True
 
     print("=" * 60)
-    print("상품 데이터 OpenSearch 색인 시작 (v2 - structured 필드 포함)")
+    print("상품 데이터 OpenSearch 색인 시작 (v3 - structured 필드 포함)")
     print("=" * 60)
     print(f"JSONL 파일: {JSONL_FILE}")
     print(f"인덱스 이름: {INDEX_NAME}")

@@ -13,25 +13,22 @@ from langchain_core.messages import HumanMessage
 # ──────────────────────────────────────────────
 # 설정
 # ──────────────────────────────────────────────
-INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_251231.jsonl"
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_inner_beauty_v.jsonl"
+INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data.jsonl"
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_inner_beauty.jsonl"
 CONCURRENCY = 10  # 동시 LLM 호출 수
 
-_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
+_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "category.json"
 with open(_CATEGORIES_FILE, encoding="utf-8") as _f:
-    _INNER_BEAUTY_CATEGORIES: list[str] = json.load(_f)["category_type"]["이너뷰티"]
+    _inner_beauty_raw = json.load(_f)["categories"]["이너뷰티"]
+    _INNER_BEAUTY_CATEGORIES: list[str] = [v for vals in _inner_beauty_raw.values() for v in vals]
 
 llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 
 # 태그 → 이너뷰티 그룹 매핑
 TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
     # 기능성 이너뷰티 그룹
-    "슬리밍":   "inner_beauty",
-    "이너뷰티": "inner_beauty",
-    "영양보충": "inner_beauty",
-    # 음료/차 그룹
-    "차/간식": "tea_snack",
-    "차세트":      "tea",
+    "기능성이너뷰티": "functional_subtags",
+    "이너뷰티푸드": "food_subtags"
 }
 
 

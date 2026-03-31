@@ -13,8 +13,8 @@ from langchain_core.messages import HumanMessage
 # ──────────────────────────────────────────────
 # 설정
 # ──────────────────────────────────────────────
-INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_251231.jsonl"
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_fragrance_body.jsonl"
+INPUT_FILE  = Path(__file__).parent.parent.parent / "data" / "product_data_filtered.jsonl"
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_fragrance_body.jsonl"
 CONCURRENCY = 10  # 동시 LLM 호출 수
 
 _CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
@@ -25,24 +25,11 @@ llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 
 # 태그 → 향수/바디 그룹 매핑
 TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
-    # 향수 그룹
-    "향수":             "fragrance",
-    "샤워코롱":         "fragrance",
-    "향수세트":         "fragrance",
-    # 바디 세정 그룹
-    "바디워시":         "body_cleansing",
-    "바디스크럽":       "body_cleansing",
-    "비누":             "body_cleansing",
-    # 여성청결제
-    "여성청결제":       "feminine_care",
-    # 바디 케어 그룹
-    "바디모이스처라이저":  "body_care",
-    "바디오일&미스트":     "body_care",
-    "핸드&풋케어":         "body_care",
-    "데오드란트":          "body_care",
-    "입욕제/배쓰밤":       "body_care",
-    # 홈 프래그런스 그룹
-    "캔들&디퓨져":      "home_fragrance",
+    "향수": "fragrance",
+    "바디세정": "body_cleansing",
+    "여성청결제": "feminine_care",
+    "바디케어": "body_care",
+    "홈프래그런스": "home_fragrance",
 }
 
 
