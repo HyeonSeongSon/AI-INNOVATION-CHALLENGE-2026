@@ -2,17 +2,16 @@
 역방향 합성 평가 데이터셋 생성 스크립트
 
 사용법:
-    python eval/generate_eval_dataset.py [--samples N] [--output PATH] [--model MODEL]
+    python eval/generate_eval_dataset.py [--output PATH] [--model MODEL]
 
 동작:
-    1. data/ 디렉토리의 상품 JSONL 파일들을 카테고리별 로드
-    2. 카테고리별 균등 샘플링
+    1. data/test_products_selected.jsonl에서 product_id 목록 로드
+    2. 카테고리별 JSONL 파일에서 해당 product_id 필터링
     3. 각 상품에 대해 LLM으로 역방향 페르소나 생성
     4. (persona_info, ground_truth_product_id) 쌍을 JSONL로 저장
 """
 import asyncio
 import json
-import random
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,21 +26,34 @@ _ROOT = Path(__file__).parent.parent
 load_dotenv(_ROOT / "backend" / "app" / ".env")
 
 # ── 설정 ─────────────────────────────────────────────────────────────────────
+SELECTED_FILE = _ROOT / "data" / "test_products_selected.jsonl"
+
 DATA_FILES = {
-    "skincare":       _ROOT / "data" / "product_data_structured_skincare.jsonl",
-    "color_tone":     _ROOT / "data" / "product_data_structured_color_tone.jsonl",
-    "hair":           _ROOT / "data" / "product_data_structured_hair.jsonl",
-    "fragrance_body": _ROOT / "data" / "product_data_structured_fragrance_body.jsonl",
-    "inner_beauty":   _ROOT / "data" / "product_data_structured_inner_beauty.jsonl",
-    "beauty_tool":    _ROOT / "data" / "product_data_structured_beauty_tool.jsonl",
-    "nail":           _ROOT / "data" / "product_data_structured_nail.jsonl",
+    "skincare":        _ROOT / "data" / "v2_product_data_structured_skincare.jsonl",
+    "color_tone":      _ROOT / "data" / "v2_product_data_structured_color_tone.jsonl",
+    "hair":            _ROOT / "data" / "v2_product_data_structured_hair.jsonl",
+    "fragrance_body":  _ROOT / "data" / "v2_product_data_structured_fragrance_body.jsonl",
+    "inner_beauty":    _ROOT / "data" / "v2_product_data_structured_inner_beauty.jsonl",
+    "beauty_tool":     _ROOT / "data" / "v2_product_data_structured_beauty_tool.jsonl",
+    "living_supplies": _ROOT / "data" / "v2_product_data_structured_living_supplies.jsonl",
 }
 
-DEFAULT_SAMPLES_PER_CATEGORY = 7   # 카테고리 7개 × 7 = 49개
-DEFAULT_MODEL = "gpt-4o-mini"
+# 한국어 카테고리명 → DATA_FILES 키 매핑
+CATEGORY_MAP = {
+    "스킨케어":  "skincare",
+    "뷰티툴":    "beauty_tool",
+    "헤어":      "hair",
+    "색조":      "color_tone",
+    "향수/바디": "fragrance_body",
+    "이너뷰티":  "inner_beauty",
+    "생활도구":  "living_supplies",
+}
+
+DEFAULT_MODEL = "gpt-5-mini"
 DEFAULT_OUTPUT = _ROOT / "eval" / "synthetic_eval_dataset.jsonl"
+TEST_OUTPUT    = _ROOT / "eval" / "synthetic_eval_dataset_test.jsonl"
 MAX_CONCURRENT = 5                  # 동시 API 호출 수 (rate limit 방지)
-RANDOM_SEED = 42
+NUM_PERSONAS   = 3                  # 상품당 기본 페르소나 생성 수
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -55,24 +67,46 @@ def load_products(file_path: Path) -> list[dict]:
     return products
 
 
-def sample_products(samples_per_category: int, seed: int = RANDOM_SEED) -> list[dict]:
-    """카테고리별 균등 샘플링 (상품 수가 적은 카테고리는 전체 사용)"""
-    rng = random.Random(seed)
-    sampled = []
+def load_selected_products(max_per_category: int | None = None) -> list[dict]:
+    """test_products_selected.jsonl의 product_id를 기반으로 상품 데이터 로드
 
-    for category, path in DATA_FILES.items():
-        if not path.exists():
-            print(f"[skip] {path.name} 파일 없음")
+    Args:
+        max_per_category: 카테고리당 최대 상품 수 (None이면 전체)
+    """
+    # 1. 선택된 product_id를 카테고리(영문 키)별로 분류
+    selected: dict[str, list[str]] = {}
+    with open(SELECTED_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            cat_kr = item.get("카테고리", "")
+            cat_en = CATEGORY_MAP.get(cat_kr)
+            if not cat_en:
+                print(f"[warn] 알 수 없는 카테고리: {cat_kr}")
+                continue
+            selected.setdefault(cat_en, []).append(item["product_id"])
+
+    # 2. 각 카테고리 파일에서 해당 product_id 필터링
+    products = []
+    for category, ids in selected.items():
+        if max_per_category is not None:
+            ids = ids[:max_per_category]
+        path = DATA_FILES.get(category)
+        if not path or not path.exists():
+            print(f"[skip] {category} 파일 없음")
             continue
-        products = load_products(path)
-        n = min(samples_per_category, len(products))
-        chosen = rng.sample(products, n)
-        for p in chosen:
-            p["_source_category"] = category  # 내부 추적용
-        sampled.extend(chosen)
-        print(f"[load] {category}: {len(products)}개 중 {n}개 샘플링")
+        id_set = set(ids)
+        found = [p for p in load_products(path) if p.get("product_id") in id_set]
+        if max_per_category is not None:
+            found = found[:max_per_category]
+        for p in found:
+            p["_source_category"] = category
+        products.extend(found)
+        print(f"[load] {category}: {len(ids)}개 요청 → {len(found)}개 로드")
 
-    return sampled
+    return products
 
 
 async def generate_persona(
@@ -85,13 +119,16 @@ async def generate_persona(
     product_id = product.get("product_id", "unknown")
     prompt = build_reverse_persona_prompt(product)
 
+    # null byte, 제어 문자, BOM/비문자(U+FEFF, U+FFFE, U+FFFF) 제거 (HTTP JSON body 파싱 오류 방지)
+    _BAD = frozenset("\ufeff\ufffe\uffff")
+    prompt = "".join(ch for ch in prompt if (ch >= " " or ch in "\n\t") and ch not in _BAD)
+
     async with semaphore:
         try:
             response = await client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
-                temperature=0.8,  # 다양한 페르소나 생성
             )
             persona_json = response.choices[0].message.content
             persona_info = json.loads(persona_json)
@@ -102,11 +139,11 @@ async def generate_persona(
             return None
 
 
-def build_eval_record(product: dict, persona_info: dict) -> dict:
+def build_eval_record(product: dict, persona_info: dict, persona_idx: int = 0) -> dict:
     """평가 레코드 구성"""
     s = product.get("structured", {})
     return {
-        "eval_id": f"eval_{product.get('product_id', 'unknown')}",
+        "eval_id": f"eval_{product.get('product_id', 'unknown')}_{persona_idx:02d}",
         "source_product_id": product.get("product_id"),
         "source_product_name": product.get("상품명", ""),
         "source_product_category": product.get("_source_category", ""),
@@ -131,77 +168,82 @@ def build_eval_record(product: dict, persona_info: dict) -> dict:
     }
 
 
-async def main(
-    samples_per_category: int,
-    model: str,
-    output_path: Path,
-    seed: int = RANDOM_SEED,
-):
+async def main(model: str, output_path: Path, test_mode: bool = False, num_personas: int = NUM_PERSONAS):
+    mode_label = "[TEST] 카테고리별 1개" if test_mode else "전체"
     print(f"\n{'='*60}")
-    print(f"역방향 합성 평가 데이터셋 생성")
-    print(f"  카테고리당 샘플 수: {samples_per_category}")
+    print(f"역방향 합성 평가 데이터셋 생성 ({mode_label})")
+    print(f"  선택 파일: {SELECTED_FILE.name}")
     print(f"  LLM 모델: {model}")
+    print(f"  상품당 페르소나: {num_personas}개")
     print(f"  출력 파일: {output_path}")
     print(f"{'='*60}\n")
 
-    # 1. 상품 샘플링
-    products = sample_products(samples_per_category, seed=seed)
-    print(f"\n총 {len(products)}개 상품에 대해 페르소나 생성 시작...\n")
+    # 1. 선택된 상품 로드
+    products = load_selected_products(max_per_category=1 if test_mode else None)
+    total = len(products) * num_personas
+    print(f"\n총 {len(products)}개 상품 × {num_personas}개 페르소나 = {total}개 레코드 생성 시작...\n")
 
-    # 2. 비동기 페르소나 생성
+    # 2. 완료 즉시 저장·출력하는 래퍼
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     client = AsyncOpenAI()
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-
-    tasks = [
-        generate_persona(client, product, model, semaphore)
-        for product in products
-    ]
-    personas = await asyncio.gather(*tasks)
-
-    # 3. 결과 저장
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    done_count = 0
     success = 0
-    with open(output_path, "w", encoding="utf-8") as f:
-        for product, persona in zip(products, personas):
+
+    async def process(product: dict, out_file):
+        nonlocal done_count, success
+        product_id = product.get("product_id")
+        for idx in range(num_personas):
+            persona = await generate_persona(client, product, model, semaphore)
+            done_count += 1
             if persona is None:
-                print(f"[skip] {product.get('product_id')} - 페르소나 생성 실패")
+                print(f"[{done_count}/{total}] [skip] {product_id}_{idx:02d} - 페르소나 생성 실패")
                 continue
-            record = build_eval_record(product, persona)
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            record = build_eval_record(product, persona, persona_idx=idx)
+            out_file.write(json.dumps(record, ensure_ascii=False) + "\n")
+            out_file.flush()
             success += 1
-            print(f"[done] {product.get('product_id')} ({product.get('_source_category')}) → {persona.get('이름', '?')}, {persona.get('나이', '?')}세")
+            print(f"[{done_count}/{total}] [done] {product_id}_{idx:02d} ({product.get('_source_category')}) → {persona.get('이름', '?')}, {persona.get('나이', '?')}세")
+
+    # 3. 비동기 실행 (파일은 미리 열어두고 각 작업이 즉시 기록)
+    with open(output_path, "w", encoding="utf-8") as f:
+        await asyncio.gather(*[process(p, f) for p in products])
 
     print(f"\n{'='*60}")
-    print(f"완료: {success}/{len(products)}개 생성 → {output_path}")
+    print(f"완료: {success}/{total}개 생성 → {output_path}")
     print(f"{'='*60}\n")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="역방향 합성 평가 데이터셋 생성")
     parser.add_argument(
-        "--samples", type=int, default=DEFAULT_SAMPLES_PER_CATEGORY,
-        help=f"카테고리당 샘플 수 (기본값: {DEFAULT_SAMPLES_PER_CATEGORY})"
-    )
-    parser.add_argument(
         "--model", type=str, default=DEFAULT_MODEL,
         help=f"LLM 모델명 (기본값: {DEFAULT_MODEL})"
     )
     parser.add_argument(
-        "--output", type=str, default=str(DEFAULT_OUTPUT),
-        help=f"출력 파일 경로 (기본값: {DEFAULT_OUTPUT})"
+        "--output", type=str, default=None,
+        help=f"출력 파일 경로 (기본값: {DEFAULT_OUTPUT}, --test 시: {TEST_OUTPUT.name})"
     )
     parser.add_argument(
-        "--seed", type=int, default=RANDOM_SEED,
-        help=f"랜덤 시드 (기본값: {RANDOM_SEED})"
+        "--test", action="store_true",
+        help="테스트 모드: 카테고리별 1개씩만 생성 (출력: synthetic_eval_dataset_test.jsonl)"
+    )
+    parser.add_argument(
+        "--num-personas", type=int, default=NUM_PERSONAS,
+        help=f"상품당 생성할 페르소나 수 (기본값: {NUM_PERSONAS})"
     )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+    if args.output:
+        out = Path(args.output)
+    else:
+        out = TEST_OUTPUT if args.test else DEFAULT_OUTPUT
     asyncio.run(main(
-        samples_per_category=args.samples,
         model=args.model,
-        output_path=Path(args.output),
-        seed=args.seed,
+        output_path=out,
+        test_mode=args.test,
+        num_personas=args.num_personas,
     ))

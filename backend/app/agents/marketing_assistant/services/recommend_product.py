@@ -152,26 +152,35 @@ class ProductRecommender:
         logger.info("get_product_documents.done")
         return results
 
-    @staticmethod
-    def _apply_rrf(dimension_results: Dict, k: int = 60) -> List[tuple]:
-        """
-        Reciprocal Rank Fusion으로 3개 차원 결과 합산
+    _DIMENSION_WEIGHTS: Dict[str, float] = {
+        "need": 1.5,        # 기능 니즈 — 가장 직접적인 매칭 신호
+        "preference": 1.2,  # 선호/속성 — 두 번째 중요 신호
+        "persona": 1.0,     # 페르소나 유사도 — 보조 신호
+        "retrieval": 0.9,   # 1차 retrieval 순위 — 보조 타이브레이커
+    }
 
-        RRF score = Σ 1 / (k + rank)
-        각 차원(need, preference, persona)의 랭킹을 합산해 최종 순위 결정
+    @staticmethod
+    def _apply_rrf(dimension_results: Dict, k: int = 15) -> List[tuple]:
+        """
+        Reciprocal Rank Fusion으로 3개 차원 결과 합산 (차원별 가중치 적용)
+
+        RRF score = Σ w_i / (k + rank_i)
+        각 차원(need, preference, persona)에 차별화된 가중치를 적용해 최종 순위 결정
 
         Args:
             dimension_results: {"need": [...], "preference": [...], "persona": [...]}
-            k: RRF 상수 (기본값 60)
+            k: RRF 상수 (기본값 20)
 
         Returns:
             [(product_id, rrf_score), ...] 내림차순
         """
+        weights = ProductRecommender._DIMENSION_WEIGHTS
         rrf_scores: Dict[str, float] = {}
-        for results in dimension_results.values():
+        for dim_name, results in dimension_results.items():
+            w = weights.get(dim_name, 1.0)
             for rank, item in enumerate(results, start=1):
                 pid = item["product_id"]
-                rrf_scores[pid] = rrf_scores.get(pid, 0.0) + 1.0 / (k + rank)
+                rrf_scores[pid] = rrf_scores.get(pid, 0.0) + w * (1.0 / (k + rank))
         return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
     async def recommend(
@@ -193,6 +202,11 @@ class ProductRecommender:
         """
         # 3차원 병렬 하이브리드 검색
         dimension_results = await self.get_product_documents(queries, retrieval_result_ids)
+
+        # 1차 retrieval 순위를 4번째 차원으로 추가 (추가 API 호출 없음)
+        dimension_results["retrieval"] = [
+            {"product_id": pid} for pid in retrieval_result_ids
+        ]
 
         # RRF로 최종 순위 결정
         ranked = self._apply_rrf(dimension_results)

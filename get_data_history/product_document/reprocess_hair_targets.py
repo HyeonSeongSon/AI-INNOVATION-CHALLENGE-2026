@@ -15,29 +15,29 @@ from backend.app.core.llm_factory import get_llm
 from backend.app.config.settings import Settings
 from langchain_core.messages import HumanMessage
 
-OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "product_data_structured_hair.jsonl"
+
+OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "v2_product_data_structured_hair.jsonl"
 CONCURRENCY = 5
 
-_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "categories.json"
+_CATEGORIES_FILE = Path(__file__).parent.parent.parent / "data" / "category.json"
 with open(_CATEGORIES_FILE, encoding="utf-8") as _f:
-    _HAIR_CATEGORIES: list[str] = json.load(_f)["category_type"]["헤어"]
+    _hair_raw = json.load(_f)["categories"]["헤어"]
+    _HAIR_CATEGORIES: list[str] = [v for vals in _hair_raw.values() for v in vals]
 
 TAG_TO_EXTRA_CATEGORY: dict[str, str] = {
-    "샴푸":             "hair_cleansing",
-    "린스&컨디셔너":    "hair_cleansing",
-    "트리트먼트&팩":    "hair_treatment",
-    "에센스&세럼&오일": "hair_treatment",
-    "스타일링":         "hair_styling_",
-    "헤어컬러":         "hair_color",
+    "세정": "hair_cleansing",
+    "모발케어": "hair_treatment",
+    "두피케어": "scalp_care",
+    "스타일링": "hair_styling_", 
+    "헤어컬러": "hair_color",
 }
 
 llm = get_llm(Settings.chatgpt_model_name, temperature=0.7)
 
 TARGET_PRODUCT_IDS = {
-    "A20251200403",  # 인리치 본딩 케어 샴푸 350g — value 빈값
-    "A20251200405",  # 인핸싱 실키 컬러 샴푸 500g — value 빈값
-    "A20251200410",  # 리밸런싱 모이스처 샴푸 500g — 완전 붕괴, fallback 사용
-    "A20251200412",  # 인핸싱 실키 오일 100ml — value 빈값
+    "A20251200053",
+    "A20251200061",
+    "A20251200062"
 }
 
 # 문서 오염으로 상품명+한줄소개 기반 fallback 사용할 product_id 목록

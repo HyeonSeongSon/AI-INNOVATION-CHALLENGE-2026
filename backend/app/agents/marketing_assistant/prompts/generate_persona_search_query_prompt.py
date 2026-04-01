@@ -28,6 +28,7 @@ def build_generate_product_search_query_from_persona_prompt(persona_info: Union[
 - 이너뷰티: 건강 고민(피로·수면·소화·체지방), 건강 관리 루틴(영양제 섭취)
 - 향수/바디: 선호 향, 체취 고민, 바디 케어 루틴
 - 네일: 손톱 고민(약함·갈라짐), 네일아트 취향, 네일 관리 루틴
+- 생활용품/생활가전: 식기·주방·수납 용품 고민(위생·편의성·선물), 가전 사용 목적(공기질·습도·청소), 소재 선호(스테인리스·구리·유리, BPA·플라스틱 기피), 제품 사용·관리 루틴
 
 페르소나 분석 기준
 판단된 카테고리에 따라 아래에서 해당 항목을 우선 반영하세요.
@@ -67,8 +68,17 @@ def build_generate_product_search_query_from_persona_prompt(persona_info: Union[
 [네일] → 손톱 관리·색상 표현 중심
   user_need_query: 손톱 고민 또는 네일아트 취향 + 목적
 
+[생활용품/생활가전] → 용도·편의성·소재 중심
+  user_need_query: 고민 키워드(위생·편의성·소재·용도·가전 기능) + 사용 목적
+  - skincare_routine이 제품 사용·관리 루틴인 경우 실사용 기능으로 변환
+    예: "식기 사용 후 세척, 건조 보관" → "세척 후 위생 관리가 쉬운, 내구성 있는"
+    예: "주 1회 필터 청소, 취침 전 작동" → "조용하고 에너지 효율 높은, 필터 관리 편리한"
+  - 피부 고민·스킨케어 효능·화장품 성분 관련 표현 사용 금지
+  user_preference_query: values(친환경·소재주의) + avoided_ingredients(BPA·플라스틱 등 소재 기피)
+  - preferred_ingredients는 소재명(구리·스테인리스·유리 등)으로 해석
+
 [선호/가치관 관련] → user_preference_query에 반영 (카테고리 공통)
-- preferred_ingredients, avoided_ingredients: 성분 선호/기피 (스킨케어·헤어에 해당)
+- preferred_ingredients, avoided_ingredients: 성분 선호/기피 (스킨케어·헤어에 해당, 생활용품은 소재명)
 - preferred_texture: 제형 선호
 - preferred_scents: 향 선호 (향수·바디·헤어에 해당)
 - values: 친환경 등 가치관
