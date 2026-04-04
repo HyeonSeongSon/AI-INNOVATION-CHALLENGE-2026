@@ -58,7 +58,7 @@ class ProductClient:
         self,
         retrieval_query: str,
         product_ids: List[str],
-        top_k: int = 10
+        top_k: int = 10,
     ):
         """
         combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색
@@ -77,7 +77,7 @@ class ProductClient:
                 f"{self.vector_db_api_url}/api/search/combined",
                 json={
                     "index_name": "product_index_v2",
-                    "pipeline_id": "hybrid-minmax-pipeline",
+                    "pipeline_id": "0.2_0.8",
                     "product_ids": product_ids,
                     "query": retrieval_query,
                     "top_k": top_k,

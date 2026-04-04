@@ -153,10 +153,10 @@ class ProductRecommender:
         return results
 
     _DIMENSION_WEIGHTS: Dict[str, float] = {
+        "retrieval": 1.2,   # 1차 retrieval 순위 — 보조 타이브레이커
         "need": 1.5,        # 기능 니즈 — 가장 직접적인 매칭 신호
-        "preference": 1.2,  # 선호/속성 — 두 번째 중요 신호
-        "persona": 1.0,     # 페르소나 유사도 — 보조 신호
-        "retrieval": 0.9,   # 1차 retrieval 순위 — 보조 타이브레이커
+        "preference": 0.6,  # 선호/속성 — 두 번째 중요 신호
+        "persona": 0.3,     # 페르소나 유사도 — 보조 신호
     }
 
     @staticmethod

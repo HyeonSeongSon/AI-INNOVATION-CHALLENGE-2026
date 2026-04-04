@@ -17,46 +17,34 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGSMITH_TRACING"] = "false"
 
 from openai import AsyncOpenAI
-from prompts import build_reverse_persona_prompt
+from v3_prompts import build_reverse_persona_prompt
 
 _EVAL_DIR      = Path(__file__).parent
 _DATA_DIR      = _ROOT / "data"
 DEFAULT_OUTPUT = _EVAL_DIR / "synthetic_eval_dataset.jsonl"
 DEFAULT_MODEL  = "gpt-5-mini"
-DEFAULT_CONCURRENCY = 3
+DEFAULT_CONCURRENCY = 5
 NUM_PERSONAS   = 3
 
 # 재생성 대상 product_id 목록
 TARGET_PRODUCT_IDS = {
-    "A20251200017",
-    "A20251200040",
-    "A20251200049",
-    "A20251200157",
-    "A20251200158",
-    "A20251200163",
-    "A20251200309",
-    "A20251200311",
-    "A20251200323",
-    "A20251200044",
-    "A20251200052",
-    "A20251200054",
-    "A20251200150",
-    "A20251200151",
-    "A20251200153",
-    "A20251200156",
-    "A20251200160",
-    "A20251200164",
-    "A20251200039",
-    "A20251200041",
-    "A20251200045",
-    "A20251200486",
-    "A20251200530"
+    "A20251200249",
+    "A20251200255",
+    "A20251200258",
+    "A20251200246",
+    "A20251200248",
+    "A20251200254",
+    "A20251200553",
+    "A20251200217",
+    "A20251200251",
+    "A20251200551",
+    "A20251200552"
 }
 
 
 def load_hair_products() -> list[dict]:
-    """skincare 데이터 파일에서 대상 상품만 로드"""
-    path = _DATA_DIR / "v2_product_data_structured_skincare.jsonl"
+    """inner_beauty 데이터 파일에서 대상 상품만 로드"""
+    path = _DATA_DIR / "v2_product_data_structured_inner_beauty.jsonl"
     products = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -64,7 +52,7 @@ def load_hair_products() -> list[dict]:
             if line:
                 p = json.loads(line)
                 if p.get("product_id") in TARGET_PRODUCT_IDS:
-                    p["_source_category"] = "skincare"
+                    p["_source_category"] = "inner_beauty"
                     products.append(p)
     return products
 
