@@ -61,7 +61,10 @@ class ProductClient:
         top_k: int = 10,
     ):
         """
-        combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색
+        combined_vector(KNN) + search_tags/search_phrases(BM25) 하이브리드 검색
+
+        BM25: search_tags + search_phrases (검색 최적화 필드)
+        Vector: combined_vector
 
         Args:
             retrieval_query: 검색 쿼리 텍스트
@@ -76,10 +79,12 @@ class ProductClient:
             response = await self.http_client.post(
                 f"{self.vector_db_api_url}/api/search/combined",
                 json={
-                    "index_name": "product_index_v2",
-                    "pipeline_id": "0.2_0.8",
+                    "index_name": "product_index_v3",
+                    "pipeline_id": "hybrid-minmax-pipeline",
                     "product_ids": product_ids,
                     "query": retrieval_query,
+                    "bm25_fields": ["search_tags", "search_phrases"],
+                    "vector_field": "combined_vector",
                     "top_k": top_k,
                 },
             )
@@ -121,21 +126,21 @@ class ProductClient:
     async def _search_by_field(
         self,
         query: str,
-        bm25_field: str,
+        bm25_fields: List[str],
         vector_field: str,
         product_ids: List[str],
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """단일 필드 하이브리드 검색 (내부용)"""
+        """다중 BM25 필드 + 벡터 하이브리드 검색 (내부용)"""
         try:
             response = await self.http_client.post(
                 f"{self.vector_db_api_url}/api/search/by-field",
                 json={
                     "query": query,
-                    "bm25_field": bm25_field,
+                    "bm25_fields": bm25_fields,
                     "vector_field": vector_field,
                     "product_ids": product_ids,
-                    "index_name": "product_index_v2",
+                    "index_name": "product_index_v3",
                     "pipeline_id": "hybrid-minmax-pipeline",
                     "top_k": top_k,
                 },
@@ -146,7 +151,7 @@ class ProductClient:
         except Exception as e:
             logger.error(
                 "search_by_field.failed",
-                bm25_field=bm25_field,
+                bm25_fields=bm25_fields,
                 error=str(e),
                 exc_info=True,
             )
@@ -163,9 +168,9 @@ class ProductClient:
         페르소나 3개 차원을 독립적으로 병렬 하이브리드 검색
 
         매핑:
-          need       → function_desc  / function_desc_vector
-          preference → attribute_desc / attribute_desc_vector
-          persona    → target_user    / target_user_vector
+          need       → function_tags + function_desc   / function_desc_vector
+          preference → attribute_tags + attribute_desc / combined_vector
+          persona    → target_tags + target_user       / target_user_vector
 
         Args:
             queries: get_product_search_queries 반환값
@@ -186,21 +191,21 @@ class ProductClient:
         need_result, preference_result, persona_result = await asyncio.gather(
             self._search_by_field(
                 query=queries["user_need_query"],
-                bm25_field="function_desc",
+                bm25_fields=["function_tags", "function_desc"],
                 vector_field="function_desc_vector",
                 product_ids=product_ids,
                 top_k=top_k,
             ),
             self._search_by_field(
                 query=queries["user_preference_query"],
-                bm25_field="attribute_desc",
-                vector_field="attribute_desc_vector",
+                bm25_fields=["attribute_tags", "attribute_desc"],
+                vector_field="combined_vector",
                 product_ids=product_ids,
                 top_k=top_k,
             ),
             self._search_by_field(
                 query=queries["persona"],
-                bm25_field="target_user",
+                bm25_fields=["target_tags", "target_user"],
                 vector_field="target_user_vector",
                 product_ids=product_ids,
                 top_k=top_k,
@@ -282,7 +287,7 @@ class ProductClient:
     async def get_products_by_ids(
         self,
         product_ids: List[str],
-        index_name: str = "product_index_v2",
+        index_name: str = "product_index_v3",
     ) -> List[Dict[str, Any]]:
         """
         product_id 리스트의 상품 정보를 병렬 조회

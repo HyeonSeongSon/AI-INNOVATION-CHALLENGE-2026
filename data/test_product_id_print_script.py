@@ -11,7 +11,7 @@ with open(input_path, "r", encoding="utf-8") as f:
         
         data = json.loads(line)
         
-        if data.get("카테고리") == "이너뷰티":
+        if data.get("카테고리") == "스킨케어":
             pid = data.get("product_id")
             if pid:
                 product_ids.append(pid)

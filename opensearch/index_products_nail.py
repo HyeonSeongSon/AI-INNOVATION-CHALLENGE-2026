@@ -72,6 +72,18 @@ def update_index_mapping(client, index_name: str):
         return False
 
 
+def _build_attribute_extended(structured: dict) -> str:
+    """BM25용 확장 attribute 필드. attribute_desc + texture + value + usage_context"""
+    parts = []
+    if structured.get("attribute_desc"):
+        parts.append(structured["attribute_desc"])
+    for field in ("texture", "value", "usage_context"):
+        val = structured.get(field)
+        if val:
+            parts.append(" ".join(val) if isinstance(val, list) else val)
+    return " / ".join(filter(None, parts))
+
+
 def load_and_prepare_documents(jsonl_file_path):
     """
     nail JSONL에서 문서를 로드하고 색인할 필드만 추출합니다.
@@ -137,6 +149,7 @@ def load_and_prepare_documents(jsonl_file_path):
                         logging.warning(f"라인 {line_num}: product_id가 없어 건너뜁니다.")
                         continue
 
+                    filtered_doc['attribute_extended'] = _build_attribute_extended(structured)
                     documents.append(filtered_doc)
 
                 except json.JSONDecodeError as e:

@@ -28,23 +28,17 @@ NUM_PERSONAS   = 3
 
 # 재생성 대상 product_id 목록
 TARGET_PRODUCT_IDS = {
-    "A20251200249",
-    "A20251200255",
-    "A20251200258",
-    "A20251200246",
-    "A20251200248",
-    "A20251200254",
-    "A20251200553",
-    "A20251200217",
-    "A20251200251",
-    "A20251200551",
-    "A20251200552"
+    # "A20251200045",
+    # "A20251200530",
+    "A20251200151",
+    # "A20251200160",
+    # "A20251200052"
 }
 
 
 def load_hair_products() -> list[dict]:
-    """inner_beauty 데이터 파일에서 대상 상품만 로드"""
-    path = _DATA_DIR / "v2_product_data_structured_inner_beauty.jsonl"
+    """living_supplies 데이터 파일에서 대상 상품만 로드"""
+    path = _DATA_DIR / "v2_product_data_structured_skincare.jsonl"
     products = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -52,7 +46,7 @@ def load_hair_products() -> list[dict]:
             if line:
                 p = json.loads(line)
                 if p.get("product_id") in TARGET_PRODUCT_IDS:
-                    p["_source_category"] = "inner_beauty"
+                    p["_source_category"] = "skincare"
                     products.append(p)
     return products
 

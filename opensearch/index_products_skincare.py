@@ -14,11 +14,12 @@ STRUCTURED_TEXT_FIELDS = [
     'summary', 'concern', 'ingredient', 'texture', 'value',
     'target_user', 'function', 'function_desc', 'attribute', 'attribute_desc',
     'combined', 'key_benefits', 'proof_points', 'usage_context',
-    'product_story', 'highlight_keywords',
+    'product_story', 'highlight_keywords', 'search_phrases',
 ]
 STRUCTURED_KEYWORD_FIELDS = [
     'suitable_for', 'body_area', 'absorption_speed', 'finish_type',
     'concentration_level', 'layering_compatible_types', 'ingredient_quality',
+    'function_tags', 'attribute_tags', 'target_tags', 'search_tags',
 ]
 STRUCTURED_INT_FIELDS = [
     'layering_order',
@@ -169,6 +170,10 @@ def create_product_index_mapping():
                     "type": "text",
                     "analyzer": "korean_analyzer"
                 },
+                "attribute_extended": {
+                    "type": "text",
+                    "analyzer": "korean_analyzer"
+                },
                 "combined": {
                     "type": "text",
                     "analyzer": "korean_analyzer"
@@ -207,17 +212,23 @@ def create_product_index_mapping():
                 "layering_compatible_types": {
                     "type": "keyword"
                 },
-                "function_desc_vector": {
-                    "type": "knn_vector",
-                    "dimension": 1024,
-                    "method": {
-                        "name": "hnsw",
-                        "space_type": "cosinesimil",
-                        "engine": "lucene",
-                        "parameters": {"ef_construction": 128, "m": 16}
-                    }
+                "function_tags": {
+                    "type": "keyword"
                 },
-                "attribute_desc_vector": {
+                "attribute_tags": {
+                    "type": "keyword"
+                },
+                "target_tags": {
+                    "type": "keyword"
+                },
+                "search_tags": {
+                    "type": "keyword"
+                },
+                "search_phrases": {
+                    "type": "text",
+                    "analyzer": "korean_analyzer"
+                },
+                "function_desc_vector": {
                     "type": "knn_vector",
                     "dimension": 1024,
                     "method": {
@@ -251,6 +262,29 @@ def create_product_index_mapping():
         }
     }
     return mapping
+
+
+def _build_attribute_extended(structured: dict) -> str:
+    """
+    BM25용 확장 attribute 필드.
+    attribute_desc + texture + value + usage_context + finish_type + absorption_speed
+    """
+    parts = []
+
+    if structured.get("attribute_desc"):
+        parts.append(structured["attribute_desc"])
+
+    for field in ("texture", "value", "usage_context"):
+        val = structured.get(field)
+        if val:
+            parts.append(" ".join(val) if isinstance(val, list) else val)
+
+    for field in ("finish_type", "absorption_speed"):
+        val = structured.get(field)
+        if val:
+            parts.append(val)
+
+    return " / ".join(filter(None, parts))
 
 
 def load_and_prepare_documents(jsonl_file_path):
@@ -309,6 +343,9 @@ def load_and_prepare_documents(jsonl_file_path):
                         if val is not None:
                             filtered_doc[field] = val
 
+                    # BM25 확장 필드 계산
+                    filtered_doc['attribute_extended'] = _build_attribute_extended(structured)
+
                     if 'product_id' not in filtered_doc:
                         logging.warning(f"라인 {line_num}: product_id가 없어 건너뜁니다.")
                         continue
@@ -332,7 +369,7 @@ def load_and_prepare_documents(jsonl_file_path):
 
 def index_products_to_opensearch(
     jsonl_file_path,
-    index_name="product_index_v2",
+    index_name="product_index_v3",
     recreate_index=False
 ):
     """
@@ -371,7 +408,6 @@ def index_products_to_opensearch(
     # 임베딩할 필드와 저장할 벡터 필드명 매핑
     EMBED_FIELDS = [
         ('function_desc',  'function_desc_vector'),
-        ('attribute_desc', 'attribute_desc_vector'),
         ('combined',       'combined_vector'),
         ('target_user',    'target_user_vector'),
     ]
@@ -412,7 +448,7 @@ def index_products_to_opensearch(
 
 
 if __name__ == "__main__":
-    JSONL_FILE = get_absolute_path("data", "v2_product_data_structured_skincare.jsonl")
+    JSONL_FILE = get_absolute_path("data", "v3_product_data_rewritten_skincare.jsonl")
     INDEX_NAME = "product_index_v3"
     RECREATE_INDEX = True
 

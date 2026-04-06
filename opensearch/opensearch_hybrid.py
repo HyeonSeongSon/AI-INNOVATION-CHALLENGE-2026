@@ -205,29 +205,36 @@ class OpenSearchHybridClient:
             logging.error(f"Search pipeline 검색 상세 오류: {e}")
             return []
         
-    def _create_combined_query_body(self, query_vector: list, product_ids: list, top_k: int) -> dict:
+    def _create_combined_query_body(
+        self,
+        query_vector: list,
+        product_ids: list,
+        top_k: int,
+        bm25_fields: list = None,
+        vector_field: str = "combined_vector",
+    ) -> dict:
         """
         combined_vector(KNN) + retrieval_query(BM25) 하이브리드 쿼리 보디 생성
+
+        Args:
+            bm25_fields: BM25 multi_match 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)
+            vector_field: KNN 대상 벡터 필드 (기본: combined_vector)
         """
+        if bm25_fields is None:
+            bm25_fields = ["search_tags^2.0", "search_phrases"]
+
         return {
             "size": top_k,
             "query": {
                 "hybrid": {
                     "queries": [
-                        # BM25 - structured 텍스트 필드 매칭
+                        # BM25 - search_tags + search_phrases 매칭
                         {
                             "bool": {
                                 "must": {
                                     "multi_match": {
                                         "query": "",  # 호출 시 치환
-                                        "fields": [
-                                            "combined^3.0",
-                                            # "target_user^2.5",
-                                            # "function_desc^2.0",
-                                            # "attribute_desc^1.5",
-                                            # "concern^1.5",
-                                            # "summary^1.0",
-                                        ],
+                                        "fields": bm25_fields,
                                         "type": "best_fields",
                                     }
                                 },
@@ -236,12 +243,12 @@ class OpenSearchHybridClient:
                                 }
                             }
                         },
-                        # KNN - combined_vector 유사도 검색
+                        # KNN - vector_field 유사도 검색
                         {
                             "bool": {
                                 "must": {
                                     "knn": {
-                                        "combined_vector": {
+                                        vector_field: {
                                             "vector": query_vector,
                                             "k": top_k * 10,
                                             "filter": {
@@ -263,8 +270,10 @@ class OpenSearchHybridClient:
         query_text: str,
         product_ids: list,
         top_k: int = 10,
-        index_name: str = "product_index_v2",
+        index_name: str = "product_index_v3",
         pipeline_id: str = "hybrid-minmax-pipeline",
+        bm25_fields: list = None,
+        vector_field: str = "combined_vector",
     ) -> list:
         """
         combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색 실행
@@ -275,12 +284,16 @@ class OpenSearchHybridClient:
             top_k: 반환할 최대 결과 수
             index_name: 검색 대상 인덱스
             pipeline_id: 사용할 search pipeline ID
+            bm25_fields: BM25 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)
+            vector_field: KNN 대상 벡터 필드 (기본: combined_vector)
 
         Returns:
             List[Dict]: 검색 결과 (score + source)
         """
         query_vector = self.model.encode(query_text).tolist()
-        query_body = self._create_combined_query_body(query_vector, product_ids, top_k)
+        query_body = self._create_combined_query_body(
+            query_vector, product_ids, top_k, bm25_fields, vector_field
+        )
 
         # BM25 query 텍스트 주입
         query_body["query"]["hybrid"]["queries"][0]["bool"]["must"]["multi_match"]["query"] = query_text
@@ -296,14 +309,14 @@ class OpenSearchHybridClient:
     def _create_field_specific_query_body(
         self,
         query_vector: list,
-        bm25_field: str,
+        bm25_fields: list,
         vector_field: str,
         product_ids: list,
         top_k: int,
     ) -> dict:
         """
         특정 필드를 대상으로 한 하이브리드 쿼리 보디 생성
-        BM25: bm25_field 단일 필드 / KNN: vector_field
+        BM25: bm25_fields multi_match / KNN: vector_field
         """
         return {
             "size": top_k,
@@ -313,10 +326,10 @@ class OpenSearchHybridClient:
                         {
                             "bool": {
                                 "must": {
-                                    "match": {
-                                        bm25_field: {
-                                            "query": "",  # 호출 시 치환
-                                        }
+                                    "multi_match": {
+                                        "query": "",  # 호출 시 치환
+                                        "fields": bm25_fields,
+                                        "type": "best_fields",
                                     }
                                 },
                                 "filter": {"terms": {"product_id": product_ids}},
@@ -346,11 +359,11 @@ class OpenSearchHybridClient:
     def search_by_field(
         self,
         query_text: str,
-        bm25_field: str,
+        bm25_fields: list,
         vector_field: str,
         product_ids: list,
         top_k: int = 50,
-        index_name: str = "product_index_v2",
+        index_name: str = "product_index_v3",
         pipeline_id: str = "hybrid-minmax-pipeline",
     ) -> list:
         """
@@ -358,7 +371,8 @@ class OpenSearchHybridClient:
 
         Args:
             query_text: 검색 쿼리 텍스트
-            bm25_field: BM25 검색 대상 필드 (예: function_desc, attribute_desc, target_user)
+            bm25_fields: BM25 multi_match 대상 필드 리스트
+                         (예: ["function_tags", "function_desc"])
             vector_field: KNN 검색 대상 벡터 필드 (예: function_desc_vector)
             product_ids: 검색 범위를 제한할 상품 ID 리스트
             top_k: 반환할 최대 결과 수
@@ -370,10 +384,10 @@ class OpenSearchHybridClient:
         """
         query_vector = self.model.encode(query_text).tolist()
         query_body = self._create_field_specific_query_body(
-            query_vector, bm25_field, vector_field, product_ids, top_k
+            query_vector, bm25_fields, vector_field, product_ids, top_k
         )
         # BM25 쿼리 텍스트 주입
-        query_body["query"]["hybrid"]["queries"][0]["bool"]["must"]["match"][bm25_field]["query"] = query_text
+        query_body["query"]["hybrid"]["queries"][0]["bool"]["must"]["multi_match"]["query"] = query_text
 
         return self.search_with_pipeline(
             query_text=query_text,

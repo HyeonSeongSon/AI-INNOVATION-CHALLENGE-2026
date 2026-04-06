@@ -13,13 +13,14 @@ STRUCTURED_TEXT_FIELDS = [
     'summary', 'concern', 'ingredient', 'texture', 'value',
     'target_user', 'function', 'function_desc', 'attribute', 'attribute_desc',
     'combined', 'key_benefits', 'proof_points', 'usage_context',
-    'product_story', 'highlight_keywords',
+    'product_story', 'highlight_keywords', 'search_phrases',
 ]
 STRUCTURED_KEYWORD_FIELDS = [
     'suitable_for', 'body_area',
     # 헤어 전용
     'scalp_type', 'hair_type', 'damage_level', 'treatment_type',
     'treatment_focus', 'hair_function', 'greasy_feel', 'application_timing',
+    'function_tags', 'attribute_tags', 'target_tags', 'search_tags',
 ]
 # 헤어 전용 텍스트 필드 (값이 없을 수 있음)
 STRUCTURED_HAIR_TEXT_FIELDS = [
@@ -72,6 +73,18 @@ def update_index_mapping(client, index_name: str):
     except Exception as e:
         logging.error(f"매핑 업데이트 실패: {e}")
         return False
+
+
+def _build_attribute_extended(structured: dict) -> str:
+    """BM25용 확장 attribute 필드. attribute_desc + texture + value + usage_context"""
+    parts = []
+    if structured.get("attribute_desc"):
+        parts.append(structured["attribute_desc"])
+    for field in ("texture", "value", "usage_context"):
+        val = structured.get(field)
+        if val:
+            parts.append(" ".join(val) if isinstance(val, list) else val)
+    return " / ".join(filter(None, parts))
 
 
 def load_and_prepare_documents(jsonl_file_path):
@@ -138,6 +151,7 @@ def load_and_prepare_documents(jsonl_file_path):
                         logging.warning(f"라인 {line_num}: product_id가 없어 건너뜁니다.")
                         continue
 
+                    filtered_doc['attribute_extended'] = _build_attribute_extended(structured)
                     documents.append(filtered_doc)
 
                 except json.JSONDecodeError as e:
@@ -157,7 +171,7 @@ def load_and_prepare_documents(jsonl_file_path):
 
 def index_hair_to_opensearch(
     jsonl_file_path,
-    index_name="product_index_v2",
+    index_name="product_index_v3",
     recreate_index=False
 ):
     client = OpenSearchHybridClient()
@@ -191,7 +205,6 @@ def index_hair_to_opensearch(
 
     EMBED_FIELDS = [
         ('function_desc',  'function_desc_vector'),
-        ('attribute_desc', 'attribute_desc_vector'),
         ('combined',       'combined_vector'),
         ('target_user',    'target_user_vector'),
     ]
@@ -231,7 +244,7 @@ def index_hair_to_opensearch(
 
 
 if __name__ == "__main__":
-    JSONL_FILE = get_absolute_path("data", "v2_product_data_structured_hair.jsonl")
+    JSONL_FILE = get_absolute_path("data", "v3_product_data_rewritten_hair.jsonl")
     INDEX_NAME = "product_index_v3"
     RECREATE_INDEX = False  # 기존 인덱스에 추가
 

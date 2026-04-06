@@ -38,48 +38,48 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-INDEX_NAME = "product_index_v2"
+INDEX_NAME = "product_index_v3"
 
 PIPELINE_STEPS = [
     {
         "name": "스킨케어",
         "func": index_products_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_skincare.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_skincare.jsonl"),
         "recreate_index": True,   # 인덱스 생성
     },
     {
         "name": "뷰티툴",
         "func": index_beauty_tool_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_beauty_tool.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_beauty_tool.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "색조",
         "func": index_color_tone_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_color_tone.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_color_tone.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "헤어",
         "func": index_hair_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_hair.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_hair.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "생활도구",
         "func": index_living_supplies_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_living_supplies.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_living_supplies.jsonl"),
     },
     {
         "name": "향수/바디",
         "func": index_fragrance_body_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_fragrance_body.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_fragrance_body.jsonl"),
         "recreate_index": False,
     },
     {
         "name": "이너뷰티",
         "func": index_inner_beauty_to_opensearch,
-        "jsonl": get_absolute_path("data", "v2_product_data_structured_inner_beauty.jsonl"),
+        "jsonl": get_absolute_path("data", "v3_product_data_rewritten_inner_beauty.jsonl"),
         "recreate_index": False,
     },
 ]

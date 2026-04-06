@@ -153,14 +153,14 @@ class ProductRecommender:
         return results
 
     _DIMENSION_WEIGHTS: Dict[str, float] = {
-        "retrieval": 1.2,   # 1차 retrieval 순위 — 보조 타이브레이커
-        "need": 1.5,        # 기능 니즈 — 가장 직접적인 매칭 신호
-        "preference": 0.6,  # 선호/속성 — 두 번째 중요 신호
-        "persona": 0.3,     # 페르소나 유사도 — 보조 신호
+        "retrieval": 1.0,   # 1차 retrieval 순위 — 보조 타이브레이커
+        "need": 1.2,        # 기능 니즈 — 가장 직접적인 매칭 신호
+        "preference": 1.0,  # 선호/속성 — 두 번째 중요 신호
+        "persona": 0.8,     # 페르소나 유사도 — 보조 신호
     }
 
     @staticmethod
-    def _apply_rrf(dimension_results: Dict, k: int = 15) -> List[tuple]:
+    def _apply_rrf(dimension_results: Dict, k: int = 20) -> List[tuple]:
         """
         Reciprocal Rank Fusion으로 3개 차원 결과 합산 (차원별 가중치 적용)
 
