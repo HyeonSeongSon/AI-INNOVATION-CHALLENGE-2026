@@ -24,7 +24,8 @@ from pathlib import Path
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from get_data_history.product_document.v3.rewrite_semantic_fields_prompt import (
+#스킨케어 전용 프롬프트 사용
+from get_data_history.product_document.v3.rewrite_semantic_fields_prompt_skincare import (
     build_rewrite_semantic_fields_prompt,
 )
 from backend.app.core.llm_factory import get_llm
@@ -39,12 +40,12 @@ CONCURRENCY = 10  # 동시 LLM 호출 수
 
 CATEGORIES = [
     "skincare",
-    "color_tone",
-    "hair",
-    "fragrance_body",
-    "inner_beauty",
-    "beauty_tool",
-    "living_supplies",
+    # "color_tone",
+    # "hair",
+    # "fragrance_body",
+    # "inner_beauty",
+    # "beauty_tool",
+    # "living_supplies",
 ]
 
 llm = get_llm(Settings.chatgpt_model_name, temperature=0.3)
@@ -56,10 +57,10 @@ llm = get_llm(Settings.chatgpt_model_name, temperature=0.3)
 # 검증 대상 필드 및 최소/최대 조건 (min, max)
 _REQUIRED_STR_FIELDS = ("function_desc", "attribute_desc", "target_user", "combined")
 _REQUIRED_LIST_FIELDS: dict[str, tuple[int, int]] = {
-    "function_tags":  (3, 10),
-    "attribute_tags": (3, 10),
-    "target_tags":    (3, 10),
-    "search_tags":    (5, 20),
+    "function_tags":  (5, 10),
+    "attribute_tags": (5, 10),
+    "target_tags":    (5, 10),
+    "search_tags":    (10, 18),
     "search_phrases": (5, 10),
 }
 

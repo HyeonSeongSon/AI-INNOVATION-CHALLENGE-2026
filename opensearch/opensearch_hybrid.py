@@ -397,6 +397,107 @@ class OpenSearchHybridClient:
             top_k=top_k,
         )
 
+    def search_multivector_field(
+        self,
+        query_text: str,
+        index_name: str,
+        product_ids: list,
+        top_k: int = 100,
+        aggregation: str = "max",
+        topk_k: int = 2,
+        pipeline_id: str = "hybrid-minmax-pipeline",
+    ) -> list:
+        """
+        멀티벡터 인덱스(문장 단위 문서)에서 하이브리드 검색 후 product_id별 스코어 집계
+
+        v4 인덱스 공통 필드: text (BM25), vector (KNN)
+        동일 상품의 여러 문장 히트를 aggregation 방식으로 product_id당 1개 스코어로 집계
+
+        Args:
+            query_text: 검색 쿼리 텍스트
+            index_name: 검색 대상 인덱스 (예: product_v4_combined)
+            product_ids: 검색 범위를 제한할 상품 ID 리스트
+            top_k: 최종 반환할 상품 수
+            aggregation: 집계 방식 "max" | "topk_avg"
+            topk_k: topk_avg 사용 시 상위 k개 문장 수 (기본 2)
+            pipeline_id: 하이브리드 파이프라인 ID
+
+        Returns:
+            [{"product_id": str, "score": float}, ...] 내림차순 top_k개
+        """
+        from collections import defaultdict
+
+        query_vector = self.model.encode(query_text).tolist()
+
+        # 문장이 상품당 최대 6~7개이므로 size를 충분히 크게
+        fetch_size = top_k * 10
+
+        query_body = {
+            "size": fetch_size,
+            "query": {
+                "hybrid": {
+                    "queries": [
+                        {
+                            "bool": {
+                                "must": {
+                                    "match": {
+                                        "text": {
+                                            "query": query_text,
+                                        }
+                                    }
+                                },
+                                "filter": {"terms": {"product_id": product_ids}},
+                            }
+                        },
+                        {
+                            "bool": {
+                                "must": {
+                                    "knn": {
+                                        "vector": {
+                                            "vector": query_vector,
+                                            "k": fetch_size,
+                                            "filter": {
+                                                "terms": {"product_id": product_ids}
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    ]
+                }
+            },
+            "_source": ["product_id"],
+        }
+
+        raw_results = self.search_with_pipeline(
+            query_text=query_text,
+            pipeline_id=pipeline_id,
+            index_name=index_name,
+            query_body=query_body,
+            top_k=fetch_size,
+        )
+
+        # product_id별 스코어 수집
+        product_scores: dict = defaultdict(list)
+        for item in raw_results:
+            pid = item.get("source", {}).get("product_id")
+            score = item.get("score", 0.0)
+            if pid:
+                product_scores[pid].append(score)
+
+        # 집계
+        aggregated = []
+        for pid, scores in product_scores.items():
+            if aggregation == "max":
+                agg_score = max(scores)
+            else:  # topk_avg
+                top = sorted(scores, reverse=True)[:topk_k]
+                agg_score = sum(top) / len(top)
+            aggregated.append({"product_id": pid, "score": agg_score})
+
+        return sorted(aggregated, key=lambda x: x["score"], reverse=True)[:top_k]
+
     def _create_search_pipe_line_body(self):
         pipeline_body = {
             "description": "하이브리드 점수 정규화 및 결합 파이프라인",
