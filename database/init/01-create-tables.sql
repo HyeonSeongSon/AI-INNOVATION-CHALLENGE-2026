@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS personas (
     shopping_style VARCHAR(100),
     purchase_decision_factors TEXT[] DEFAULT ARRAY[]::TEXT[],
     persona_summary TEXT,
+    user_input TEXT,
     persona_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS products (
     product_image_url TEXT[] DEFAULT ARRAY[]::TEXT[],
     product_page_url TEXT,
     product_comment TEXT,
+    product_details JSONB,
     product_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

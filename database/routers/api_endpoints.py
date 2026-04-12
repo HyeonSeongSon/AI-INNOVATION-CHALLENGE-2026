@@ -226,6 +226,7 @@ class ProductDetailResponse(BaseModel):
     product_image_url: Optional[List[str]] = None
     product_page_url: Optional[str] = None
     product_comment: Optional[str] = None
+    product_details: Optional[dict] = None
     product_created_at: Optional[datetime] = None
 
 
@@ -626,6 +627,7 @@ def _to_product_detail(p) -> ProductDetailResponse:
         product_image_url=p.product_image_url,
         product_page_url=p.product_page_url,
         product_comment=p.product_comment,
+        product_details=p.product_details,
         product_created_at=p.product_created_at,
     )
 

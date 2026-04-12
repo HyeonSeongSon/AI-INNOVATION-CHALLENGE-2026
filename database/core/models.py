@@ -159,6 +159,9 @@ class Product(Base):
     # 상품 한줄소개
     product_comment = Column(Text)
 
+    # 카테고리별 가변 상품 정보
+    product_details = Column(JSON)
+
     # 타임스탬프
     product_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

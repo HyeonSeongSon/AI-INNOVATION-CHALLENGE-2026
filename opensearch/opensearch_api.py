@@ -614,7 +614,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
 
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
-
+        
         raw_results = client.search_multivector_field(
             query_text=request.query,
             index_name=request.index_name,
