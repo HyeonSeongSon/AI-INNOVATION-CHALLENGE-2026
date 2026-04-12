@@ -36,7 +36,6 @@ def _build_ai_analysis(persona_summary: str | None) -> dict | None:
 
 class PersonaCreate(BaseModel):
     """페르소나 생성 요청"""
-    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
     name: str = Field(..., description="이름", examples=["김지현"])
     gender: Optional[str] = Field(None, description="성별", examples=["여성"])
     age: Optional[int] = Field(None, description="나이", examples=[28])
@@ -272,13 +271,8 @@ async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
     """
     from app.core.models import Persona
 
-    # 중복 확인
-    existing = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Persona with ID '{request.persona_id}' already exists")
-
     # 새 페르소나 생성
-    persona = Persona(**request.dict())
+    persona = Persona(**request.model_dump())
     db.add(persona)
     db.commit()
     db.refresh(persona)
@@ -489,7 +483,7 @@ async def create_analysis_result(request: AnalysisResultCreate, db: Session = De
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
 
     # 분석 결과 생성
-    analysis = AnalysisResult(**request.dict())
+    analysis = AnalysisResult(**request.model_dump())
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
@@ -556,7 +550,7 @@ async def create_search_query(request: SearchQueryCreate, db: Session = Depends(
         raise HTTPException(status_code=404, detail=f"Analysis with ID '{request.analysis_id}' not found")
 
     # 검색 쿼리 생성
-    search = SearchQuery(**request.dict())
+    search = SearchQuery(**request.model_dump())
     db.add(search)
     db.commit()
     db.refresh(search)
@@ -624,7 +618,7 @@ async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Product with ID '{request.product_id}' already exists")
 
     # 새 상품 생성
-    product = Product(**request.dict())
+    product = Product(**request.model_dump())
     db.add(product)
     db.commit()
     db.refresh(product)

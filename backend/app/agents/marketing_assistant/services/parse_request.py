@@ -7,7 +7,7 @@ from ....core.logging import get_logger
 from ....core.data_loader import get_categories
 import json
 
-logger = get_logger("parse_crm_request")
+logger = get_logger("parse_request")
 
 class RecommendProductRequest(BaseModel):
     """다중 값을 지원하는 상품 추천 메시지 요청"""

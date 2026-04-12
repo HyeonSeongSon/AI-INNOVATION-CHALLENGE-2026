@@ -89,6 +89,27 @@ class PersonaClient:
             logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
             return None
         
+    @traced(name="save_persona", run_type="tool")
+    async def save_persona(self, persona_data: Dict[str, Any]) -> str:
+        """페르소나 정보를 DB에 저장하고 persona_id 반환"""
+        try:
+            response = await self.http_client.post(
+                f"{self.db_api_url}/api/personas",
+                json=persona_data,
+            )
+            response.raise_for_status()
+            result = response.json()
+            persona_id = result["persona_id"]
+            logger.info("persona_saved", persona_id=persona_id)
+            return persona_id
+
+        except httpx.HTTPStatusError as e:
+            logger.error("persona_save_failed", status_code=e.response.status_code, error=str(e))
+            raise
+        except Exception as e:
+            logger.error("persona_save_failed", error=str(e))
+            raise
+
     @traced(name="save_product_search_query", run_type="tool")
     async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any]) -> Dict[str, int]:
         """생성한 상품 검색 쿼리를 DB에 저장"""

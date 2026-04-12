@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
 from ....config.settings import settings
-from .generate_product_search_query_from_persona import generate_product_search_query_from_persona
+from .generate_persona_and_query import generate_search_query
 from .persona_client import PersonaClient
 from .product_client import ProductClient
 from ....core.llm_factory import get_llm
@@ -15,7 +15,7 @@ class ProductRecommender:
     def __init__(self):
         self.vector_db_api_url = settings.opensearch_api_url
         self.db_api_url = settings.database_api_url
-        self.llm = get_llm(settings.chatgpt_model_name, temperature=0)
+        self.llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
     
     async def get_product_search_queries(self, persona_id):
         logger.info("product_search_queries.start", persona_id=persona_id)
@@ -36,7 +36,7 @@ class ProductRecommender:
             # 기존 검색 쿼리 없으면 상품 검색 쿼리 생성
             logger.info("product_search_queries.generating", persona_id=persona_id)
             persona_info = await _persona_client.get_persona_info(persona_id)
-            raw_queries = await generate_product_search_query_from_persona(self.llm, persona_info)
+            raw_queries = await generate_search_query(persona_info, self.llm)
 
             # DB저장
             await _persona_client.save_product_search_query(persona_id, raw_queries)

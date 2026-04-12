@@ -11,7 +11,7 @@ from sqlalchemy import (
     ForeignKey, ARRAY, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 
 class Base(DeclarativeBase):
@@ -27,16 +27,16 @@ class Persona(Base):
     """페르소나 정보 테이블"""
     __tablename__ = 'personas'
 
-    persona_id = Column(String(100), primary_key=True)
+    persona_id = Column(String(20), primary_key=True, server_default=text("'PERSONA_' || LPAD(nextval('persona_seq')::text, 5, '0')"))
     name = Column(String(200), nullable=False)
     gender = Column(String(20))
     age = Column(Integer)
-    occupation = Column(String(100))
+    occupation = Column(Text)
 
     # 피부 관련
     skin_type = Column(ARRAY(Text), default=[])
     skin_concerns = Column(ARRAY(Text), default=[])
-    personal_color = Column(String(50))
+    personal_color = Column(Text)
     shade_number = Column(Integer)
 
     # 선호 사항
@@ -47,16 +47,16 @@ class Persona(Base):
     values = Column(ARRAY(Text), default=[])
 
     # 라이프스타일
-    skincare_routine = Column(String(100))
-    main_environment = Column(String(100))
+    skincare_routine = Column(Text)
+    main_environment = Column(Text)
     preferred_texture = Column(ARRAY(Text), default=[])
-    pets = Column(String(50))
+    pets = Column(Text)
     avg_sleep_hours = Column(Integer)
-    stress_level = Column(String(50))
+    stress_level = Column(Text)
     digital_device_usage_time = Column(Integer)
 
     # 쇼핑 성향
-    shopping_style = Column(String(100))
+    shopping_style = Column(Text)
     purchase_decision_factors = Column(ARRAY(Text), default=[])
 
     # AI 요약
@@ -81,7 +81,7 @@ class AnalysisResult(Base):
     __tablename__ = 'analysis_results'
 
     analysis_id = Column(Integer, primary_key=True, autoincrement=True)
-    persona_id = Column(String(100), ForeignKey('personas.persona_id', ondelete='CASCADE'), nullable=False, index=True)
+    persona_id = Column(String(20), ForeignKey('personas.persona_id', ondelete='CASCADE'), nullable=False, index=True)
     analysis_result = Column(Text)
     analysis_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -200,7 +200,7 @@ class GeneratedMessage(Base):
     user_id         = Column(String(100), nullable=False, index=True)
     product_id      = Column(String(100), nullable=False, index=True)
     product_name    = Column(String(500))
-    persona_id      = Column(String(100))
+    persona_id      = Column(String(20))
     title           = Column(Text)
     content         = Column(Text, nullable=False)
     thread_id       = Column(String(36))  # LangSmith 트레이싱용

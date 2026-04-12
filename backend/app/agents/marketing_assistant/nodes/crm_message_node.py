@@ -4,12 +4,12 @@ from ..state import MarketingAssistantState
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
-from ..services.generate_crm_message import CRMMessageGenerator
+from ..services.generate_crm_message import CrmMessageGenerator
 from ..services.parse_request import MultiValueParser
 from ....config.settings import settings
 
 _parser = MultiValueParser()
-_generator = CRMMessageGenerator()
+_generator = CrmMessageGenerator()
 
 
 def _parse_message(ai_message) -> dict:

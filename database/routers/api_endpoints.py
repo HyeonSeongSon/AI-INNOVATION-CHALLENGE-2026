@@ -36,7 +36,6 @@ def _build_ai_analysis(persona_summary: str | None) -> dict | None:
 
 class PersonaCreate(BaseModel):
     """페르소나 생성 요청"""
-    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
     name: str = Field(..., description="이름", examples=["김지현"])
     gender: Optional[str] = Field(None, description="성별", examples=["여성"])
     age: Optional[int] = Field(None, description="나이", examples=[28])
@@ -277,11 +276,8 @@ class PersonaQueryRequest(BaseModel):
 async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
     from core.models import Persona
 
-    existing = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Persona with ID '{request.persona_id}' already exists")
-
-    persona = Persona(**request.dict())
+    # persona_id는 DB가 gen_random_uuid()로 자동 생성
+    persona = Persona(**request.model_dump())
     db.add(persona)
     db.commit()
     db.refresh(persona)
