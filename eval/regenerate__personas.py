@@ -24,21 +24,17 @@ _DATA_DIR      = _ROOT / "data"
 DEFAULT_OUTPUT = _EVAL_DIR / "synthetic_eval_dataset.jsonl"
 DEFAULT_MODEL  = "gpt-5-mini"
 DEFAULT_CONCURRENCY = 5
-NUM_PERSONAS   = 3
+NUM_PERSONAS   = 1
 
 # 재생성 대상 product_id 목록
 TARGET_PRODUCT_IDS = {
-    # "A20251200045",
-    # "A20251200530",
-    "A20251200151",
-    # "A20251200160",
-    # "A20251200052"
+    "A20251200218"
 }
 
 
 def load_hair_products() -> list[dict]:
     """living_supplies 데이터 파일에서 대상 상품만 로드"""
-    path = _DATA_DIR / "v2_product_data_structured_skincare.jsonl"
+    path = _DATA_DIR / "v3_product_data_rewritten_beauty_tool.jsonl"
     products = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -46,7 +42,7 @@ def load_hair_products() -> list[dict]:
             if line:
                 p = json.loads(line)
                 if p.get("product_id") in TARGET_PRODUCT_IDS:
-                    p["_source_category"] = "skincare"
+                    p["_source_category"] = "beauty_tool"
                     products.append(p)
     return products
 
@@ -164,12 +160,12 @@ async def main(output_path: Path, model: str, concurrency: int):
             record = build_eval_record(product, persona, persona_idx=idx)
             new_records[eval_id] = record
             success += 1
-            concerns = persona.get("고민 키워드", [])
             print(
                 f"[{done_count}/{total}] [done] {eval_id}\n"
-                f"         이름: {persona.get('이름','?')}  나이: {persona.get('나이','?')}세  직업: {persona.get('직업','?')}\n"
-                f"         고민: {concerns}\n"
-                f"         루틴: {str(persona.get('루틴',''))[:80]}"
+                f"         기본 정보: {persona.get('기본 정보','?')}\n"
+                f"         라이프스타일: {str(persona.get('라이프스타일',''))[:80]}\n"
+                f"         니즈: {str(persona.get('니즈',''))[:80]}\n"
+                f"         취향: {str(persona.get('취향',''))[:80]}"
             )
 
     await asyncio.gather(*[process(p) for p in products])

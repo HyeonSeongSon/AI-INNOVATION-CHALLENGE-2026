@@ -102,19 +102,23 @@ class ProductRecommender:
     
     async def product_retriever(
             self,
-            retrieval_query: str, 
+            retrieval_query: str,
             brands: Optional[List[str]],
             product_tag: Optional[List[str]],
-            avoided_ingredients: Optional[List[str]]
+            avoided_ingredients: Optional[List[str]],
+            allowed_product_ids: Optional[List[str]] = None,
         ):
 
-        filtered_product_ids = await self.filtered_products(
-            brands=brands if brands else None,
-            products=product_tag if product_tag else None,
-            avoided_ingredients=avoided_ingredients if avoided_ingredients else None
-        )
+        if allowed_product_ids is not None:
+            filtered_product_ids = allowed_product_ids
+        else:
+            filtered_product_ids = await self.filtered_products(
+                brands=brands if brands else None,
+                products=product_tag if product_tag else None,
+                avoided_ingredients=avoided_ingredients if avoided_ingredients else None
+            )
 
-        retrieval_result = await _product_client.search_by_combined_vector(retrieval_query, filtered_product_ids, top_k=100)
+        retrieval_result = await _product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=100)
         retrieval_result_ids = [p['product_id'] for p in retrieval_result]
         
         return retrieval_result_ids
@@ -145,7 +149,7 @@ class ProductRecommender:
             "get_product_documents.start",
             product_count=len(retrieval_result_ids),
         )
-        results = await _product_client.search_persona_dimensions(
+        results = await _product_client.search_persona_dimensions_multivector(
             queries=queries,
             product_ids=retrieval_result_ids,
         )
@@ -153,14 +157,14 @@ class ProductRecommender:
         return results
 
     _DIMENSION_WEIGHTS: Dict[str, float] = {
-        "retrieval": 1.0,   # 1차 retrieval 순위 — 보조 타이브레이커
-        "need": 1.2,        # 기능 니즈 — 가장 직접적인 매칭 신호
-        "preference": 1.0,  # 선호/속성 — 두 번째 중요 신호
-        "persona": 0.8,     # 페르소나 유사도 — 보조 신호
+        "retrieval": 1.0,   
+        "need": 1.2,        
+        "preference": 1.0,  
+        "persona": 0.8,     
     }
 
     @staticmethod
-    def _apply_rrf(dimension_results: Dict, k: int = 20) -> List[tuple]:
+    def _apply_rrf(dimension_results: Dict, k: int = 15) -> List[tuple]:
         """
         Reciprocal Rank Fusion으로 3개 차원 결과 합산 (차원별 가중치 적용)
 

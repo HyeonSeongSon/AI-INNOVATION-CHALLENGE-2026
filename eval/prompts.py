@@ -497,7 +497,7 @@ def build_reverse_persona_prompt(product: dict) -> str:
     product_context = {
         "카테고리": product.get("카테고리", ""),
         "태그": product.get("태그", ""),
-        **s,  # structured의 모든 필드 포함
+        **{k: v for k, v in s.items() if k != "_original_semantic"},  # structured의 모든 필드 포함 (_original_semantic 제외)
     }
     product_json = json.dumps(product_context, ensure_ascii=False, indent=2)
 

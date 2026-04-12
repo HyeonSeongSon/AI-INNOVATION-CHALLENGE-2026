@@ -213,16 +213,20 @@ def create_product_index_mapping():
                     "type": "keyword"
                 },
                 "function_tags": {
-                    "type": "keyword"
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "korean_analyzer"}}
                 },
                 "attribute_tags": {
-                    "type": "keyword"
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "korean_analyzer"}}
                 },
                 "target_tags": {
-                    "type": "keyword"
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "korean_analyzer"}}
                 },
                 "search_tags": {
-                    "type": "keyword"
+                    "type": "keyword",
+                    "fields": {"text": {"type": "text", "analyzer": "korean_analyzer"}}
                 },
                 "search_phrases": {
                     "type": "text",

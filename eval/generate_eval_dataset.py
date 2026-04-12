@@ -19,7 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from prompts import build_reverse_persona_prompt
+from v3_prompts import build_reverse_persona_prompt
 
 # .env 로드 (backend/app/.env)
 _ROOT = Path(__file__).parent.parent
@@ -29,13 +29,13 @@ load_dotenv(_ROOT / "backend" / "app" / ".env")
 SELECTED_FILE = _ROOT / "data" / "test_products_selected.jsonl"
 
 DATA_FILES = {
-    "skincare":        _ROOT / "data" / "v2_product_data_structured_skincare.jsonl",
-    "color_tone":      _ROOT / "data" / "v2_product_data_structured_color_tone.jsonl",
-    "hair":            _ROOT / "data" / "v2_product_data_structured_hair.jsonl",
-    "fragrance_body":  _ROOT / "data" / "v2_product_data_structured_fragrance_body.jsonl",
-    "inner_beauty":    _ROOT / "data" / "v2_product_data_structured_inner_beauty.jsonl",
-    "beauty_tool":     _ROOT / "data" / "v2_product_data_structured_beauty_tool.jsonl",
-    "living_supplies": _ROOT / "data" / "v2_product_data_structured_living_supplies.jsonl",
+    "skincare":        _ROOT / "data" / "v3_product_data_rewritten_skincare.jsonl",
+    "color_tone":      _ROOT / "data" / "v3_product_data_rewritten_color_tone.jsonl",
+    "hair":            _ROOT / "data" / "v3_product_data_rewritten_hair.jsonl",
+    "fragrance_body":  _ROOT / "data" / "v3_product_data_rewritten_fragrance_body.jsonl",
+    "inner_beauty":    _ROOT / "data" / "v3_product_data_rewritten_inner_beauty.jsonl",
+    "beauty_tool":     _ROOT / "data" / "v3_product_data_rewritten_beauty_tool.jsonl",
+    "living_supplies": _ROOT / "data" / "v3_product_data_rewritten_living_supplies.jsonl",
 }
 
 # 한국어 카테고리명 → DATA_FILES 키 매핑
@@ -53,7 +53,7 @@ DEFAULT_MODEL = "gpt-5-mini"
 DEFAULT_OUTPUT = _ROOT / "eval" / "synthetic_eval_dataset.jsonl"
 TEST_OUTPUT    = _ROOT / "eval" / "synthetic_eval_dataset_test.jsonl"
 MAX_CONCURRENT = 5                  # 동시 API 호출 수 (rate limit 방지)
-NUM_PERSONAS   = 3                  # 상품당 기본 페르소나 생성 수
+NUM_PERSONAS   = 1                  # 상품당 기본 페르소나 생성 수
 # ──────────────────────────────────────────────────────────────────────────────
 
 

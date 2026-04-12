@@ -19,7 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from .v4_prompts import build_reverse_persona_prompt
+from .v4_generate_persona_prompts import build_reverse_persona_prompt
 
 # .env 로드 (backend/app/.env)
 _ROOT = Path(__file__).parent.parent.parent  # eval/v4/ → eval/ → project root
