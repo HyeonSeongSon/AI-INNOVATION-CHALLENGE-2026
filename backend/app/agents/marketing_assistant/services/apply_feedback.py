@@ -195,6 +195,11 @@ class ApplyFeedback:
             "feedback_applied",
             product_id=product_id,
             failed_stage=quality_check.get("failed_stage"),
+            issues=quality_check.get("rule_check_issues", []),
+            before_title=existing_message.get("title", ""),
+            before_snippet=existing_message.get("message", "")[:80],
+            after_title=improved.get("title", ""),
+            after_snippet=improved.get("message", "")[:80],
         )
 
         return {**task, "message": improved}

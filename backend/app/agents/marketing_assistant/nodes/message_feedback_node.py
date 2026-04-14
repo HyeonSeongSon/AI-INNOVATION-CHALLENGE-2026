@@ -3,10 +3,13 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
+from ....core.logging import get_logger
 from ..services.apply_feedback import get_applier
 from ..services.parse_request import MultiValueParser
 from ..services.product_client import ProductClient
 from ....config.settings import settings
+
+logger = get_logger("message_feedback_node")
 
 _MAX_RETRIES = 2
 _DEFAULT_PURPOSE = "브랜드/제품 첫소개"
@@ -19,7 +22,24 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
     retry_count = state.get("feedback_retry_count", 0)
 
     if retry_count >= _MAX_RETRIES:
-        return Command(goto=END, update={"feedback_retry_count": 0})
+        failed_ids = state.get("failed_task_ids", [])
+        logger.warning(
+            "quality_check_max_retries_exceeded",
+            retry_count=retry_count,
+            max_retries=_MAX_RETRIES,
+            failed_product_ids=failed_ids,
+        )
+        return Command(
+            goto=END,
+            update={
+                "feedback_retry_count": 0,
+                "status": "failed",
+                "error": (
+                    f"품질 검사 최대 재시도 횟수({_MAX_RETRIES}회)를 초과했습니다. "
+                    f"실패 상품 ID: {failed_ids}"
+                ),
+            },
+        )
 
     failed_ids = set(state.get("failed_task_ids", []))
     model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
