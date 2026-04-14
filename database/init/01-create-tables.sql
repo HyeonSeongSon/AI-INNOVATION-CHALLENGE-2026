@@ -129,6 +129,7 @@ CREATE INDEX idx_conversations_thread_id ON conversations(thread_id);
 
 -- ============================================================
 -- 6. 생성된 마케팅 메시지 테이블 (generated_messages)
+-- 품질 검사(3단계)를 통과한 최종 메시지만 저장
 -- ============================================================
 CREATE TABLE IF NOT EXISTS generated_messages (
     id              VARCHAR(36) PRIMARY KEY,
@@ -136,13 +137,43 @@ CREATE TABLE IF NOT EXISTS generated_messages (
     user_id         VARCHAR(100) NOT NULL,
     product_id      VARCHAR(100) NOT NULL,
     product_name    VARCHAR(500),
-    persona_id      VARCHAR(100),
+    brand           VARCHAR(100),               -- 브랜드명
+    product_tag     VARCHAR(200),               -- 상품 카테고리/태그 (예: 에센스&세럼&오일)
+
+    -- 메시지 생성 컨텍스트
+    purpose         VARCHAR(200),               -- 발송 목적 (예: "베스트셀러 제품 소개")
+    user_input      TEXT,                       -- 유저 원문 요청
+
+    -- 메시지 내용
     title           TEXT,
     content         TEXT NOT NULL,
-    thread_id       VARCHAR(36),
+
+    -- 품질 평가 요약 (집계/필터용 flat columns)
+    quality_passed        BOOLEAN,
+    quality_failed_stage  VARCHAR(50),          -- rule_check | semantic_check | llm_judge
+    quality_failure_reason TEXT,
+
+    -- LLM-as-a-Judge 점수 (항목별 집계/필터용)
+    llm_score_accuracy        SMALLINT,         -- 1~5
+    llm_score_tone            SMALLINT,         -- 1~5
+    llm_score_personalization SMALLINT,         -- 1~5
+    llm_score_naturalness     SMALLINT,         -- 1~5
+    llm_score_cta_clarity     SMALLINT,         -- 1~5
+    llm_score_overall         NUMERIC(3, 2),    -- 1.00~5.00
+    llm_feedback              TEXT,             -- LLM 종합 피드백
+
+    -- 품질 평가 상세 (rule_check_issues 배열, semantic 결과 등 raw 데이터)
+    quality_details   JSONB,
+
+    -- 재생성 추적
+    regeneration_count SMALLINT DEFAULT 0,      -- feedback 루프 횟수
+
+    thread_id       VARCHAR(36),                -- LangSmith 트레이싱용
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_generated_messages_conversation_id ON generated_messages(conversation_id);
-CREATE INDEX idx_generated_messages_user_id ON generated_messages(user_id);
+CREATE INDEX idx_generated_messages_user_id_created ON generated_messages(user_id, created_at DESC);
 CREATE INDEX idx_generated_messages_product_id ON generated_messages(product_id);
+CREATE INDEX idx_generated_messages_quality_passed ON generated_messages(quality_passed);
+CREATE INDEX idx_generated_messages_llm_score_overall ON generated_messages(llm_score_overall);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { Home, User, MessageSquare, Settings, Plus, Trash2 } from 'lucide-react';
+import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2 } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 
 /* --- 스타일 컴포넌트 --- */
@@ -228,6 +228,9 @@ export default function Sidebar() {
         </MenuItem>
         <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
           <MessageSquare /> 메시지 생성
+        </MenuItem>
+        <MenuItem to="/generated-messages" $active={location.pathname.startsWith('/generated-messages')}>
+          <FileText /> 메시지 조회
         </MenuItem>
       </MenuList>
 

@@ -7,9 +7,10 @@ SQLAlchemy ORM Models for PostgreSQL
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DECIMAL, TIMESTAMP,
+    Column, Integer, String, Text, DECIMAL, TIMESTAMP, SmallInteger, Boolean, Numeric,
     ForeignKey, ARRAY, UniqueConstraint, JSON
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func, text
 
@@ -197,12 +198,40 @@ class GeneratedMessage(Base):
 
     id              = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = Column(String(36), ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id         = Column(String(100), nullable=False, index=True)
+    user_id         = Column(String(100), nullable=False)
     product_id      = Column(String(100), nullable=False, index=True)
     product_name    = Column(String(500))
-    persona_id      = Column(String(20))
+    brand           = Column(String(100))
+    product_tag     = Column(String(200))
+
+    # 메시지 생성 컨텍스트
+    purpose         = Column(String(200))
+    user_input      = Column(Text)
+
+    # 메시지 내용
     title           = Column(Text)
     content         = Column(Text, nullable=False)
+
+    # 품질 평가 요약
+    quality_passed        = Column(Boolean)
+    quality_failed_stage  = Column(String(50))
+    quality_failure_reason = Column(Text)
+
+    # LLM-as-a-Judge 점수
+    llm_score_accuracy        = Column(SmallInteger)
+    llm_score_tone            = Column(SmallInteger)
+    llm_score_personalization = Column(SmallInteger)
+    llm_score_naturalness     = Column(SmallInteger)
+    llm_score_cta_clarity     = Column(SmallInteger)
+    llm_score_overall         = Column(Numeric(3, 2))
+    llm_feedback              = Column(Text)
+
+    # 품질 평가 상세 raw 데이터
+    quality_details   = Column(JSONB)
+
+    # 재생성 추적
+    regeneration_count = Column(SmallInteger, default=0)
+
     thread_id       = Column(String(36))  # LangSmith 트레이싱용
     created_at      = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

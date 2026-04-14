@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
 import api, { pipelineApi, dbApi } from '../api';
-import { useChat } from '../context/ChatContext';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
 const PageContainer = styled.div`
@@ -260,21 +259,19 @@ const RankCount = styled.span`
 /* --- 메인 컴포넌트 --- */
 export default function Home() {
   const navigate = useNavigate();
-  const { selectConversation } = useChat();
 
   const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
   const [personaMap, setPersonaMap] = useState({});
   const [recentMessages, setRecentMessages] = useState([]);
 
   useEffect(() => {
-    dbApi.get('/generated-messages?user_id=son&limit=3')
-      .then(res => setRecentMessages(res.data || []))
+    dbApi.get('/generated-messages', { params: { user_id: 'son', limit: 3 } })
+      .then(res => setRecentMessages(res.data?.items || []))
       .catch(() => {});
   }, []);
 
-  const handleMessageClick = async (item) => {
-    await selectConversation({ id: item.conversation_id });
-    navigate('/message');
+  const handleMessageClick = (item) => {
+    navigate('/generated-messages', { state: { openMessage: item } });
   };
 
   const parseTag = (item) => {

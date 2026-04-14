@@ -276,7 +276,9 @@ export default function Message() {
       let aiText = '';
       let isGenerated = false;
 
-      if (result.messages && result.messages.length > 0) {
+      if (result.status === 'failed') {
+        aiText = result.error || "메시지 품질 검사를 통과하지 못했습니다. 내용을 조정하여 다시 시도해주세요.";
+      } else if (result.messages && result.messages.length > 0) {
         const msg = result.messages[0];
         const title = msg.title || "";
         const content = msg.content || "";

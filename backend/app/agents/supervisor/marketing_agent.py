@@ -271,6 +271,9 @@ class MarketingAgent:
             intermediate = result.get("intermediate", {})
             raw_status = result.get("status")
             api_status = "failed" if raw_status in ("failed", "quality_check_failed") else "completed"
+            quality_check = intermediate.get("quality_check", {})
+            quality_results = quality_check.get("results", [])
+            quality_result = quality_results[0] if quality_results else {}
             return {
                 "status": api_status,
                 "interrupt_type": None,
@@ -280,7 +283,11 @@ class MarketingAgent:
                 "selected_product": selected or None,
                 "recommended_products": intermediate.get("recommendation", {}).get("recommended_products", []),
                 "persona_info": intermediate.get("recommendation", {}).get("persona_info"),
-                "regeneration_history": intermediate.get("quality_check", {}).get("regeneration_history", []),
+                "regeneration_history": quality_check.get("regeneration_history", []),
+                "quality_result": quality_result,
+                "purpose": intermediate.get("request", {}).get("parsed_request", {}).get("purpose"),
+                "user_input": result.get("input", ""),
+                "regeneration_count": len(quality_check.get("regeneration_history", [])),
                 "logs": result.get("logs", []),
                 "error": result.get("error"),
             }

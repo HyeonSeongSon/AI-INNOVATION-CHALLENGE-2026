@@ -41,8 +41,10 @@ async def crm_message_node(state: MarketingAssistantState, config: RunnableConfi
     generated_tasks = [
         {
             "product_id": t["product_id"],
-            "purpose": t["purpose"],
+            "product_name": t.get("product_info", {}).get("product_name", ""),
             "brand": t.get("product_info", {}).get("brand", ""),
+            "product_tag": t.get("product_info", {}).get("product_tag", ""),
+            "purpose": t["purpose"],
             "message": _parse_message(t["message"]),
         }
         for t in tasks

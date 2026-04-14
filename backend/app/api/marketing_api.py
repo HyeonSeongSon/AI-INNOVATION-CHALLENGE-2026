@@ -365,8 +365,87 @@ async def chat_v2(
                 "timestamp": now,
                 "thread_id": thread_id,
             })
+        elif status == "failed":
+            error_msg = result.get("error") or "메시지 품질 검사를 통과하지 못했습니다. 내용을 조정하여 다시 시도해주세요."
+            new_entries.append({
+                "role": "assistant",
+                "content": error_msg,
+                "type": "error",
+                "timestamp": now,
+                "thread_id": thread_id,
+            })
 
         _save_conversation_messages(conv_id, new_entries)
+
+        # 품질 검사 통과 메시지만 generated_messages 저장
+        if status == "completed" and conv_id:
+            generated_tasks = result.get("generated_tasks", [])
+            for task in generated_tasks:
+                _quality = task.get("quality_check") or {}
+                _scores = _quality.get("llm_judge_scores") or {}
+                msg = task.get("message") or {}
+                content = msg.get("message") or msg.get("content", "")
+                if not content:
+                    continue
+                if not _quality.get("passed"):
+                    logger.info(
+                        "generated_message_skip_quality_failed",
+                        product_id=task.get("product_id"),
+                        failed_stage=_quality.get("failed_stage"),
+                    )
+                    continue
+                db = SessionLocal()
+                try:
+                    gm = GeneratedMessage(
+                        conversation_id=conv_id,
+                        user_id=user_id,
+                        product_id=task.get("product_id", ""),
+                        product_name=task.get("product_name"),
+                        brand=task.get("brand"),
+                        product_tag=task.get("product_tag"),
+                        purpose=task.get("purpose"),
+                        user_input=request.user_input,
+                        title=msg.get("title"),
+                        content=content,
+                        quality_passed=_quality.get("passed"),
+                        quality_failed_stage=_quality.get("failed_stage"),
+                        quality_failure_reason=_quality.get("failure_reason"),
+                        llm_score_accuracy=_scores.get("accuracy"),
+                        llm_score_tone=_scores.get("tone"),
+                        llm_score_personalization=_scores.get("personalization"),
+                        llm_score_naturalness=_scores.get("naturalness"),
+                        llm_score_cta_clarity=_scores.get("cta_clarity"),
+                        llm_score_overall=_scores.get("overall"),
+                        llm_feedback=_scores.get("feedback"),
+                        quality_details={
+                            "rule_check_passed": _quality.get("rule_check_passed"),
+                            "rule_check_issues": _quality.get("rule_check_issues", []),
+                            "semantic_check_passed": _quality.get("semantic_check_passed"),
+                            "semantic_check_results": _quality.get("semantic_check_results", []),
+                        },
+                        regeneration_count=len(result.get("regeneration_history") or []),
+                        thread_id=thread_id,
+                    )
+                    db.add(gm)
+                    db.commit()
+                    logger.info(
+                        "generated_message_saved",
+                        conversation_id=conv_id,
+                        product_id=gm.product_id,
+                        user_id=user_id,
+                        quality_passed=gm.quality_passed,
+                        llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
+                    )
+                except Exception as db_err:
+                    logger.error(
+                        "generated_message_save_failed",
+                        error=str(db_err),
+                        conv_id=conv_id,
+                        product_id=task.get("product_id"),
+                        exc_info=True,
+                    )
+                finally:
+                    db.close()
 
         logger.info(
             "chat_v2_completed",
@@ -444,14 +523,37 @@ async def resume_interrupt(
             try:
                 _persona_info = result.get("persona_info") or {}
                 _selected_product = result.get("selected_product") or {}
+                _quality = result.get("quality_result") or {}
+                _scores = _quality.get("llm_judge_scores") or {}
                 gm = GeneratedMessage(
                     conversation_id=conv_id,
                     user_id=user_id,
                     product_id=request.payload.get("selected_product_id", ""),
                     product_name=_selected_product.get("product_name"),
-                    persona_id=str(_persona_info.get("persona_id")) if _persona_info.get("persona_id") else None,
+                    brand=_selected_product.get("brand"),
+                    product_tag=_selected_product.get("product_tag"),
+                    purpose=result.get("purpose"),
+                    user_input=result.get("user_input"),
                     title=msg.get("title") or msg.get("headline"),
                     content=content,
+                    quality_passed=_quality.get("passed"),
+                    quality_failed_stage=_quality.get("failed_stage"),
+                    quality_failure_reason=_quality.get("failure_reason"),
+                    llm_score_accuracy=_scores.get("accuracy"),
+                    llm_score_tone=_scores.get("tone"),
+                    llm_score_personalization=_scores.get("personalization"),
+                    llm_score_naturalness=_scores.get("naturalness"),
+                    llm_score_cta_clarity=_scores.get("cta_clarity"),
+                    llm_score_overall=_scores.get("overall"),
+                    llm_feedback=_scores.get("feedback"),
+                    quality_details={
+                        "rule_check_passed": _quality.get("rule_check_passed"),
+                        "rule_check_issues": _quality.get("rule_check_issues", []),
+                        "semantic_check_passed": _quality.get("semantic_check_passed"),
+                        "groundedness_passed": _quality.get("groundedness_passed"),
+                        "groundedness_result": _quality.get("groundedness_result"),
+                    },
+                    regeneration_count=result.get("regeneration_count", 0),
                     thread_id=request.thread_id,
                 )
                 db.add(gm)
@@ -462,6 +564,8 @@ async def resume_interrupt(
                     product_id=gm.product_id,
                     user_id=user_id,
                     content_length=len(content),
+                    quality_passed=gm.quality_passed,
+                    llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
                 )
             except Exception as db_err:
                 logger.error(

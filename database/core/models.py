@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP,
-    ForeignKey, ARRAY, UniqueConstraint, JSON
+    ForeignKey, ARRAY, UniqueConstraint, JSON, Boolean, Numeric
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func, text
@@ -203,9 +203,14 @@ class GeneratedMessage(Base):
     user_id         = Column(String(100), nullable=False, index=True)
     product_id      = Column(String(100), nullable=False, index=True)
     product_name    = Column(String(500))
-    persona_id      = Column(String(20))
+    brand           = Column(String(100))
+    product_tag     = Column(String(200))
+    purpose         = Column(String(200))
     title           = Column(Text)
     content         = Column(Text, nullable=False)
+    quality_passed  = Column(Boolean)
+    llm_score_overall = Column(Numeric(3, 2))
+    llm_feedback    = Column(Text)
     thread_id       = Column(String(36))
     created_at      = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
