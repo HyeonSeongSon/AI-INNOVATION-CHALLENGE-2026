@@ -54,16 +54,27 @@ class MarketingAgent:
         """
         generated_tasks = result.get("generated_tasks", [])
         if generated_tasks:
-            return [
-                {
+            messages = []
+            for t in generated_tasks:
+                msg_data = t["message"]
+                if isinstance(msg_data, dict):
+                    title = msg_data.get("title", "")
+                    content = msg_data.get("message", "")
+                elif hasattr(msg_data, "content"):
+                    title = ""
+                    content = msg_data.content
+                else:
+                    title = ""
+                    content = str(msg_data)
+                messages.append({
                     "role": "assistant",
                     "product_id": t["product_id"],
                     "brand": t["brand"],
                     "purpose": t["purpose"],
-                    "content": t["message"].content if hasattr(t["message"], "content") else str(t["message"]),
-                }
-                for t in generated_tasks
-            ]
+                    "title": title,
+                    "content": content,
+                })
+            return messages
 
         for msg in reversed(result.get("messages", [])):
             if isinstance(msg, AIMessage):

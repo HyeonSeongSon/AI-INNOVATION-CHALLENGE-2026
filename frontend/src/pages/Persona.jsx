@@ -266,7 +266,9 @@ export default function PersonaManager() {
         naturalOrganic: (structured_persona.values || []).includes('천연/유기농'),
         veganCrueltyFree: (structured_persona.values || []).includes('비건'),
         aiAnalysis: {
-          primary_category: '맞춤형 뷰티',
+          primary_category: structured_persona.skin_type?.length > 0
+            ? `${structured_persona.skin_type[0]} 피부`
+            : '맞춤형 뷰티',
           reasoning: persona_summary,
         },
       };
@@ -552,7 +554,7 @@ export default function PersonaManager() {
 
       <Grid>
         {personas.map(p => (
-          <PersonaCard key={p.id} onClick={() => handleCardClick(p)}>
+          <PersonaCard key={p.id} onDoubleClick={() => handleCardClick(p)}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'15px', borderBottom:'1px solid #f0f0f0', paddingBottom:'15px'}}>
               <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
                 <div style={{width:48, height:48, borderRadius:'50%', background:'#F0EBFF', display:'flex', alignItems:'center', justifyContent:'center', color:'#6B4DFF'}}>
@@ -561,6 +563,7 @@ export default function PersonaManager() {
                 <div>
                   <div style={{fontWeight:'800', fontSize:'18px', color:'#333'}}>{p.name}</div>
                   <div style={{fontSize:'13px', color:'#888', marginTop:'4px'}}>{p.age}세 · {p.occupation || '직업 미입력'} ({p.gender})</div>
+                  <div style={{fontSize:'11px', color:'#bbb', marginTop:'3px', fontFamily:'monospace'}}>{p.id}</div>
                 </div>
               </div>
               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
