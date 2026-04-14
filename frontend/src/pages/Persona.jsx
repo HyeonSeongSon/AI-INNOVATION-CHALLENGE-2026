@@ -187,9 +187,9 @@ const RangeLabels = styled.div`display: flex; justify-content: space-between; fo
 /* --- [3] 메인 컴포넌트 --- */
 export default function PersonaManager() {
   const navigate = useNavigate();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [step, setStep] = useState(1);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [personaText, setPersonaText] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const [personas, setPersonas] = useState([]);
 
   const { addToast } = useToast();
@@ -237,121 +237,53 @@ export default function PersonaManager() {
     fetchPersonas();
   }, []);
 
-  const initialData = {
-    name: '', age: '', gender: '', 
-    skinType: [], 
-    personalColor: '', 
-    baseColor: '', 
-    skinConcerns: [], 
-    preferredColors: [], 
-    preferredIngredients: [], 
-    avoidedIngredients: [], 
-    preferredScent: [], 
-    priceRange: '', 
-    buyingFactor: [], 
-    skincareRoutine: '', 
-    dailyEnvironment: '', 
-    texturePreference: [], 
-    petInfo: '', 
-    sleepHours: '', 
-    stressLevel: '', 
-    occupation: '', 
-    location: '', 
-    screenTime: 5, 
-    naturalOrganic: false, veganCrueltyFree: false, ecoPackaging: false, pregnancyLactation: false
-  };
-
-  const [data, setData] = useState(initialData);
-
-  const handleChange = (field, value) => setData(prev => ({ ...prev, [field]: value }));
-  
-  const toggleArray = (field, value) => {
-    setData(prev => ({
-      ...prev,
-      [field]: prev[field].includes(value) 
-        ? prev[field].filter(i => i !== value)
-        : [...prev[field], value]
-    }));
-  };
-
-  // ✅ [수정] handleSave: 백엔드 응답 구조(result.analysis)에 맞춰 수정
-  const handleSave = async () => {
-    if (!data.name) return addToast('페르소나 이름을 입력해주세요.', 'error');
-    if (data.skinType.length === 0) return addToast('피부 타입을 하나 이상 선택해주세요.', 'error');
-    if (!data.personalColor) return addToast('퍼스널 컬러를 선택해주세요.', 'error');
-
-    setIsAnalyzing(true); 
-
+  const handleCreateFromText = async () => {
+    if (!personaText.trim()) return addToast('페르소나 설명을 입력해주세요.', 'error');
+    setIsCreating(true);
     try {
-      // 1. Pydantic 모델(PersonaCreateRequest) 필드명과 100% 일치하도록 매핑
-      const payload = {
-        name: data.name,
-        age: data.age ? Number(data.age) : null,
-        gender: data.gender,
-        occupation: data.occupation,
-        skin_type: data.skinType, 
-        skin_concerns: data.skinConcerns, 
-        personal_color: data.personalColor,
-        shade_number: data.baseColor ? Number(data.baseColor) : null,
-        preferred_colors: data.preferredColors,
-        preferred_ingredients: data.preferredIngredients,
-        avoided_ingredients: data.avoidedIngredients,
-        preferred_scents: Array.isArray(data.preferredScent) ? data.preferredScent : [data.preferredScent],
-        skincare_routine: data.skincareRoutine,
-        main_environment: data.dailyEnvironment,
-        preferred_texture: data.texturePreference, 
-        pets: data.petInfo, 
-        digital_device_usage_time: Number(data.screenTime),
-        avg_sleep_hours: data.sleepHours ? Number(data.sleepHours) : null,
-        stress_level: data.stressLevel,
-        shopping_style: data.priceRange,
-        purchase_decision_factors: data.buyingFactor, 
-        values: [
-          data.naturalOrganic ? '천연/유기농' : '',
-          data.veganCrueltyFree ? '비건' : '',
-          data.ecoPackaging ? '친환경' : '',
-          data.pregnancyLactation ? '임신/수유' : ''
-        ].filter(Boolean)
-      };
-
-      // 시각적 효과
-      await new Promise(r => setTimeout(r, 1500));
-
-      // 2. 파이프라인 API 호출
-      const response = await pipelineApi.post('/pipeline/personas/create-analyze', payload);
-      const result = response.data;
-      
-      // ✅ [핵심 수정] 백엔드 응답에서 analysis 객체를 바로 꺼냅니다.
-      const aiData = result.analysis || {};
+      const res = await pipelineApi.post('/pipeline/personas/create-from-text', {
+        text: personaText,
+      });
+      const { persona_id, structured_persona, persona_summary } = res.data;
 
       const newPersona = {
-        ...data,
-        id: result.persona_id, // UUID
+        id: persona_id,
+        personaId: persona_id,
+        name: structured_persona.name,
+        age: structured_persona.age,
+        gender: structured_persona.gender,
+        occupation: structured_persona.occupation,
+        skinType: structured_persona.skin_type || [],
+        personalColor: structured_persona.personal_color,
+        baseColor: structured_persona.shade_number,
+        priceRange: structured_persona.shopping_style,
+        petInfo: structured_persona.pets || '없음',
+        screenTime: structured_persona.digital_device_usage_time || 0,
+        preferredColors: structured_persona.preferred_colors || [],
+        texturePreference: structured_persona.preferred_texture || [],
+        buyingFactor: structured_persona.purchase_decision_factors || [],
+        skinConcerns: structured_persona.skin_concerns || [],
+        naturalOrganic: (structured_persona.values || []).includes('천연/유기농'),
+        veganCrueltyFree: (structured_persona.values || []).includes('비건'),
         aiAnalysis: {
-          primary_category: aiData.primary_category || '분석 완료',
-          reasoning: aiData.ai_analysis_text || '상세 리포트'
-        }
+          primary_category: '맞춤형 뷰티',
+          reasoning: persona_summary,
+        },
       };
 
-      setPersonas([newPersona, ...personas]);
-      addToast(`분석 완료! [${newPersona.aiAnalysis.primary_category}]`, 'success');
-      closeModal();
-
+      setPersonas(prev => [newPersona, ...prev]);
+      addToast('페르소나 생성 완료!', 'success');
+      setShowTextModal(false);
+      setPersonaText('');
     } catch (error) {
-      console.error("에러:", error);
-      const errMsg = error.response?.data?.detail 
-         ? (typeof error.response.data.detail === 'string' ? error.response.data.detail : JSON.stringify(error.response.data.detail))
-         : error.message;
-      addToast(`저장 실패: ${errMsg}`, 'error');
+      console.error('페르소나 생성 에러:', error);
+      const errMsg = error.response?.data?.detail
+        ? (typeof error.response.data.detail === 'string' ? error.response.data.detail : JSON.stringify(error.response.data.detail))
+        : error.message;
+      addToast(`생성 실패: ${errMsg}`, 'error');
     } finally {
-      setIsAnalyzing(false); 
+      setIsCreating(false);
     }
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setStep(1);
-    setData(initialData);
   };
 
   const handleDelete = async (e, id) => {
@@ -372,9 +304,10 @@ export default function PersonaManager() {
     navigate('/message', { state: { persona } });
   };
 
-  const renderStepContent = () => {
-    switch(step) {
-      case 1: 
+  // renderStepContent 제거됨 — 텍스트 입력 방식으로 전환
+  const _unused_renderStepContent = () => {
+    switch(0) {
+      case 1:
         return (
           <>
             <SectionTitle><User size={20}/>기본 정보 설정</SectionTitle>
@@ -608,7 +541,7 @@ export default function PersonaManager() {
           <Title>페르소나 관리</Title>
           <p style={{color:'#666', marginTop:'8px'}}>스킨케어부터 메이크업까지, AI가 맞춤 분석합니다.</p>
         </div>
-        <AddButton onClick={() => setIsModalOpen(true)}><Plus size={18}/> 새 페르소나 만들기</AddButton>
+        <AddButton onClick={() => setShowTextModal(true)}><Plus size={18}/> 새 페르소나 만들기</AddButton>
       </Header>
 
       {personas.length === 0 && (
@@ -666,45 +599,56 @@ export default function PersonaManager() {
         ))}
       </Grid>
 
-      {isModalOpen && (
-        <ModalOverlay onClick={closeModal}>
-          <ModalBox onClick={e => e.stopPropagation()}>
-            
-            {isAnalyzing && (
+      {showTextModal && (
+        <ModalOverlay onClick={() => { if (!isCreating) { setShowTextModal(false); setPersonaText(''); } }}>
+          <ModalBox onClick={e => e.stopPropagation()} style={{maxWidth: 560}}>
+
+            {isCreating && (
               <AnalyzingOverlay>
                 <PulseRing>
                   <Sparkles size={32} color="#6B4DFF" fill="#6B4DFF" />
                 </PulseRing>
                 <LoadingText>
-                  고객 페르소나를 분석 중입니다...
-                  <span>피부 타입, 라이프스타일, 소비 패턴 매칭 중</span>
+                  페르소나를 생성 중입니다...
+                  <span>입력 내용을 분석하고 검색 쿼리를 생성하는 중</span>
                 </LoadingText>
               </AnalyzingOverlay>
             )}
 
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
-              <h2 style={{fontSize:'20px', fontWeight:'bold', color:'#333'}}>페르소나 생성 (Step {step}/7)</h2>
-              <X style={{cursor:'pointer', color:'#999'}} onClick={closeModal}/>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+              <h2 style={{fontSize:'20px', fontWeight:'bold', color:'#333', margin:0}}>새 페르소나 만들기</h2>
+              <X style={{cursor:'pointer', color:'#999'}} onClick={() => { if (!isCreating) { setShowTextModal(false); setPersonaText(''); } }}/>
             </div>
-            <ProgressBar><div style={{width: `${(step/7)*100}%`}}/></ProgressBar>
-            <div style={{flex: 1, overflowY:'auto', paddingRight:'5px'}}>
-              {renderStepContent()}
-            </div>
+
+            <p style={{fontSize:'14px', color:'#666', marginBottom:'16px', lineHeight:'1.6'}}>
+              고객의 특성을 자유롭게 입력해주세요. AI가 자동으로 구조화하고 검색 쿼리를 생성합니다.
+            </p>
+
+            <textarea
+              value={personaText}
+              onChange={e => setPersonaText(e.target.value)}
+              placeholder="예) 28살 직장인 여성, 지성·복합성 피부, 여드름과 모공 고민, 히알루론산 선호, 알코올 기피, 가성비 쇼핑 선호..."
+              disabled={isCreating}
+              style={{
+                width: '100%', minHeight: '160px', padding: '14px', fontSize: '14px',
+                border: '1px solid #ddd', borderRadius: '12px', resize: 'vertical',
+                outline: 'none', fontFamily: 'inherit', lineHeight: '1.6',
+                boxSizing: 'border-box',
+                transition: '0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#6B4DFF'}
+              onBlur={e => e.target.style.borderColor = '#ddd'}
+              autoFocus
+            />
+
             <ButtonGroup>
-              {step > 1 && (
-                <NavButton onClick={() => setStep(step - 1)}>
-                    <ChevronLeft size={16} style={{marginBottom:-2, marginRight:5}}/>이전
-                </NavButton>
-              )}
-              {step < 7 ? (
-                <NavButton $primary onClick={() => setStep(step + 1)}>
-                  다음<ChevronRight size={16} style={{marginBottom:-2, marginLeft:5}}/>
-                </NavButton>
-              ) : (
-                <NavButton $primary onClick={handleSave} disabled={isAnalyzing}>
-                    <Check size={16} style={{marginBottom:-2, marginLeft:5}}/> 완료 및 저장
-                </NavButton>
-              )}
+              <NavButton onClick={() => { setShowTextModal(false); setPersonaText(''); }} disabled={isCreating}>
+                취소
+              </NavButton>
+              <NavButton $primary onClick={handleCreateFromText} disabled={isCreating || !personaText.trim()}>
+                <Sparkles size={16} style={{marginBottom:-2, marginRight:6}}/>
+                {isCreating ? '생성 중...' : '페르소나 생성'}
+              </NavButton>
             </ButtonGroup>
           </ModalBox>
         </ModalOverlay>

@@ -1,11 +1,17 @@
-from typing import Dict, List, Optional, Union
-from pydantic import BaseModel, Field
-from ..prompts.generate_query_prompt import build_persona_structured_prompt, build_generate_query_prompt
+"""
+페르소나 생성 서비스
+자유 텍스트 → 구조화된 페르소나 정보 + 검색 쿼리 생성
+"""
+
+import os
 import json
+import logging
+from typing import Any, Dict, List, Optional, Union
 
-from app.core.logging import get_logger
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
 
-logger = get_logger("generate_persona_and_query")
+logger = logging.getLogger("persona_creator")
 
 
 class PersonaData(BaseModel):
@@ -34,55 +40,92 @@ class PersonaData(BaseModel):
     persona_summary: Optional[str] = Field(default=None, description="페르소나 전반을 자연스럽게 요약한 설명문")
 
 
-async def generate_structured_persona_info(user_input: str, llm) -> Dict:
-    """
-    사용자 입력 텍스트를 분석하여 구조화된 페르소나 정보를 생성.
+def _get_llm(model_name: str = None) -> ChatOpenAI:
+    model = model_name or os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
+    return ChatOpenAI(
+        model=model,
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
 
-    LLM에 structured output을 적용해 PersonaData 스키마에 맞는 페르소나를 추출.
-    피부 타입, 피부 고민, 선호 성분 등 뷰티 추천에 필요한 속성을 포함.
+
+async def generate_structured_persona_info(user_input: str, model_name: str = None) -> Dict[str, Any]:
+    """
+    자유 텍스트를 구조화된 페르소나 정보로 변환.
 
     Args:
         user_input: 페르소나를 생성할 원본 사용자 입력 텍스트
-        llm: structured output을 지원하는 LangChain LLM 인스턴스
+        model_name: 사용할 LLM 모델명 (없으면 환경변수에서 읽음)
 
     Returns:
         PersonaData 스키마를 따르는 딕셔너리
     """
-    logger.info("generate_structured_persona_info_started", input_length=len(user_input))
+    llm = _get_llm(model_name)
+    logger.info("generate_structured_persona_info_started | input_length=%d model=%s", len(user_input), llm.model_name)
+
     structured_llm = llm.with_structured_output(PersonaData)
-    prompt = build_persona_structured_prompt(user_input)
+    prompt = f"""사용자 입력을 바탕으로 뷰티 상품 추천용 페르소나 정보를 구조화해서 추출하세요.
+명시되지 않은 필드는 입력 맥락에서 합리적으로 추론하거나, 추론이 불가능하면 null/빈 배열로 두세요.
+persona_summary는 페르소나 전반을 2~3문장으로 자연스럽게 요약하세요.
+
+사용자 입력:
+{user_input}
+"""
     result = await structured_llm.ainvoke(prompt)
     persona = result.model_dump()
     logger.info(
-        "generate_structured_persona_info_completed",
-        persona_name=persona.get("name"),
-        skin_type=persona.get("skin_type"),
-        skin_concerns=persona.get("skin_concerns"),
+        "generate_structured_persona_info_completed | persona_name=%s skin_type=%s",
+        persona.get("name"),
+        persona.get("skin_type"),
     )
     return persona
 
-async def generate_search_query(persona_info: Union[Dict, str], llm) -> Dict:
-    """
-    페르소나 정보를 기반으로 상품 검색에 사용할 쿼리를 생성.
 
-    페르소나의 피부 타입, 고민, 선호 성분 등을 종합하여 벡터 검색 또는
-    키워드 검색에 활용할 수 있는 쿼리 딕셔너리를 반환.
+_SEARCH_QUERY_PROMPT_TEMPLATE = """
+당신은 뷰티·라이프스타일 상품 추천 시스템용 검색 쿼리 생성 전문가입니다.
+주어진 페르소나를 깊이 이해하고, 이 사용자에게 실제로 맞는 상품을 찾기 위한
+검색/매칭용 4개 쿼리(need / preference / retrieval / persona)를 생성하세요.
+
+[쿼리 역할]
+- need: 사용자가 원하는 결과 상태 (자연스러운 문장형)
+- preference: 선호하는 제품 속성/사용감/스타일 (자연스러운 문장형)
+- retrieval: 검색창에 입력할 법한 짧고 응집된 검색 문구
+- persona: 이 상품이 필요한 사람 유형 묘사 (자연스러운 문장형, 추천 문장 금지)
+
+반드시 아래 JSON 형식만 반환하세요:
+{{
+  "need": "",
+  "preference": "",
+  "retrieval": "",
+  "persona": ""
+}}
+
+Persona:
+{persona_str}
+"""
+
+
+async def generate_search_query(persona_info: Union[Dict[str, Any], str], model_name: str = None) -> Dict[str, str]:
+    """
+    페르소나 정보를 기반으로 상품 검색 쿼리 생성.
 
     Args:
-        persona_info: 구조화된 페르소나 정보 (딕셔너리 또는 문자열)
-        llm: LangChain LLM 인스턴스
+        persona_info: 구조화된 페르소나 정보 딕셔너리 또는 문자열
+        model_name: 사용할 LLM 모델명 (없으면 환경변수에서 읽음)
 
     Returns:
-        검색 쿼리를 담은 딕셔너리 (LLM 응답을 JSON 파싱한 결과)
+        {"need": ..., "preference": ..., "retrieval": ..., "persona": ...}
     """
+    llm = _get_llm(model_name)
+    persona_str = json.dumps(persona_info, ensure_ascii=False, indent=2) if isinstance(persona_info, dict) else persona_info
     persona_name = persona_info.get("name") if isinstance(persona_info, dict) else None
-    logger.info("generate_search_query_started", persona_name=persona_name)
-    prompt = build_generate_query_prompt(persona_info)
-    generate_query_response = await llm.ainvoke(prompt)
-    search_query = json.loads(generate_query_response.content)
+    logger.info("generate_search_query_started | persona_name=%s model=%s", persona_name, llm.model_name)
+
+    prompt = _SEARCH_QUERY_PROMPT_TEMPLATE.format(persona_str=persona_str)
+    response = await llm.ainvoke(prompt)
+    search_query = json.loads(response.content)
     logger.info(
-        "generate_search_query_completed",
-        persona_name=persona_name,
-        query_keys=list(search_query.keys()) if isinstance(search_query, dict) else None,
+        "generate_search_query_completed | persona_name=%s query_keys=%s",
+        persona_name,
+        list(search_query.keys()),
     )
     return search_query

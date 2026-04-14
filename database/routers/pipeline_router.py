@@ -9,12 +9,14 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from core.database import get_db, SessionLocal
 from core.models import AnalysisResult, Persona
 from services.persona_analyzer import generate_persona_summary
 from services.persona_analysis import run_persona_analysis
+from services.persona_creator import generate_structured_persona_info, generate_search_query
 
 logger = logging.getLogger("pipeline")
 
@@ -213,3 +215,111 @@ def _extract_primary_category(summary: str) -> str:
         if kw in summary:
             return f"{kw} 피부"
     return "맞춤형 뷰티"
+
+
+# ============================================================
+# 자유 텍스트 → 페르소나 생성 엔드포인트
+# ============================================================
+
+class PersonaCreateFromTextRequest(BaseModel):
+    text: str
+    model: Optional[str] = None
+
+
+class PersonaCreateFromTextResponse(BaseModel):
+    persona_id: str
+    structured_persona: Dict[str, Any]
+    search_queries: Dict[str, str]
+    persona_summary: str
+
+
+@router.post("/personas/create-from-text", response_model=PersonaCreateFromTextResponse)
+async def create_persona_from_text(
+    request: PersonaCreateFromTextRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    자유 텍스트 입력으로 페르소나 생성
+
+    1. LLM으로 구조화된 페르소나 정보 추출 → DB 저장
+    2. 검색 쿼리 생성 → DB 저장
+    """
+    try:
+        model_name = request.model
+
+        # 1. 페르소나 정보 구조화
+        structured_persona = await generate_structured_persona_info(request.text, model_name)
+
+        # 2. personas 테이블에 저장
+        import uuid as _uuid
+        persona_id = f"PERSONA_{_uuid.uuid4().hex[:12].upper()}"
+
+        preferred_texture = structured_persona.get("preferred_texture", [])
+        if isinstance(preferred_texture, str):
+            preferred_texture = [preferred_texture] if preferred_texture else []
+
+        purchase_decision_factors = structured_persona.get("purchase_decision_factors", [])
+        if isinstance(purchase_decision_factors, str):
+            purchase_decision_factors = [purchase_decision_factors] if purchase_decision_factors else []
+
+        persona = Persona(
+            persona_id=persona_id,
+            name=structured_persona.get("name"),
+            gender=structured_persona.get("gender"),
+            age=structured_persona.get("age"),
+            occupation=structured_persona.get("occupation"),
+            skin_type=structured_persona.get("skin_type", []),
+            skin_concerns=structured_persona.get("skin_concerns", []),
+            personal_color=structured_persona.get("personal_color"),
+            shade_number=structured_persona.get("shade_number"),
+            preferred_colors=structured_persona.get("preferred_colors", []),
+            preferred_ingredients=structured_persona.get("preferred_ingredients", []),
+            avoided_ingredients=structured_persona.get("avoided_ingredients", []),
+            preferred_scents=structured_persona.get("preferred_scents", []),
+            values=structured_persona.get("values", []),
+            skincare_routine=structured_persona.get("skincare_routine"),
+            main_environment=structured_persona.get("main_environment"),
+            preferred_texture=preferred_texture,
+            pets=structured_persona.get("pets"),
+            avg_sleep_hours=structured_persona.get("avg_sleep_hours"),
+            stress_level=structured_persona.get("stress_level"),
+            digital_device_usage_time=structured_persona.get("digital_device_usage_time"),
+            shopping_style=structured_persona.get("shopping_style"),
+            purchase_decision_factors=purchase_decision_factors,
+            persona_summary=structured_persona.get("persona_summary"),
+        )
+        db.add(persona)
+        db.commit()
+
+        # 3. 검색 쿼리 생성
+        raw_queries = await generate_search_query(structured_persona, model_name)
+
+        # 4. 검색 쿼리 DB 저장 (upsert)
+        upsert_sql = sa_text("""
+            INSERT INTO search_queries (persona_id, query_type, query_text)
+            VALUES (:persona_id, CAST(:query_type AS query_type_enum), :query_text)
+            ON CONFLICT (persona_id, query_type)
+            DO UPDATE SET query_text = EXCLUDED.query_text
+        """)
+        for query_type in ("need", "preference", "retrieval", "persona"):
+            db.execute(upsert_sql, {
+                "persona_id": persona_id,
+                "query_type": query_type,
+                "query_text": raw_queries.get(query_type, ""),
+            })
+        db.commit()
+
+        logger.info("create_persona_from_text_completed | persona_id=%s persona_name=%s",
+                    persona_id, structured_persona.get("name"))
+
+        return PersonaCreateFromTextResponse(
+            persona_id=persona_id,
+            structured_persona=structured_persona,
+            search_queries=raw_queries,
+            persona_summary=structured_persona.get("persona_summary") or "",
+        )
+
+    except Exception as e:
+        db.rollback()
+        logger.error("create_persona_from_text_failed | error=%s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional, List, Tuple
 from pydantic import BaseModel, Field
 from langchain_core.language_models import BaseChatModel
 import httpx
+import ahocorasick
+from kiwipiepy import Kiwi
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
@@ -30,11 +32,11 @@ _product_client = ProductClient()
 class LLMJudgeOutput(BaseModel):
     """LLM-as-a-Judge 구조화된 출력"""
     accuracy: int = Field(..., ge=1, le=5, description="정확성: 상품 정보가 정확하게 반영되었는지 (1-5)")
-    tone: int = Field(..., ge=1, le=5, description="톤: 브랜드 톤에 부합하는지 (1-5)")
+    tone: int = Field(..., ge=1, le=5, description="톤: 브랜드 톤 가이드의 문체·어조가 구현되었는지 (1-5)")
     personalization: int = Field(..., ge=1, le=5, description="개인화: 타깃 고객 고민과 핵심 혜택이 메시지에 반영되었는지 (1-5)")
-    naturalness: int = Field(..., ge=1, le=5, description="자연스러움: 문장이 자연스럽고 읽기 좋은지 (1-5)")
-    safety: int = Field(..., ge=1, le=5, description="안전성: 금지 표현이 없고 과장이 없는지 (1-5)")
-    feedback: str = Field(..., description="종합 피드백 (한글, 2-3문장)")
+    naturalness: int = Field(..., ge=1, le=5, description="자연스러움: 문장이 자연스럽고 모바일 가독성에 적합한지 (1-5)")
+    cta_clarity: int = Field(..., ge=1, le=5, description="CTA 명확도: 소비자가 취해야 할 다음 행동이 명확히 안내되는지 (1-5)")
+    feedback: str = Field(..., description="종합 피드백 (한글, 2-4문장)")
 
 
 # ============================================================
@@ -46,6 +48,8 @@ class QualityChecker:
 
     def __init__(self):
         self._forbidden_expressions: List[str] = self._extract_forbidden_expressions()
+        self._kiwi = Kiwi()
+        self._automaton = self._build_automaton()
         logger.info("quality_checker_initialized")
 
 
@@ -241,11 +245,10 @@ class QualityChecker:
         if message and len(message) > 350:
             issues.append(f"메시지가 너무 깁니다 ({len(message)}자, 최대 350자)")
 
-        # 금지 표현 검사
-        for expr in self._forbidden_expressions:
-            expr_stripped = expr.strip()
-            if expr_stripped and expr_stripped in full_text:
-                issues.append(f"금지 표현 감지: '{expr_stripped}'")
+        # 금지 표현 검사 (3단계 매칭)
+        detected = self._detect_forbidden_expressions(full_text)
+        for expr in detected:
+            issues.append(f"금지 표현 감지: '{expr}'")
 
         passed = len(issues) == 0
         return passed, issues
@@ -262,6 +265,78 @@ class QualityChecker:
         for category in categories.values():
             keywords.extend(category.get("keywords", []))
         return keywords
+
+    @staticmethod
+    def _strip_spaces(text: str) -> str:
+        """공백을 모두 제거하여 띄어쓰기 불일치 무력화"""
+        return re.sub(r"\s+", "", text)
+
+    def _build_automaton(self) -> ahocorasick.Automaton:
+        """
+        Aho-Corasick 오토마톤 빌드 (공백 제거 정규화 적용).
+
+        공백을 제거한 키워드를 등록하여 O(n+m)으로 다중 키워드 탐색.
+        """
+        A = ahocorasick.Automaton()
+        for idx, expr in enumerate(self._forbidden_expressions):
+            norm = self._strip_spaces(expr.strip())
+            if norm:
+                # 동일 정규화 키가 있으면 덮어쓰기(중복 방지)
+                A.add_word(norm, (idx, expr.strip()))
+        A.make_automaton()
+        return A
+
+    def _morpheme_tokens(self, text: str) -> str:
+        """
+        kiwipiepy로 체언·용언·어근 형태소만 추출하여 공백 구분 문자열 반환.
+
+        조사·어미가 분리되므로 "피부를 치료해" → "피부 치료" 형태로
+        키워드 형태소 시퀀스와 매칭할 수 있음.
+        """
+        tokens = [
+            t.form
+            for t in self._kiwi.tokenize(text)
+            if t.tag.startswith(("N", "V", "XR"))
+        ]
+        return " ".join(tokens)
+
+    def _detect_forbidden_expressions(self, text: str) -> List[str]:
+        """
+        3단계 금지 표현 탐지:
+          1. 원문 Aho-Corasick  — 정확 매칭
+          2. 공백 제거 Aho-Corasick — 띄어쓰기 변형 대응
+          3. 형태소 분석 순차 매칭 — 조사·어미 변형 대응
+
+        Returns:
+            감지된 금지 표현 원문 리스트 (중복 제거)
+        """
+        detected: List[str] = []
+        seen_idx: set = set()
+
+        # Step 1: 원문 Aho-Corasick
+        for _, (idx, original) in self._automaton.iter(text):
+            if idx not in seen_idx:
+                seen_idx.add(idx)
+                detected.append(original)
+
+        # Step 2: 공백 제거 후 Aho-Corasick
+        norm_text = self._strip_spaces(text)
+        for _, (idx, original) in self._automaton.iter(norm_text):
+            if idx not in seen_idx:
+                seen_idx.add(idx)
+                detected.append(original)
+
+        # Step 3: 형태소 분석 — 조사/어미 변형 대응
+        morph_text = self._morpheme_tokens(text)
+        for idx, expr in enumerate(self._forbidden_expressions):
+            if idx in seen_idx:
+                continue
+            morph_expr = self._morpheme_tokens(expr)
+            if morph_expr and morph_expr in morph_text:
+                seen_idx.add(idx)
+                detected.append(expr)
+
+        return detected
 
 # ============================================================
 # Stage 2: Semantic Similarity Check
@@ -460,16 +535,16 @@ class QualityChecker:
                 "tone": result.tone,
                 "personalization": result.personalization,
                 "naturalness": result.naturalness,
-                "safety": result.safety,
+                "cta_clarity": result.cta_clarity,
                 "overall": round(
                     (result.accuracy + result.tone + result.personalization
-                     + result.naturalness + result.safety) / 5.0, 2
+                     + result.naturalness + result.cta_clarity) / 5.0, 2
                 ),
                 "feedback": result.feedback,
             }
 
             # 코드가 직접 판정: 모든 항목 3점 이상 AND 평균 4점 이상
-            score_keys = ("accuracy", "tone", "personalization", "naturalness", "safety")
+            score_keys = ("accuracy", "tone", "personalization", "naturalness", "cta_clarity")
             passed = (
                 all(scores[k] >= 3 for k in score_keys)
                 and scores["overall"] >= 4
