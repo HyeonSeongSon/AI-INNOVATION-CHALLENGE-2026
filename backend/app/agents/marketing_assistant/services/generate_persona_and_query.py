@@ -9,11 +9,11 @@ logger = get_logger("generate_persona_and_query")
 
 
 class PersonaData(BaseModel):
-    name: str = Field(description="페르소나 이름. 실명이 있으면 그대로, 없으면 핵심 특징을 담은 간단한 설명으로 대체 (예: 트러블 관리가 중요한 20대 대학생)")
+    name: str = Field(description="페르소나 이름. 실명이 있으면 그대로, 없으면 핵심 특징을 담은 간단한 설명으로 대체 (예: XX세 성별 직업")
     gender: Optional[str] = Field(default=None, description="성별 (예: 여성, 남성)")
     age: Optional[int] = Field(default=None, description="나이")
     occupation: Optional[str] = Field(default=None, description="직업 (예: 직장인, 대학생)")
-    skin_type: List[str] = Field(default_factory=list, description="피부 타입 (예: 지성, 복합성, 건성), 피부 타입 외 작성 금지(예: 복합성(T존 번들거림))")
+    skin_type: List[str] = Field(default_factory=list, description="피부 타입 (예: 지성, 복합성, 건성), 피부 타입 외 작성 금지(잘못된 예: 복합성(T존 번들거림))")
     skin_concerns: List[str] = Field(default_factory=list, description="피부 고민 (예: 모공, 여드름, 색소침착)")
     personal_color: Optional[str] = Field(default=None, description="퍼스널 컬러 (예: 웜톤, 쿨톤, 봄웜)")
     shade_number: Optional[int] = Field(default=None, description="파운데이션 쉐이드 번호 (예: 21, 23, 25)")

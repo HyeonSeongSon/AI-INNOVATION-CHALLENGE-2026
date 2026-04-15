@@ -8,7 +8,6 @@ import {
   Layers, Wind, Home, Feather, Shield, Clock, ShoppingBag, Star, Gift,
   Cat 
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 // ✅ Toast 및 API 모듈 불러오기
 import { useToast } from '../components/Toast';
@@ -186,11 +185,11 @@ const RangeLabels = styled.div`display: flex; justify-content: space-between; fo
 
 /* --- [3] 메인 컴포넌트 --- */
 export default function PersonaManager() {
-  const navigate = useNavigate();
   const [showTextModal, setShowTextModal] = useState(false);
   const [personaText, setPersonaText] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [personas, setPersonas] = useState([]);
+  const [queryModal, setQueryModal] = useState({ open: false, persona: null, data: null, loading: false, error: null });
 
   const { addToast } = useToast();
 
@@ -302,8 +301,14 @@ export default function PersonaManager() {
     }
   };
 
-  const handleCardClick = (persona) => {
-    navigate('/message', { state: { persona } });
+  const handleCardClick = async (persona) => {
+    setQueryModal({ open: true, persona, data: null, loading: true, error: null });
+    try {
+      const res = await pipelineApi.post('/product-search-queries/get', { persona_id: persona.id });
+      setQueryModal(prev => ({ ...prev, loading: false, data: res.data }));
+    } catch {
+      setQueryModal(prev => ({ ...prev, loading: false, error: '검색 쿼리가 아직 생성되지 않았습니다.' }));
+    }
   };
 
   // renderStepContent 제거됨 — 텍스트 입력 방식으로 전환
@@ -541,7 +546,7 @@ export default function PersonaManager() {
       <Header>
         <div>
           <Title>페르소나 관리</Title>
-          <p style={{color:'#666', marginTop:'8px'}}>스킨케어부터 메이크업까지, AI가 맞춤 분석합니다.</p>
+          <p style={{color:'#666', marginTop:'8px'}}>페르소나를 등록하고 메시지를 생성해보세요.</p>
         </div>
         <AddButton onClick={() => setShowTextModal(true)}><Plus size={18}/> 새 페르소나 만들기</AddButton>
       </Header>
@@ -567,7 +572,6 @@ export default function PersonaManager() {
                 </div>
               </div>
               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                {p.aiAnalysis && <div style={{background:'#6B4DFF', color:'white', padding:'6px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:'bold', boxShadow:'0 4px 10px rgba(107, 77, 255, 0.3)'}}>{p.aiAnalysis.primary_category}</div>}
                 <DeleteBtn onClick={(e) => handleDelete(e, p.id)}><Trash2 size={16}/></DeleteBtn>
               </div>
             </div>
@@ -581,8 +585,8 @@ export default function PersonaManager() {
 
               <div style={{display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center'}}>
                  <span style={{fontWeight:'bold', width:'50px'}}>취향</span>
-                 {p.preferredColors?.length > 0 ? p.preferredColors.slice(0,2).map(c=><TagChip key={c} $bg="#fff0f6" $color="#c41d7f">{c}</TagChip>) : <span style={{color:'#ccc'}}>색상 미선택</span>}
                  {p.texturePreference && p.texturePreference.length > 0 && <TagChip $bg="#e6f7ff" $color="#1890ff">{p.texturePreference[0]}</TagChip>}
+                 {p.preferredColors?.length > 0 ? p.preferredColors.slice(0,2).map(c=><TagChip key={c} $bg="#fff0f6" $color="#c41d7f">{c}</TagChip>) : <span style={{color:'#ccc'}}>색상 미선택</span>}
               </div>
 
               <div style={{display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center'}}>
@@ -601,6 +605,59 @@ export default function PersonaManager() {
           </PersonaCard>
         ))}
       </Grid>
+
+      {queryModal.open && (
+        <ModalOverlay onClick={() => setQueryModal(prev => ({ ...prev, open: false }))}>
+          <ModalBox onClick={e => e.stopPropagation()} style={{maxWidth: 560}}>
+            {/* 헤더 */}
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24}}>
+              <div>
+                <div style={{fontSize:20, fontWeight:800, color:'#111'}}>{queryModal.persona?.name}</div>
+                <div style={{fontSize:13, color:'#888', marginTop:4}}>검색 쿼리</div>
+              </div>
+              <button onClick={() => setQueryModal(prev => ({ ...prev, open: false }))}
+                style={{background:'none', border:'none', cursor:'pointer', color:'#aaa', padding:4, display:'flex', alignItems:'center'}}>
+                <X size={22}/>
+              </button>
+            </div>
+
+            {/* 로딩 */}
+            {queryModal.loading && (
+              <div style={{textAlign:'center', padding:'40px 0', color:'#888'}}>
+                <div style={{fontSize:14}}>쿼리를 불러오는 중...</div>
+              </div>
+            )}
+
+            {/* 에러 */}
+            {queryModal.error && (
+              <div style={{textAlign:'center', padding:'40px 0', color:'#aaa'}}>
+                <AlertCircle size={32} style={{marginBottom:12, display:'block', margin:'0 auto 12px'}}/>
+                <div style={{fontSize:14}}>{queryModal.error}</div>
+              </div>
+            )}
+
+            {/* 쿼리 목록 */}
+            {queryModal.data && (() => {
+              const labels = { need: '니즈 쿼리', preference: '선호 쿼리', retrieval: '검색 쿼리', persona: '페르소나 쿼리' };
+              const colors = { need: {bg:'#F0EBFF', color:'#6B4DFF'}, preference: {bg:'#fff0f6', color:'#c41d7f'}, retrieval: {bg:'#e6f7ff', color:'#1890ff'}, persona: {bg:'#f6ffed', color:'#389e0d'} };
+              return (
+                <div style={{display:'flex', flexDirection:'column', gap:12}}>
+                  {Object.entries(labels).map(([key, label]) => (
+                    <div key={key} style={{padding:'16px 20px', borderRadius:14, border:'1px solid #eee', background:'#fafafa'}}>
+                      <div style={{fontSize:11, fontWeight:700, color: colors[key].color, background: colors[key].bg, display:'inline-block', padding:'3px 10px', borderRadius:20, marginBottom:8}}>
+                        {label}
+                      </div>
+                      <div style={{fontSize:14, color:'#333', lineHeight:1.6}}>
+                        {queryModal.data[key]?.text || '-'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </ModalBox>
+        </ModalOverlay>
+      )}
 
       {showTextModal && (
         <ModalOverlay onClick={() => { if (!isCreating) { setShowTextModal(false); setPersonaText(''); } }}>

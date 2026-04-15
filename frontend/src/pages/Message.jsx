@@ -78,8 +78,25 @@ const TagContainer = styled.div` display: flex; flex-wrap: wrap; gap: 6px; margi
 const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-weight: 600; `;
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
 const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; `;
-const InputRow = styled.div` display: flex; gap: 12px; align-items: center; `;
-const ChatInput = styled.input` flex: 1; padding: 14px 20px; border: 1px solid #ddd; border-radius: 30px; font-size: 14px; outline: none; &:focus { border-color: #6B4DFF; } `;
+const InputRow = styled.div` display: flex; gap: 12px; align-items: flex-end; `;
+const ChatInput = styled.textarea`
+  flex: 1;
+  padding: 12px 20px;
+  border: 1px solid #ddd;
+  border-radius: 22px;
+  font-size: 14px;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  min-height: 44px;
+  max-height: 200px;
+  line-height: 1.6;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  &:focus { border-color: #6B4DFF; box-shadow: 0 0 0 3px rgba(107, 77, 255, 0.08); }
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+`;
 const SendBtn = styled.button` width: 44px; height: 44px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } &:disabled { background: #ccc; cursor: not-allowed; } `;
 const SelectedProductChip = styled.div`
   display: inline-flex; align-items: center; gap: 8px;
@@ -198,6 +215,13 @@ export default function Message() {
 
 
   const scrollRef = useRef(null);
+  const chatInputRef = useRef(null);
+
+  const autoResize = (el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  };
 
   const [personas, setPersonas] = useState([]);
   const [config, setConfig] = useState({
@@ -241,6 +265,9 @@ export default function Message() {
     if (!text || isChatLoading) return;
 
     setChatInput('');
+    if (chatInputRef.current) {
+      chatInputRef.current.style.height = '44px';
+    }
     const userMsg = { id: Date.now(), role: 'user', text };
     addMessage(userMsg);
     setIsChatLoading(true);
@@ -359,7 +386,10 @@ export default function Message() {
               {msg.products && msg.products.length > 0 && (
                 <ProductGrid>
                   {msg.products.map(product => (
-                    <ProductCard key={product.id}>
+                    <ProductCard key={product.id} onDoubleClick={() => {
+                      setChatInput(prev => (prev ? prev + ' ' : '') + product.id);
+                      chatInputRef.current?.focus();
+                    }}>
                       <CardImage>
                         <span className="brand-badge">{product.brand}</span>
                         {product.image ? (
@@ -390,11 +420,13 @@ export default function Message() {
           <InputRow>
             <ShoppingBag size={20} color="#bbb" />
             <ChatInput
+              ref={chatInputRef}
               placeholder="메시지를 입력하세요"
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => { setChatInput(e.target.value); autoResize(e.target); }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
               disabled={isChatLoading}
+              rows={1}
             />
             <SendBtn onClick={handleSendChat} disabled={isChatLoading || !chatInput.trim()}>
               {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
