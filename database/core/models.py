@@ -199,7 +199,7 @@ class GeneratedMessage(Base):
     __tablename__ = 'generated_messages'
 
     id              = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    conversation_id = Column(String(36), ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
+    conversation_id = Column(String(36), ForeignKey('conversations.id', ondelete='SET NULL'), nullable=True, index=True)
     user_id         = Column(String(100), nullable=False, index=True)
     product_id      = Column(String(100), nullable=False, index=True)
     product_name    = Column(String(500))

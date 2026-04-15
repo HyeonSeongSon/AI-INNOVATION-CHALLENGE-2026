@@ -133,7 +133,7 @@ CREATE INDEX idx_conversations_thread_id ON conversations(thread_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS generated_messages (
     id              VARCHAR(36) PRIMARY KEY,
-    conversation_id VARCHAR(36) NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    conversation_id VARCHAR(36) REFERENCES conversations(id) ON DELETE SET NULL,
     user_id         VARCHAR(100) NOT NULL,
     product_id      VARCHAR(100) NOT NULL,
     product_name    VARCHAR(500),
