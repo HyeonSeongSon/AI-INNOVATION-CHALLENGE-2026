@@ -123,11 +123,7 @@ class QualityChecker:
             "llm_judge_scores": None,
         }
 
-        vector_products, db_products = await asyncio.gather(
-            _product_client.get_products_by_ids([product_id]),
-            _product_client.get_products_detail_from_db([product_id]),
-        )
-        vector_product = vector_products[0] if vector_products else {}
+        db_products = await _product_client.get_products_detail_from_db([product_id])
         db_product = db_products[0] if db_products else {}
 
         if not db_product:
@@ -136,10 +132,7 @@ class QualityChecker:
             result["failure_reason"] = f"상품 정보를 찾을 수 없습니다 (product_id: {product_id})"
             return result
 
-        if not vector_product:
-            logger.warning("product_vector_not_found", product_id=product_id)
-
-        product = _product_client.merge_product_data(db_product, vector_product)
+        product = _product_client.flatten_product_data(db_product)
 
         product_name = db_product.get("product_name", "")
         brand_name = db_product.get("brand", "")

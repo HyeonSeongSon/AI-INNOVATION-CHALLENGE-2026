@@ -47,6 +47,23 @@ async def quality_check_node(state: MarketingAssistantState, config: RunnableCon
             },
         )
 
+    # product_fetch 실패는 피드백 재작성으로 해결 불가 — 즉시 종료
+    unrecoverable = [
+        t for t in check_tasks
+        if t["quality_check"].get("failed_stage") == "product_fetch"
+    ]
+    if unrecoverable:
+        failed_ids = [t["product_id"] for t in unrecoverable]
+        return Command(
+            goto=END,
+            update={
+                "generated_tasks": check_tasks,
+                "failed_task_ids": failed_task_ids,
+                "status": "failed",
+                "error": f"상품 정보를 찾을 수 없습니다: {failed_ids}",
+            },
+        )
+
     return Command(
         goto="message_feedback_node",
         update={

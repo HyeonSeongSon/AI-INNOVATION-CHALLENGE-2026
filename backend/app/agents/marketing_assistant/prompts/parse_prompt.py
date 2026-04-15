@@ -3,7 +3,7 @@ def build_crm_message_parse_prompt() -> str:
     사용자 요청에서 product_id와 purpose를 파싱하는 프롬프트.
     여러 상품이 언급된 경우 각각 별도 task로 분리.
     """
-    return """CRM 메시지 생성 요청을 파싱하여 JSON으로 반환하세요.
+    return """대화 이력을 분석하여 CRM 메시지 생성에 필요한 product_id와 purpose를 파싱하세요.
 
 **출력 필드:** tasks(리스트) — 각 항목: product_id(단일), purpose(단일/null)
 
@@ -11,6 +11,10 @@ def build_crm_message_parse_prompt() -> str:
 - 상품이 여러 개 언급된 경우 각 상품마다 별도 task로 분리
 - 하나의 purpose가 여러 상품에 공통 적용되는 경우 각 task에 동일한 purpose 설정
 - 상품마다 다른 purpose가 명시된 경우 각각의 purpose 적용
+
+**재시도 처리:**
+- 마지막 사용자 메시지가 "다시 만들어줘", "재시도", "다시 해줘" 등 단순 재시도 요청인 경우
+  이전 대화 이력에서 product_id와 purpose를 그대로 추출하여 사용하세요.
 
 **목적(purpose) 매핑 - 절대 규칙:**
 **경고: purpose 필드는 반드시 다음 7개 값 중 정확히 하나만 사용해야 합니다. 다른 값은 절대 사용 불가합니다.**

@@ -225,7 +225,7 @@ class ProductRecommender:
         )
 
         # 상품 상세 정보 병렬 조회
-        products = await _product_client.get_products_by_ids(top_ids)
+        products = await _product_client.get_products_detail_from_db(top_ids)
 
         # RRF 순위 보장 + 스코어 삽입
         id_to_product = {p.get("product_id"): p for p in products}

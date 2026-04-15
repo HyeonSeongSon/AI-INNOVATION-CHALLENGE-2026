@@ -51,9 +51,11 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
         parser_llm = get_llm(settings.parser_model_name, temperature=0)
         parsed = await _parser.user_feedback_parser(messages, parser_llm)
 
-        # 상품 정보 조회 -> brand 추출
+        # 상품 정보 조회 -> brand, product_name, product_tag 추출
         product_info = await _product_client.get_merged_product_info(parsed["product_id"])
         brand = product_info.get("brand", "")
+        product_name = product_info.get("product_name", "")
+        product_tag = product_info.get("product_tag", "")
 
         # 기존 generated_tasks에서 purpose 보조 조회 (사용자가 명시하지 않은 경우)
         existing_tasks = state.get("generated_tasks", [])
@@ -64,6 +66,8 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
             "product_id": parsed["product_id"],
             "purpose": purpose,
             "brand": brand,
+            "product_name": product_name,
+            "product_tag": product_tag,
             "message": {"title": parsed["title"], "message": parsed["message"]},
             "quality_check": {
                 "passed": False,

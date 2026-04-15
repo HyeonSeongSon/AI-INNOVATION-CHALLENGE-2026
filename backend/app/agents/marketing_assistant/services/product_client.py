@@ -369,43 +369,34 @@ class ProductClient:
             "persona": persona_result,
         }
 
-    # 벡터 DB의 한국어 키와 중복되거나 내부용인 DB 필드
-    _DB_EXCLUDE_KEYS = {
-        "vectordb_id", "product_created_at",
-        "product_name", "brand", "product_tag",
-        "skin_type", "preferred_ingredients", "avoided_ingredients",
-        "preferred_scents", "values", "preferred_colors", "exclusive_product",
-    }
-
-    def merge_product_data(self, db_product: Dict[str, Any], vector_product: Dict[str, Any]) -> Dict[str, Any]:
+    def flatten_product_data(self, db_product: Dict[str, Any]) -> Dict[str, Any]:
         """
-        벡터 DB 데이터를 기반으로 DB의 비중복 필드를 추가해 병합.
+        정형 DB 응답에서 product_details를 최상위 필드로 펼쳐 반환.
 
-        - 벡터 DB: 전체 포함 (_vector 필드, URL 필드 제외)
-        - DB: 벡터 DB에 없는 키만 추가 (내부 필드, URL 필드 제외)
+        - 최상위 DB 필드가 베이스
+        - product_details 필드가 우선 (같은 키면 product_details 값)
+        - _vector 필드 및 URL 필드 제외
         """
         def _is_url_field(key: str) -> bool:
             return "url" in key.lower() or key == "상품이미지"
 
-        vector_clean = {
-            k: v for k, v in vector_product.items()
+        product_details = db_product.get("product_details") or {}
+
+        db_base = {
+            k: v for k, v in db_product.items()
+            if k != "product_details" and "_vector" not in k and not _is_url_field(k)
+        }
+        details_clean = {
+            k: v for k, v in product_details.items()
             if "_vector" not in k and not _is_url_field(k)
         }
-        db_extra = {
-            k: v for k, v in db_product.items()
-            if k not in vector_clean and k not in self._DB_EXCLUDE_KEYS and not _is_url_field(k)
-        }
-        return {**vector_clean, **db_extra}
+        return {**db_base, **details_clean}
 
     async def get_merged_product_info(self, product_id: str) -> Dict[str, Any]:
-        """DB + 벡터 DB 상품 정보를 병합하여 반환."""
-        vector_products, db_products = await asyncio.gather(
-            self.get_products_by_ids([product_id]),
-            self.get_products_detail_from_db([product_id]),
-        )
-        vector_product = vector_products[0] if vector_products else {}
+        """정형 DB 상품 정보를 조회하여 product_details를 펼쳐 반환."""
+        db_products = await self.get_products_detail_from_db([product_id])
         db_product = db_products[0] if db_products else {}
-        return self.merge_product_data(db_product, vector_product)
+        return self.flatten_product_data(db_product)
 
     @traced(name="get_products_detail_from_db", run_type="tool")
     async def get_products_detail_from_db(
@@ -427,30 +418,6 @@ class ProductClient:
         results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
         return [r for r in results if r is not None]
 
-    @traced(name="get_products_by_ids", run_type="retriever")
-    async def get_products_by_ids(
-        self,
-        product_ids: List[str],
-    ) -> List[Dict[str, Any]]:
-        """
-        product_id 리스트의 상품 정보를 PostgreSQL에서 병렬 조회
-
-        Args:
-            product_ids: 조회할 상품 ID 리스트 (RRF 순위 순)
-
-        Returns:
-            List[Dict]: 상품 정보 리스트 (입력 순서 보장)
-        """
-        async def _fetch_one(product_id: str) -> Optional[Dict[str, Any]]:
-            try:
-                response = await self.http_client.get(
-                    f"{self.db_api_url}/api/products/{product_id}",
-                )
-                response.raise_for_status()
-                return response.json()
-            except Exception as e:
-                logger.error("get_product_by_id.failed", product_id=product_id, error=str(e))
-                return None
-
-        results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
-        return [r for r in results if r is not None]
+    async def get_products_by_ids(self, product_ids: List[str]) -> List[Dict[str, Any]]:
+        """get_products_detail_from_db의 alias."""
+        return await self.get_products_detail_from_db(product_ids)

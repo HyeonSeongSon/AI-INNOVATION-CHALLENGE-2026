@@ -226,11 +226,11 @@ export default function Sidebar() {
         <MenuItem to="/persona" $active={location.pathname.startsWith('/persona')}>
           <User /> 페르소나 생성
         </MenuItem>
-        <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
-          <MessageSquare /> 메시지 생성
-        </MenuItem>
         <MenuItem to="/generated-messages" $active={location.pathname.startsWith('/generated-messages')}>
           <FileText /> 메시지 조회
+        </MenuItem>
+        <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
+          <MessageSquare /> 마케팅 어시스턴트
         </MenuItem>
       </MenuList>
 

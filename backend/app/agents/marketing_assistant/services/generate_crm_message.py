@@ -7,21 +7,6 @@ from ....core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# 벡터 DB에서 제거할 필드:
-# - category/카테고리/태그: 정형 DB의 product_tag로 대체
-# - 정형 DB 영어 필드와 중복되는 한국어 필드
-_VECTOR_EXCLUDE_KEYS = {
-    "category", "카테고리", "태그",
-    "상품명", "브랜드",
-    "피부타입", "기피성분", "선호성분", "선호향",
-    "가치관", "고민키워드", "선호포인트색상", "전용제품",
-}
-
-# 정형 DB에서 제거할 필드 (내부용, CRM 메시지 불필요)
-_DB_EXCLUDE_KEYS = {
-    "vectordb_id",
-    "product_created_at",
-}
 
 
 class CrmMessageGenerator:
@@ -49,25 +34,9 @@ class CrmMessageGenerator:
                 return value
 
     async def _get_product_info(self, product_id: str) -> dict:
-        product_info_by_db, product_info_by_vectordb = await asyncio.gather(
-            self._product_client.get_products_detail_from_db([product_id]),
-            self._product_client.get_products_by_ids([product_id]),
-        )
-
-        db_map = {p["product_id"]: p for p in product_info_by_db if "product_id" in p}
-        vector_map = {p["product_id"]: p for p in product_info_by_vectordb if "product_id" in p}
-
-        vector = vector_map.get(product_id, {})
-        db = db_map.get(product_id, {})
-
-        vector_clean = {
-            k: v for k, v in vector.items()
-            if not k.endswith("_vector") and k not in _VECTOR_EXCLUDE_KEYS
-        }
-        db_clean = {k: v for k, v in db.items() if k not in _DB_EXCLUDE_KEYS}
-
-        # 정형 DB가 베이스, 벡터 DB가 우선 (같은 키면 벡터 DB 값 사용)
-        return {**db_clean, **vector_clean}
+        db_products = await self._product_client.get_products_detail_from_db([product_id])
+        db_product = db_products[0] if db_products else {}
+        return self._product_client.flatten_product_data(db_product)
 
     async def get_product_info(self, tasks: List[Dict]) -> List[Dict]:
         logger.info("get_product_info.start", task_count=len(tasks))

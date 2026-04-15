@@ -70,25 +70,20 @@ class MultiValueParser:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
             return json.dumps({"error": f"파싱 중 오류 발생: {str(e)}"}, ensure_ascii=False)
         
-    async def crm_message_parser(self, user_input: str, llm: BaseChatModel) -> List[Dict[str, Any]]:
-        """자연어 → product_id/purpose 파싱. 여러 상품이 언급된 경우 parallel 플래그와 함께 반환.
+    async def crm_message_parser(self, messages: List[AnyMessage], llm: BaseChatModel) -> List[Dict[str, Any]]:
+        """대화 이력 → product_id/purpose 파싱.
+
+        마지막 메시지가 단순 재시도("다시 만들어줘" 등)인 경우
+        이전 대화 맥락에서 product_id/purpose를 추출합니다.
 
         Args:
-            user_input: 사용자 입력 (자연어 또는 JSON)
+            messages: 전체 대화 메시지 리스트 (HumanMessage/AIMessage)
             llm: 노드에서 생성된 LLM 인스턴스 (BaseChatModel)
-
-        Returns:
-            JSON 문자열. 예:
-            단일: {"parallel": false, "tasks": [{"product_id": "p001", "purpose": "프로모션"}]}
-            복수: {"parallel": true,  "tasks": [{"product_id": "p001", ...}, {"product_id": "p002", ...}]}
         """
         parser = llm.with_structured_output(CRMMessageParseResult)
-        messages = [
-            SystemMessage(content=build_crm_message_parse_prompt()),
-            HumanMessage(content=user_input)
-        ]
+        prompt_messages = [SystemMessage(content=build_crm_message_parse_prompt()), *messages]
         try:
-            response = await parser.ainvoke(messages)
+            response = await parser.ainvoke(prompt_messages)
             return [t.model_dump() for t in response.tasks]
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)

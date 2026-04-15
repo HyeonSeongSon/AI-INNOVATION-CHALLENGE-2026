@@ -31,7 +31,7 @@ async def crm_message_node(state: MarketingAssistantState, config: RunnableConfi
     parser_llm = get_llm(settings.parser_model_name, temperature=0)
     message_llm = get_llm(model_name, temperature=0.7)
 
-    tasks = await _parser.crm_message_parser(message[-1].content, parser_llm)
+    tasks = await _parser.crm_message_parser(message, parser_llm)
     tasks = await _generator.get_product_info(tasks)
     tasks = await _generator.get_brand_tone(tasks)
     tasks = await _generator.get_crm_prompt(tasks)

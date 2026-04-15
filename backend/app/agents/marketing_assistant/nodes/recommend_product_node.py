@@ -75,7 +75,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     product_summary = "\n".join(
-        f"- [{p.get('brand')}] {p.get('product_name')} ({p.get('product_tag')}): {p.get('product_comment')}"
+        f"- [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('product_tag')}): {p.get('product_comment')}"
         for p in recommended_products
     )
     return Command(
