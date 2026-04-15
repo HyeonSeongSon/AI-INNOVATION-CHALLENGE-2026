@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
     async with AsyncPostgresSaver.from_conn_string(postgres_url) as checkpointer:
         await checkpointer.setup()
         app.state.agent = MarketingAgent(checkpointer=checkpointer)
-        app.state.agent_v2 = MarketingAssistantAgent()
+        app.state.agent_v2 = MarketingAssistantAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
         yield
 

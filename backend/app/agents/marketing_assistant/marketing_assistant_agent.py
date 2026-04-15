@@ -3,7 +3,6 @@ from .state import MarketingAssistantState
 from ...core.logging import get_logger
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import Optional, Dict, Any, List
-import uuid
 
 _logger = get_logger("marketing_agent")
 
@@ -90,17 +89,15 @@ class MarketingAgent:
         user_input: str,
         session_id: str,
         user_id: str,
-        history: list,
+        conversation_id: str,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         대화 처리
 
-        - 매 호출마다 fresh thread_id 생성 (task 격리)
-        - history: API 레이어가 DB에서 로드해 넘겨주는 이전 대화 이력
-          ({"role": "user"|"assistant", "content": str, ...} 목록)
-        - LangGraph 상태는 task마다 항상 깨끗하게 시작
-          (intermediate, step, logs, status 등 stale 데이터 없음)
+        - thread_id = conversation_id 고정 (LangGraph checkpointer가 messages 보존)
+        - init_node가 매 요청마다 task-scope 필드(generated_tasks 등)를 리셋
+        - 현재 사용자 메시지만 initial_state에 포함 (이력은 checkpoint에서 자동 복원)
 
         Returns:
             {
@@ -113,13 +110,11 @@ class MarketingAgent:
                 "error": str | None
             }
         """
-        thread_id = str(uuid.uuid4())  # 항상 fresh — task 격리의 핵심
+        thread_id = conversation_id  # 고정 — checkpointer가 대화 이력 관리
         config = self._build_config(thread_id, session_id, user_id, model)
 
-        # 이전 대화 이력 + 현재 사용자 메시지로 초기 상태 구성
-        seed_messages = self._history_to_messages(history)
-        seed_messages.append(HumanMessage(content=user_input))
-        initial_state: MarketingAssistantState = {"messages": seed_messages}
+        # 현재 메시지만 전달 — 이전 이력은 LangGraph checkpoint에서 자동 복원
+        initial_state: MarketingAssistantState = {"messages": [HumanMessage(content=user_input)]}
 
         try:
             result = await self.workflow.ainvoke(initial_state, config)

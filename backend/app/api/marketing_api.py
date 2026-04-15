@@ -297,21 +297,13 @@ async def chat_v2(
     """
     대화 처리 v2 (interrupt 없는 새 추천 방식)
 
-    기존 /chat 대비 추천 성능 비교용 엔드포인트.
+    - thread_id = conversation_id 고정 (LangGraph checkpointer가 messages 보존)
+    - Conversation 레코드를 에이전트 호출 전에 확보하여 thread_id 일관성 보장
     """
     try:
         agent = get_agent_v2(req)
 
-        history = _load_conversation_messages(request.conversation_id)
-
-        result = await agent.chat(
-            user_input=request.user_input,
-            session_id=request.session_id,
-            user_id=user_id,
-            history=history,
-            model=request.model,
-        )
-
+        # 1. conversation_id 사전 확보 (에이전트 호출 전에 thread_id를 결정해야 함)
         conv_id = request.conversation_id
         if not conv_id:
             conv_id = str(uuid.uuid4())
@@ -320,8 +312,8 @@ async def chat_v2(
                 conv = Conversation(
                     id=conv_id,
                     user_id=user_id,
-                    thread_id=result["thread_id"],
-                    session_id=result["session_id"],
+                    thread_id=conv_id,   # thread_id = id 고정
+                    session_id=request.session_id,
                     title="새 대화 (v2)",
                     messages=[],
                 )
@@ -329,15 +321,15 @@ async def chat_v2(
                 db.commit()
             finally:
                 db.close()
-        else:
-            db = SessionLocal()
-            try:
-                conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-                if conv:
-                    conv.thread_id = result["thread_id"]
-                    db.commit()
-            finally:
-                db.close()
+
+        # 2. 에이전트 호출 — conversation_id 전달, history 제거
+        result = await agent.chat(
+            user_input=request.user_input,
+            session_id=request.session_id,
+            user_id=user_id,
+            conversation_id=conv_id,
+            model=request.model,
+        )
 
         result["conversation_id"] = conv_id
 
