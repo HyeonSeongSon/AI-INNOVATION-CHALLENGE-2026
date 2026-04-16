@@ -102,11 +102,12 @@ def build_crm_parse_prompt(categories) -> str:
     """
    #  categories_list = "\n".join(f"- {c}" for c in categories)
 
-    return f"""CRM 메시지 요청을 파싱하여 JSON으로 반환하세요.
+    return f"""대화 히스토리를 분석하여 CRM 상품 추천 요청을 파싱하고 JSON으로 반환하세요.
 
 **출력 필드:** persona_id(단일), brands(리스트), product_categories(리스트), purpose(단일), exclusive_target(단일/None)
 **JSON 입력:** 필드를 그대로 매핑. 자연어 입력: 키워드 분석하여 변환.
 **persona_id:** PERSONA_[숫자+대문자영어] 형식으로 정규화 (예: "6E6354965AB9" → "PERSONA_6E6354965AB9")
+**persona_id 추출 규칙:** 마지막 사용자 메시지에 persona_id가 없으면 이전 AI 메시지에서 "persona_id: PERSONA_..." 패턴을 찾아 추출하세요. "위 페르소나", "해당 페르소나", "그 페르소나" 등의 표현은 직전 AI 메시지의 persona_id를 가리킵니다.
 **brands:** 사용자가 입력에서 명시적으로 언급한 브랜드명만 추출. 언급이 없으면 반드시 []로 반환. 카테고리나 맥락에서 유추하거나 추가하지 말 것.
 
 **product_categories - 반드시 아래 목록에서만 선택:**

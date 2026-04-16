@@ -24,8 +24,8 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     messages = state.get("messages")
     parser_llm = get_llm(settings.parser_model_name, temperature=0.7)
 
-    # 사용자 입력에서 필요한 필드 추출
-    parsed_json = await _parser.recommend_product_parser(messages[-1].content, parser_llm)
+    # 전체 대화 히스토리에서 필요한 필드 추출 (이전 AI 메시지의 persona_id 포함)
+    parsed_json = await _parser.recommend_product_parser(messages, parser_llm)
     parsed_data = json.loads(parsed_json)
 
     logger.info(

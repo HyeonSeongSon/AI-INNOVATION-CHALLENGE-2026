@@ -51,20 +51,23 @@ class MultiValueParser:
     def __init__(self):
         logger.info("parser_initialized")
 
-    async def recommend_product_parser(self, user_input: str, llm: BaseChatModel) -> str:
-        """자연어 → 다중 값 파싱
+    async def recommend_product_parser(self, messages: List[AnyMessage], llm: BaseChatModel) -> str:
+        """대화 히스토리 → 다중 값 파싱
+
+        마지막 사용자 메시지만이 아니라 전체 대화 히스토리를 전달하여
+        이전 AI 메시지에 포함된 persona_id도 추출할 수 있도록 합니다.
 
         Args:
-            user_input: 사용자 입력 (자연어 또는 JSON)
+            messages: 전체 대화 메시지 리스트 (HumanMessage/AIMessage)
             llm: 노드에서 생성된 LLM 인스턴스 (BaseChatModel)
         """
         parser = llm.with_structured_output(RecommendProductRequest)
-        messages = [
+        prompt_messages = [
             SystemMessage(content=build_crm_parse_prompt(get_categories())),
-            HumanMessage(content=user_input)
+            *messages,
         ]
         try:
-            response = await parser.ainvoke(messages)
+            response = await parser.ainvoke(prompt_messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)

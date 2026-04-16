@@ -121,7 +121,7 @@ async def create_and_analyze_persona(
     try:
         persona_data = request.model_dump(exclude={"model"})
 
-        persona_id, persona_summary = await generate_persona_summary(
+        persona_summary = await generate_persona_summary(
             persona_data=persona_data,
             model=request.model,
         )
@@ -135,7 +135,6 @@ async def create_and_analyze_persona(
             purchase_decision_factors = [purchase_decision_factors] if purchase_decision_factors else []
 
         persona = Persona(
-            persona_id=persona_id,
             name=persona_data.get("name"),
             gender=persona_data.get("gender"),
             age=persona_data.get("age"),
@@ -162,12 +161,13 @@ async def create_and_analyze_persona(
         )
         db.add(persona)
         db.commit()
+        db.refresh(persona)
 
         persona_data_normalized = {**persona_data, "preferred_texture": preferred_texture, "purchase_decision_factors": purchase_decision_factors}
-        background_tasks.add_task(_run_pre_analysis_bg, persona_id, persona_data_normalized, request.model)
+        background_tasks.add_task(_run_pre_analysis_bg, persona.persona_id, persona_data_normalized, request.model)
 
         return PersonaCreateResponse(
-            persona_id=persona_id,
+            persona_id=persona.persona_id,
             analysis={
                 "primary_category": _extract_primary_category(persona_summary),
                 "ai_analysis_text": persona_summary,
@@ -251,9 +251,6 @@ async def create_persona_from_text(
         structured_persona = await generate_structured_persona_info(request.text, model_name)
 
         # 2. personas 테이블에 저장
-        import uuid as _uuid
-        persona_id = f"PERSONA_{_uuid.uuid4().hex[:12].upper()}"
-
         preferred_texture = structured_persona.get("preferred_texture", [])
         if isinstance(preferred_texture, str):
             preferred_texture = [preferred_texture] if preferred_texture else []
@@ -263,7 +260,6 @@ async def create_persona_from_text(
             purchase_decision_factors = [purchase_decision_factors] if purchase_decision_factors else []
 
         persona = Persona(
-            persona_id=persona_id,
             name=structured_persona.get("name"),
             gender=structured_persona.get("gender"),
             age=structured_persona.get("age"),
@@ -290,6 +286,7 @@ async def create_persona_from_text(
         )
         db.add(persona)
         db.commit()
+        db.refresh(persona)
 
         # 3. 검색 쿼리 생성
         raw_queries = await generate_search_query(structured_persona, model_name)
@@ -303,17 +300,17 @@ async def create_persona_from_text(
         """)
         for query_type in ("need", "preference", "retrieval", "persona"):
             db.execute(upsert_sql, {
-                "persona_id": persona_id,
+                "persona_id": persona.persona_id,
                 "query_type": query_type,
                 "query_text": raw_queries.get(query_type, ""),
             })
         db.commit()
 
         logger.info("create_persona_from_text_completed | persona_id=%s persona_name=%s",
-                    persona_id, structured_persona.get("name"))
+                    persona.persona_id, structured_persona.get("name"))
 
         return PersonaCreateFromTextResponse(
-            persona_id=persona_id,
+            persona_id=persona.persona_id,
             structured_persona=structured_persona,
             search_queries=raw_queries,
             persona_summary=structured_persona.get("persona_summary") or "",

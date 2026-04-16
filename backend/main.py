@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from app.api import marketing_api
 from app.api import generated_messages
 from app.agents.supervisor.marketing_agent import MarketingAgent
@@ -38,7 +39,14 @@ configure_langsmith()
 async def lifespan(app: FastAPI):
     init_db()
     postgres_url = os.getenv("POSTGRES_URL")
-    async with AsyncPostgresSaver.from_conn_string(postgres_url) as checkpointer:
+    async with AsyncConnectionPool(
+        conninfo=postgres_url,
+        min_size=1,
+        max_size=10,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    ) as pool:
+        await pool.wait()  # 최소 1개 연결이 실제로 맺어질 때까지 대기
+        checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
         app.state.agent = MarketingAgent(checkpointer=checkpointer)
         app.state.agent_v2 = MarketingAssistantAgent(checkpointer=checkpointer)
