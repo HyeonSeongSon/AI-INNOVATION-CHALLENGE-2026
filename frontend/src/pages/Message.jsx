@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import styled, { css } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // ✅ API 및 Context
-import api, { pipelineApi } from '../api';
+import api, { pipelineApi, dbApi } from '../api';
 import { useChat } from '../context/ChatContext';
 
 // ✅ 브랜드 / 카테고리 데이터
@@ -35,19 +36,19 @@ const ChatArea = styled.div` flex: 1; background: #F8F9FA; border-radius: 24px; 
 const ChatHeader = styled.div` padding: 20px 30px; background: white; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; z-index: 10; h2 { font-size: 16px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 8px; } `;
 const ChatScroll = styled.div` flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; &::-webkit-scrollbar { width: 6px; } &::-webkit-scrollbar-thumb { background-color: #ddd; border-radius: 3px; } `;
 
-const MessageBubble = styled.div` 
-  display: flex; 
-  flex-direction: column; 
-  max-width: ${props => props.$wide ? '100%' : '800px'}; 
-  align-self: ${props => props.$isUser ? 'flex-end' : 'flex-start'}; 
-  ${props => props.$isUser ? css` 
-    align-items: flex-end; 
-    .bubble { background: #333; color: white; border-radius: 20px 20px 4px 20px; padding: 12px 20px; white-space: pre-line; } 
-  ` : css` 
+const MessageBubble = styled.div`
+  display: flex;
+  flex-direction: column;
+  max-width: ${props => props.$wide ? '100%' : '800px'};
+  align-self: ${props => props.$isUser ? 'flex-end' : 'flex-start'};
+  ${props => props.$isUser ? css`
+    align-items: flex-end;
+    .bubble { background: #333; color: white; border-radius: 20px 20px 4px 20px; padding: 12px 20px; white-space: pre-line; }
+  ` : css`
     align-items: flex-start;
     .bubble { background: white; color: #333; border: 1px solid #eee; border-radius: 20px 20px 20px 4px; padding: 16px 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); line-height: 1.6; }
-  `} 
-  .sender { font-size: 12px; color: #888; margin-bottom: 6px; margin-left: 4px; display: flex; align-items: center; gap: 4px; } 
+  `}
+  .sender { font-size: 12px; color: #888; margin-bottom: 6px; margin-left: 4px; display: flex; align-items: center; gap: 4px; }
 `;
 
 const ProductGrid = styled.div` display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; width: 100%; `;
@@ -64,16 +65,16 @@ const ProductCard = styled.div`
     &:hover { border-color: #6B4DFF; box-shadow: 0 0 0 4px rgba(107, 77, 255, 0.1); }
   `}
 `;
-const CardImage = styled.div` 
-  height: 180px; width: 100%; background: #f9f9f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid #f0f0f0; 
-  img { width: 100%; height: 100%; object-fit: contain; padding: 10px; transition: 0.3s; } 
-  &:hover img { transform: scale(1.05); } 
+const CardImage = styled.div`
+  height: 180px; width: 100%; background: #f9f9f9; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid #f0f0f0;
+  img { width: 100%; height: 100%; object-fit: contain; padding: 10px; transition: 0.3s; }
+  &:hover img { transform: scale(1.05); }
   .placeholder { color: #ccc; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; }
-  .brand-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 4px; z-index: 2; } 
+  .brand-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 4px; z-index: 2; }
 `;
 const CardContent = styled.div` padding: 16px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; `;
 const ProductName = styled.div` font-weight: 700; font-size: 15px; color: #222; margin-bottom: 8px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; `;
-const OneLineReview = styled.div` font-size: 14px; color: #444; background: #f0f4ff; padding: 12px; border-radius: 8px; margin-bottom: 12px; line-height: 1.6; border-left: 4px solid #6B4DFF; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; flex: 1; `; 
+const OneLineReview = styled.div` font-size: 14px; color: #444; background: #f0f4ff; padding: 12px; border-radius: 8px; margin-bottom: 12px; line-height: 1.6; border-left: 4px solid #6B4DFF; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; flex: 1; `;
 const TagContainer = styled.div` display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; `;
 const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-weight: 600; `;
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
@@ -206,16 +207,21 @@ function ComboSelect({ value, onChange, options, placeholder }) {
 
 /* --- [3] 메인 컴포넌트 --- */
 export default function Message() {
-  // ✅ ChatContext — 세션 정보 및 메시지 관리
-  const {
-    messages, addMessage,
-    currentConvId, currentThreadId, currentSessionId,
-    setCurrentConversation, saveMessages, loadConversations,
-  } = useChat();
+  // ✅ URL에서 convId 읽기 (없으면 새 대화)
+  const { convId } = useParams();
+  const navigate = useNavigate();
 
+  // ✅ ChatContext — 대화 목록 관리만
+  const { saveMessages, loadConversations } = useChat();
 
   const scrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const autoResize = (el) => {
     if (!el) return;
@@ -228,6 +234,16 @@ export default function Message() {
     personaId: '', purpose: '신제품 홍보', category: '립스틱', brand: '이니스프리'
   });
 
+  // ✅ 로컬 state — 이 대화 인스턴스에만 속함
+  const [messages, setMessages] = useState([]);
+  const [threadId, setThreadId] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [isConvLoading, setIsConvLoading] = useState(!!convId); // DB 로드 중 여부
+
+  // messages를 항상 최신 값으로 참조 (클로저 stale 방지)
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState(null);
@@ -235,6 +251,27 @@ export default function Message() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  // ✅ convId가 있을 때 DB에서 해당 대화 로드
+  useEffect(() => {
+    if (!convId) return;
+    const loadConv = async () => {
+      setIsConvLoading(true);
+      try {
+        const { dbApi } = await import('../api');
+        const res = await dbApi.get(`/conversations/${convId}`);
+        const conv = res.data;
+        setMessages(conv.messages || []);
+        setThreadId(conv.thread_id || null);
+        setSessionId(conv.session_id || null);
+      } catch (e) {
+        console.error('대화 로드 실패:', e);
+      } finally {
+        setIsConvLoading(false);
+      }
+    };
+    loadConv();
+  }, [convId]);
 
   useEffect(() => {
     loadConversations();
@@ -250,8 +287,8 @@ export default function Message() {
         setPersonas(pData);
         if (pData.length > 0) setConfig(prev => ({ ...prev, personaId: pData[0].persona_id }));
 
-        if (messages.length === 0) {
-           addMessage({ id: Date.now(), role: 'ai', text: '안녕하세요! 페르소나를 선택하고 맞춤 상품을 추천받아보세요.' });
+        if (!convId) {
+          setMessages([{ id: Date.now(), role: 'ai', text: '안녕하세요! 페르소나를 선택하고 맞춤 상품을 추천받아보세요.' }]);
         }
       } catch (err) {
         console.error("데이터 로드 실패:", err);
@@ -262,30 +299,28 @@ export default function Message() {
 
   const handleSendChat = async () => {
     const text = chatInput.trim();
-    if (!text || isChatLoading) return;
+    if (!text || isChatLoading || isConvLoading) return;
 
     setChatInput('');
     if (chatInputRef.current) {
       chatInputRef.current.style.height = '44px';
     }
     const userMsg = { id: Date.now(), role: 'user', text };
-    addMessage(userMsg);
+    setMessages(prev => [...prev, userMsg]);
     setIsChatLoading(true);
 
-    const sessionId = currentSessionId || `sess_${crypto.randomUUID()}`;
+    // messagesRef.current 사용 — DB 로드 완료 후의 최신 messages 보장 (클로저 stale 방지)
+    const messagesWithUser = [...messagesRef.current, userMsg];
+    const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
 
     try {
       const response = await api.post('/marketing/chat/v2', {
         user_input: text,
-        session_id: sessionId,
-        conversation_id: currentConvId || null,
+        session_id: currentSessionId,
+        conversation_id: convId || null,
       }, { headers: { 'X-User-Id': USER_ID } });
 
       const result = response.data;
-
-      if (result.conversation_id) {
-        setCurrentConversation(result.conversation_id, result.thread_id, result.session_id);
-      }
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
         id: p.product_id,
@@ -321,22 +356,44 @@ export default function Message() {
         aiText = "응답을 처리했습니다.";
       }
 
-      const aiMsg = { id: Date.now() + 1, role: 'ai', text: aiText, isGenerated, products: mappedProducts.length > 0 ? mappedProducts : undefined };
-      addMessage(aiMsg);
+      const aiMsg = {
+        id: Date.now() + 1, role: 'ai', text: aiText, isGenerated,
+        products: mappedProducts.length > 0 ? mappedProducts : undefined
+      };
+      const finalMessages = [...messagesWithUser, aiMsg];
+      const targetConvId = result.conversation_id || convId;
 
-      const convId = result.conversation_id || currentConvId;
-      if (convId) {
-        const title = result.conversation_id ? text.slice(0, 40) : undefined;
-        await saveMessages(convId, [...messages, userMsg, aiMsg], title);
-        if (result.conversation_id) await loadConversations();
+      // ① DB 저장 먼저 — navigate 이전에 완료
+      if (targetConvId) {
+        const title = !convId ? text.slice(0, 40) : undefined;
+        await saveMessages(targetConvId, finalMessages, title);
+      }
+
+      // ② 컴포넌트가 여전히 마운트된 경우에만 state 업데이트
+      if (isMounted.current) {
+        setMessages(finalMessages);
+        if (result.conversation_id && !convId) {
+          setThreadId(result.thread_id || null);
+          setSessionId(result.session_id || null);
+        }
+      }
+
+      // ③ 새 대화인 경우 DB 저장 완료 후 URL 변경 (재마운트 시 DB에 데이터 있음)
+      if (result.conversation_id && !convId) {
+        await loadConversations();
+        navigate(`/message/${result.conversation_id}`, { replace: true });
       }
 
     } catch (error) {
       console.error("채팅 전송 실패:", error);
       const errMsg = error.response?.data?.detail || error.message;
-      addMessage({ id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}` });
+      if (isMounted.current) {
+        setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}` }]);
+      }
     } finally {
-      setIsChatLoading(false);
+      if (isMounted.current) {
+        setIsChatLoading(false);
+      }
     }
   };
 
@@ -425,10 +482,10 @@ export default function Message() {
               value={chatInput}
               onChange={(e) => { setChatInput(e.target.value); autoResize(e.target); }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-              disabled={isChatLoading}
+              disabled={isChatLoading || isConvLoading}
               rows={1}
             />
-            <SendBtn onClick={handleSendChat} disabled={isChatLoading || !chatInput.trim()}>
+            <SendBtn onClick={handleSendChat} disabled={isChatLoading || isConvLoading || !chatInput.trim()}>
               {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
             </SendBtn>
           </InputRow>

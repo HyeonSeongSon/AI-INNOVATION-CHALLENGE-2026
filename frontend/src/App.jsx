@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -50,6 +50,12 @@ const ServerStatusCheck = () => {
   return null;
 };
 
+// convId가 바뀔 때마다 Message를 완전히 재마운트시키는 래퍼
+function MessageWithKey() {
+  const { convId } = useParams();
+  return <Message key={convId} />;
+}
+
 function App() {
   return (
     <>
@@ -68,7 +74,8 @@ function App() {
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="persona" element={<Persona />} />
-                <Route path="message" element={<Message />} />
+                <Route path="message" element={<Message key="new" />} />
+                <Route path="message/:convId" element={<MessageWithKey />} />
                 <Route path="generated-messages" element={<GeneratedMessages />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

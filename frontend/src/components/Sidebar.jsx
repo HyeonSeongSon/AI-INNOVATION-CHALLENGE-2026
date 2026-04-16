@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2 } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
@@ -196,23 +196,25 @@ function formatDate(dateStr) {
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { conversations, currentConvId, selectConversation, startNewConversation, deleteConversation } = useChat();
+  const { convId } = useParams();
+  const { conversations, deleteConversation } = useChat();
 
   const isMessagePage = location.pathname.startsWith('/message');
 
   const handleNewChat = () => {
-    startNewConversation();
     navigate('/message');
   };
 
-  const handleSelectConv = async (conv) => {
-    await selectConversation(conv);
-    navigate('/message');
+  const handleSelectConv = (conv) => {
+    navigate(`/message/${conv.id}`);
   };
 
-  const handleDelete = (e, convId) => {
+  const handleDelete = (e, targetConvId) => {
     e.stopPropagation();
-    deleteConversation(convId);
+    deleteConversation(targetConvId);
+    if (targetConvId === convId) {
+      navigate('/message');
+    }
   };
 
   return (
@@ -251,10 +253,10 @@ export default function Sidebar() {
               conversations.map(conv => (
                 <ConvItem
                   key={conv.id}
-                  $active={conv.id === currentConvId}
+                  $active={conv.id === convId}
                   onClick={() => handleSelectConv(conv)}
                 >
-                  <ConvTitle $active={conv.id === currentConvId}>
+                  <ConvTitle $active={conv.id === convId}>
                     {conv.title || '새 대화'}
                   </ConvTitle>
                   <ConvDate>{formatDate(conv.last_active_at)}</ConvDate>
@@ -262,6 +264,7 @@ export default function Sidebar() {
                     className="del-btn"
                     onClick={(e) => handleDelete(e, conv.id)}
                     title="대화 삭제"
+                    onMouseDown={(e) => e.stopPropagation()}
                   >
                     <Trash2 />
                   </DelBtn>
