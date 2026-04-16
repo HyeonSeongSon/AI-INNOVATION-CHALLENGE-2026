@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Save, Sliders, Bell, ChevronDown } from 'lucide-react';
 
-// ✅ Toast 훅 불러오기
+// Toast 훅 불러오기
 import { useToast } from '../components/Toast';
 
 /* --- 스타일 컴포넌트 --- */

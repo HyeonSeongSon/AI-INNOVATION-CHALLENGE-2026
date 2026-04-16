@@ -3,6 +3,7 @@
 Claude UI 스타일 대화 세션 목록 조회/수정/삭제
 """
 
+import uuid
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Any
@@ -41,6 +42,13 @@ class ConversationDetail(ConversationSummary):
     messages: Optional[List[Any]] = []
 
 
+class CreateConversationRequest(BaseModel):
+    """새 대화 생성 요청"""
+    user_id: str
+    session_id: Optional[str] = None
+    title: Optional[str] = "새 대화"
+
+
 class UpdateMessagesRequest(BaseModel):
     """메시지 + 제목 갱신 요청"""
     messages: List[Any]
@@ -50,6 +58,28 @@ class UpdateMessagesRequest(BaseModel):
 # ============================================================
 # 엔드포인트
 # ============================================================
+
+@router.post("", status_code=201)
+def create_conversation(body: CreateConversationRequest):
+    """새 대화 세션 미리 생성 — 첫 메시지 전송 전 conv_id 확보용"""
+    new_id = str(uuid.uuid4())
+    db = SessionLocal()
+    try:
+        conv = Conversation(
+            id=new_id,
+            user_id=body.user_id,
+            thread_id=new_id,
+            session_id=body.session_id,
+            title=body.title or "새 대화",
+            messages=[],
+        )
+        db.add(conv)
+        db.commit()
+        logger.info("conversation_created | conv_id=%s", new_id)
+        return {"id": new_id, "thread_id": new_id}
+    finally:
+        db.close()
+
 
 @router.get("", response_model=List[ConversationSummary])
 def list_conversations(user_id: str = Query(...)):

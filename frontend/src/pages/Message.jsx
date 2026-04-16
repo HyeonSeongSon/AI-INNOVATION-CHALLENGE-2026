@@ -8,11 +8,11 @@ import {
   Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink, ChevronDown
 } from 'lucide-react';
 
-// ✅ API 및 Context
+// API 및 Context
 import api, { pipelineApi, dbApi } from '../api';
 import { useChat } from '../context/ChatContext';
 
-// ✅ 브랜드 / 카테고리 데이터
+// 브랜드 / 카테고리 데이터
 import brandsData from '../data/brands.json';
 import categoriesData from '../data/categories.json';
 
@@ -207,21 +207,18 @@ function ComboSelect({ value, onChange, options, placeholder }) {
 
 /* --- [3] 메인 컴포넌트 --- */
 export default function Message() {
-  // ✅ URL에서 convId 읽기 (없으면 새 대화)
+  // URL에서 convId 읽기 (없으면 새 대화)
   const { convId } = useParams();
   const navigate = useNavigate();
 
-  // ✅ ChatContext — 대화 목록 관리만
-  const { saveMessages, loadConversations } = useChat();
+  // ChatContext — 대화 목록 + in-flight 상태 관리
+  const { saveMessages, loadConversations, activeConvs, setPendingConv, clearPendingConv } = useChat();
 
   const scrollRef = useRef(null);
   const chatInputRef = useRef(null);
-  const isMounted = useRef(true);
 
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
+  // activeState에서 로드했으면 DB 재로드 스킵 (convId 변경 시 리셋)
+  const loadedFromActive = useRef(false);
 
   const autoResize = (el) => {
     if (!el) return;
@@ -234,11 +231,10 @@ export default function Message() {
     personaId: '', purpose: '신제품 홍보', category: '립스틱', brand: '이니스프리'
   });
 
-  // ✅ 로컬 state — 이 대화 인스턴스에만 속함
   const [messages, setMessages] = useState([]);
   const [threadId, setThreadId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
-  const [isConvLoading, setIsConvLoading] = useState(!!convId); // DB 로드 중 여부
+  const [isConvLoading, setIsConvLoading] = useState(false);
 
   // messages를 항상 최신 값으로 참조 (클로저 stale 방지)
   const messagesRef = useRef([]);
@@ -252,27 +248,46 @@ export default function Message() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // ✅ convId가 있을 때 DB에서 해당 대화 로드
+  // convId 변경 시 loadedFromActive 리셋
+  useEffect(() => { loadedFromActive.current = false; }, [convId]);
+
+  // 핵심 로딩 로직: Context(in-flight) 우선 → DB 폴백
+  const activeState = convId ? activeConvs.get(convId) : null;
+
   useEffect(() => {
     if (!convId) return;
-    const loadConv = async () => {
-      setIsConvLoading(true);
-      try {
-        const { dbApi } = await import('../api');
-        const res = await dbApi.get(`/conversations/${convId}`);
-        const conv = res.data;
-        setMessages(conv.messages || []);
-        setThreadId(conv.thread_id || null);
-        setSessionId(conv.session_id || null);
-      } catch (e) {
-        console.error('대화 로드 실패:', e);
-      } finally {
-        setIsConvLoading(false);
-      }
-    };
-    loadConv();
-  }, [convId]);
 
+    if (activeState) {
+      // Context에 in-flight 상태 있음 → 즉시 복원 (API 진행 중이어도 메시지 보임)
+      setMessages(activeState.messages);
+      setIsChatLoading(activeState.isLoading);
+      setIsConvLoading(false);
+      if (!activeState.isLoading) {
+        // API 완료 신호 → Context 정리, DB 재로드 스킵 플래그 설정
+        loadedFromActive.current = true;
+        clearPendingConv(convId);
+      }
+      return;
+    }
+
+    // activeState 없고 이미 Context에서 로드한 적 있으면 DB 재로드 스킵
+    // (clearPendingConv 후 effect 재실행 시 중복 로드 방지)
+    if (loadedFromActive.current) return;
+
+    // DB에서 로드
+    setIsConvLoading(true);
+    dbApi.get(`/conversations/${convId}`)
+      .then(res => {
+        setMessages(res.data.messages || []);
+        setThreadId(res.data.thread_id || null);
+        setSessionId(res.data.session_id || null);
+      })
+      .catch(e => console.error('대화 로드 실패:', e))
+      .finally(() => setIsConvLoading(false));
+
+  }, [convId, activeState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 초기 데이터 로드 (페르소나 목록 + 사이드바)
   useEffect(() => {
     loadConversations();
     const fetchPersonas = async () => {
@@ -286,7 +301,6 @@ export default function Message() {
         }));
         setPersonas(pData);
         if (pData.length > 0) setConfig(prev => ({ ...prev, personaId: pData[0].persona_id }));
-
         if (!convId) {
           setMessages([{ id: Date.now(), role: 'ai', text: '안녕하세요! 페르소나를 선택하고 맞춤 상품을 추천받아보세요.' }]);
         }
@@ -302,22 +316,41 @@ export default function Message() {
     if (!text || isChatLoading || isConvLoading) return;
 
     setChatInput('');
-    if (chatInputRef.current) {
-      chatInputRef.current.style.height = '44px';
-    }
+    if (chatInputRef.current) chatInputRef.current.style.height = '44px';
+
     const userMsg = { id: Date.now(), role: 'user', text };
     setMessages(prev => [...prev, userMsg]);
     setIsChatLoading(true);
 
-    // messagesRef.current 사용 — DB 로드 완료 후의 최신 messages 보장 (클로저 stale 방지)
     const messagesWithUser = [...messagesRef.current, userMsg];
     const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
+    let targetConvId = convId;
 
     try {
+      if (!targetConvId) {
+        // 새 대화: DB에 레코드 미리 생성 → convId 확보
+        const created = await dbApi.post('/conversations', {
+          user_id: USER_ID,
+          session_id: currentSessionId,
+          title: text.slice(0, 40),
+        });
+        targetConvId = created.data.id;
+        await loadConversations();
+
+        // navigate 전에 Context 등록 → 새 컴포넌트가 마운트 즉시 상태를 찾을 수 있음
+        setPendingConv(targetConvId, messagesWithUser, true);
+        await saveMessages(targetConvId, messagesWithUser);
+        navigate(`/message/${targetConvId}`, { replace: true });
+        // 이후 코드는 구 컴포넌트 인스턴스에서 계속 실행 (targetConvId 클로저로 유지됨)
+      } else {
+        setPendingConv(targetConvId, messagesWithUser, true);
+        await saveMessages(targetConvId, messagesWithUser);
+      }
+
       const response = await api.post('/marketing/chat/v2', {
         user_input: text,
         session_id: currentSessionId,
-        conversation_id: convId || null,
+        conversation_id: targetConvId,
       }, { headers: { 'X-User-Id': USER_ID } });
 
       const result = response.data;
@@ -326,10 +359,8 @@ export default function Message() {
         id: p.product_id,
         name: p.product_name || "상품명 없음",
         brand: p.brand || "AMORE",
-        image: (p.product_image_url && p.product_image_url.length > 0) ? p.product_image_url[0] : null,
-        tags: (p.product_details?.concern && p.product_details.concern.length > 0)
-              ? p.product_details.concern.slice(0, 5)
-              : ["AI추천"],
+        image: (p.product_image_url?.length > 0) ? p.product_image_url[0] : null,
+        tags: (p.product_details?.concern?.length > 0) ? p.product_details.concern.slice(0, 5) : ["AI추천"],
         price: p.sale_price,
         productUrl: p.product_page_url || "#",
         oneLineReview: p.product_comment || "맞춤 솔루션 아이템입니다."
@@ -340,16 +371,12 @@ export default function Message() {
 
       if (result.status === 'failed') {
         aiText = result.error || "메시지 품질 검사를 통과하지 못했습니다. 내용을 조정하여 다시 시도해주세요.";
-      } else if (result.messages && result.messages.length > 0) {
+      } else if (result.messages?.length > 0) {
         const msg = result.messages[0];
         const title = msg.title || "";
         const content = msg.content || "";
-        if (title && content) {
-          aiText = `## ${title}\n\n${content}`;
-          isGenerated = true;
-        } else {
-          aiText = content || title || "응답을 처리했습니다.";
-        }
+        if (title && content) { aiText = `## ${title}\n\n${content}`; isGenerated = true; }
+        else { aiText = content || title || "응답을 처리했습니다."; }
       } else if (mappedProducts.length > 0) {
         aiText = `이러한 분석을 바탕으로 **${mappedProducts.length}개의 맞춤 솔루션 상품**을 추천해 드립니다.`;
       } else {
@@ -361,37 +388,27 @@ export default function Message() {
         products: mappedProducts.length > 0 ? mappedProducts : undefined
       };
       const finalMessages = [...messagesWithUser, aiMsg];
-      const targetConvId = result.conversation_id || convId;
 
-      // ① DB 저장 먼저 — navigate 이전에 완료
-      if (targetConvId) {
-        const title = !convId ? text.slice(0, 40) : undefined;
-        await saveMessages(targetConvId, finalMessages, title);
-      }
+      await saveMessages(targetConvId, finalMessages);
+      setThreadId(result.thread_id || null);
+      setSessionId(result.session_id || null);
 
-      // ② 컴포넌트가 여전히 마운트된 경우에만 state 업데이트
-      if (isMounted.current) {
-        setMessages(finalMessages);
-        if (result.conversation_id && !convId) {
-          setThreadId(result.thread_id || null);
-          setSessionId(result.session_id || null);
-        }
-      }
-
-      // ③ 새 대화인 경우 DB 저장 완료 후 URL 변경 (재마운트 시 DB에 데이터 있음)
-      if (result.conversation_id && !convId) {
-        await loadConversations();
-        navigate(`/message/${result.conversation_id}`, { replace: true });
-      }
+      setPendingConv(targetConvId, finalMessages, false);
 
     } catch (error) {
       console.error("채팅 전송 실패:", error);
       const errMsg = error.response?.data?.detail || error.message;
-      if (isMounted.current) {
-        setMessages(prev => [...prev, { id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}` }]);
-      }
-    } finally {
-      if (isMounted.current) {
+      if (targetConvId) {
+        const errMessages = [...messagesWithUser, {
+          id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}`
+        }];
+        await saveMessages(targetConvId, errMessages).catch(() => {});
+        setPendingConv(targetConvId, errMessages, false);
+      } else {
+        // 대화 생성 전 실패 — Context 없음, 로컬 상태만 에러 표시
+        setMessages(prev => [...prev, {
+          id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}`
+        }]);
         setIsChatLoading(false);
       }
     }

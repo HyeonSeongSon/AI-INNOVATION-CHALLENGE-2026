@@ -8,13 +8,13 @@ import Message from './pages/Message';
 import Settings from './pages/Settings';
 import GeneratedMessages from './pages/GeneratedMessages';
 
-// ✅ ToastProvider 불러오기
+// ToastProvider 불러오기
 import { ToastProvider } from './components/Toast'; 
 
-// ✅ [추가됨] ChatProvider 불러오기 (이게 없어서 에러가 났던 것입니다!)
+//  ChatProvider 불러오기
 import { ChatProvider } from './context/ChatContext';
 
-// ✅ api.jsx 불러오기
+// api.jsx 불러오기
 import api from './api';
 
 import { createGlobalStyle } from 'styled-components';
@@ -65,7 +65,6 @@ function App() {
         {/* 서버 상태 체크 */}
         <ServerStatusCheck />
 
-        {/* ✅ [추가됨] 여기서 ChatProvider로 감싸줍니다! */}
         <ChatProvider>
           <BrowserRouter>
             <Routes>

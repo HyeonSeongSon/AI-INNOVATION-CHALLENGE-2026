@@ -311,7 +311,7 @@ export default function Home() {
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // ✅ 페르소나 데이터 불러오기 (실제 DB 연동)
+  // 페르소나 데이터 불러오기 (실제 DB 연동)
   useEffect(() => {
     const fetchPersonas = async () => {
       try {

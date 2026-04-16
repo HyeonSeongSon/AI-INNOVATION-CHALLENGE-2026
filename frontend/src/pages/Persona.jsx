@@ -9,7 +9,7 @@ import {
   Cat 
 } from 'lucide-react';
 
-// ✅ Toast 및 API 모듈 불러오기
+// Toast 및 API 모듈 불러오기
 import { useToast } from '../components/Toast';
 import api, { pipelineApi } from '../api';
 
@@ -221,7 +221,7 @@ export default function PersonaManager() {
             naturalOrganic: p.values && p.values.includes('천연/유기농'),
             veganCrueltyFree: p.values && p.values.includes('비건'),
             
-            // ✅ [수정] 백엔드에서 ai_analysis(json)으로 옴 -> 프론트엔드 aiAnalysis 객체로 매핑
+            // [수정] 백엔드에서 ai_analysis(json)으로 옴 -> 프론트엔드 aiAnalysis 객체로 매핑
             aiAnalysis: {
                 primary_category: p.ai_analysis?.primary_category || '분석 중',
                 reasoning: p.ai_analysis?.ai_analysis_text || '상세 리포트 준비 중'
