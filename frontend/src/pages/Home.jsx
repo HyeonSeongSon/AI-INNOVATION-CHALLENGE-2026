@@ -216,9 +216,33 @@ const MessageTitle = styled.span`
   color: #333;
 `;
 
-const PersonaInfo = styled.span`
-  font-size: 13px;
-  color: #888;
+const MessageMeta = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+`;
+
+const QualityBadge = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${props => {
+    if (props.$score >= 4.0) return '#2E7D32';
+    if (props.$score >= 3.0) return '#E65100';
+    return '#888';
+  }};
+  background-color: ${props => {
+    if (props.$score >= 4.0) return '#E8F5E9';
+    if (props.$score >= 3.0) return '#FFF3E0';
+    return '#f5f5f5';
+  }};
+  padding: 3px 8px;
+  border-radius: 4px;
+`;
+
+const DateInfo = styled.span`
+  font-size: 12px;
+  color: #aaa;
 `;
 
 /* 인기 페르소나 랭킹 스타일 */
@@ -261,12 +285,15 @@ export default function Home() {
   const navigate = useNavigate();
 
   const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
-  const [personaMap, setPersonaMap] = useState({});
   const [recentMessages, setRecentMessages] = useState([]);
+  const [messageCount, setMessageCount] = useState(null);
 
   useEffect(() => {
     dbApi.get('/generated-messages', { params: { user_id: 'son', limit: 3 } })
-      .then(res => setRecentMessages(res.data?.items || []))
+      .then(res => {
+        setRecentMessages(res.data?.items || []);
+        setMessageCount(res.data?.total ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -275,10 +302,13 @@ export default function Home() {
   };
 
   const parseTag = (item) => {
-    const purpose = item.conversation_title?.match(/\[(.+?)\]/)?.[1] || '';
-    const product = item.product_name ? item.product_name.slice(0, 20) : '';
-    if (purpose && product) return `${purpose} / ${product}`;
-    return purpose || product || '마케팅 메시지';
+    return item.purpose || item.conversation_title?.match(/\[(.+?)\]/)?.[1] || '마케팅 메시지';
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
   };
 
   // ✅ 페르소나 데이터 불러오기 (실제 DB 연동)
@@ -292,11 +322,6 @@ export default function Home() {
         
         // 최신순으로 정렬 (ID 기준 역순 가정)
         const sorted = [...data].reverse();
-
-        // persona_id → persona 이름 lookup map 생성
-        const map = {};
-        data.forEach(p => { map[String(p.persona_id || p.id)] = p; });
-        setPersonaMap(map);
 
         setPersonaStats({
           count: data.length, // 실제 개수
@@ -321,10 +346,10 @@ export default function Home() {
       <StatsGrid>
         <StatCard>
           <StatHeader>
-            <StatLabel>오늘 생성된 메시지</StatLabel>
+            <StatLabel>생성된 메시지</StatLabel>
             <StatIcon $bg="#E0F2F1" $color="#00695C"><MessageSquare size={20} /></StatIcon>
           </StatHeader>
-          <StatValue>24 <span>건</span></StatValue> {/* 하드코딩 (메시지 이력 DB 없음) */}
+          <StatValue>{messageCount ?? '-'} <span>건</span></StatValue>
         </StatCard>
         
         <StatCard onClick={() => navigate('/persona')} style={{cursor: 'pointer'}}>
@@ -374,15 +399,18 @@ export default function Home() {
             const item = recentMessages[i];
             if (item) {
               return (
-                <MessageItem key={item.id} onClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
+                <MessageItem key={item.id} onDoubleClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
                   <MessageInfo>
                     <MessageTag>{parseTag(item)}</MessageTag>
                     <MessageTitle>"{item.title || '(제목 없음)'}"</MessageTitle>
-                    <PersonaInfo>페르소나: {
-                      item.persona_id
-                        ? `${personaMap[String(item.persona_id)]?.name || '?'} (${item.persona_id})`
-                        : '-'
-                    }</PersonaInfo>
+                    <MessageMeta>
+                      {item.llm_score_overall != null && (
+                        <QualityBadge $score={item.llm_score_overall}>
+                          품질 {Number(item.llm_score_overall).toFixed(1)}
+                        </QualityBadge>
+                      )}
+                      <DateInfo>{formatDate(item.created_at)}</DateInfo>
+                    </MessageMeta>
                   </MessageInfo>
                 </MessageItem>
               );

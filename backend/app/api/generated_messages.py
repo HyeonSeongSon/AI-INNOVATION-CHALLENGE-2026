@@ -26,8 +26,10 @@ class GeneratedMessageListItem(BaseModel):
     conversation_id: str
     product_name: Optional[str] = None
     persona_id: Optional[str] = None
+    purpose: Optional[str] = None
     title: Optional[str] = None
     content: str
+    llm_score_overall: Optional[float] = None
     created_at: Optional[Any] = None
     conversation_title: Optional[str] = None
 
@@ -78,12 +80,25 @@ def list_generated_messages(
                 conversation_id=msg.conversation_id,
                 product_name=msg.product_name,
                 persona_id=msg.persona_id,
+                purpose=msg.purpose,
                 title=msg.title,
                 content=msg.content,
+                llm_score_overall=float(msg.llm_score_overall) if msg.llm_score_overall is not None else None,
                 created_at=msg.created_at,
                 conversation_title=conv_title,
             ))
         return result
+    finally:
+        db.close()
+
+
+@router.get("/count")
+def count_generated_messages(user_id: str = Query(...)):
+    """user_id 기준 생성 메시지 총 개수 조회"""
+    db = SessionLocal()
+    try:
+        total = db.query(GeneratedMessage).filter(GeneratedMessage.user_id == user_id).count()
+        return {"count": total}
     finally:
         db.close()
 

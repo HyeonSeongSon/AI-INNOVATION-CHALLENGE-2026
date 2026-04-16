@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from app.api import marketing_api
+from app.api import generated_messages
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
 from app.core.database import init_db
@@ -65,6 +66,7 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(marketing_api.router)
+app.include_router(generated_messages.router)
 
 
 @app.get("/")
