@@ -447,7 +447,7 @@ def build_multi_query_generate_prompt(
     persona_context_section = ""
     if persona_info:
         personal_color = persona_info.get("퍼스널 컬러")
-        skin_concerns = persona_info.get("고민 키워드") or []
+        concerns = persona_info.get("고민 키워드") or []
         skin_type = persona_info.get("피부타입") or []
         avoided_ingredients = persona_info.get("기피 성분") or []
 
@@ -456,8 +456,8 @@ def build_multi_query_generate_prompt(
             lines.append(f"- 퍼스널컬러: {personal_color}")
         if skin_type:
             lines.append(f"- 피부타입: {', '.join(skin_type)}")
-        if skin_concerns:
-            lines.append(f"- 고민키워드: {', '.join(skin_concerns)}")
+        if concerns:
+            lines.append(f"- 고민키워드: {', '.join(concerns)}")
         if avoided_ingredients:
             lines.append(f"- 기피성분(쿼리에서 제외): {', '.join(avoided_ingredients)}")
 

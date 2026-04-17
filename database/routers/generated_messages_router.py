@@ -54,7 +54,7 @@ class GeneratedMessageFilterItem(BaseModel):
     id: str
     product_name: Optional[str] = None
     brand: Optional[str] = None
-    product_tag: Optional[str] = None
+    sub_tag: Optional[str] = None
     purpose: Optional[str] = None
     title: Optional[str] = None
     content: str
@@ -97,7 +97,7 @@ def get_filter_options(user_id: str = Query(...)):
             return sorted([r[0] for r in rows])
 
         brands = _distinct_values(GeneratedMessage.brand)
-        product_tags = _distinct_values(GeneratedMessage.product_tag)
+        product_tags = _distinct_values(GeneratedMessage.sub_tag)
         purposes = _distinct_values(GeneratedMessage.purpose)
 
         return FilterOptions(brands=brands, product_tags=product_tags, purposes=purposes)
@@ -111,7 +111,7 @@ def list_generated_messages(
     limit: int = Query(20),
     offset: int = Query(0),
     brand: Optional[str] = Query(None),
-    product_tag: Optional[str] = Query(None),
+    sub_tag: Optional[str] = Query(None),
     purpose: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -123,8 +123,8 @@ def list_generated_messages(
 
         if brand:
             query = query.filter(GeneratedMessage.brand == brand)
-        if product_tag:
-            query = query.filter(GeneratedMessage.product_tag == product_tag)
+        if sub_tag:
+            query = query.filter(GeneratedMessage.sub_tag == sub_tag)
         if purpose:
             query = query.filter(GeneratedMessage.purpose == purpose)
         if start_date:
@@ -146,7 +146,7 @@ def list_generated_messages(
                 id=msg.id,
                 product_name=msg.product_name,
                 brand=msg.brand,
-                product_tag=msg.product_tag,
+                sub_tag=msg.sub_tag,
                 purpose=msg.purpose,
                 title=msg.title,
                 content=msg.content,

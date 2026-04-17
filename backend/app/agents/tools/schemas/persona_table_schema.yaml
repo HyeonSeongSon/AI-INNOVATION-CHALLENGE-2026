@@ -9,23 +9,28 @@ schemas:
       age                       INTEGER           -- 나이 (정수)
       occupation                TEXT              -- 직업 (예: '마케터', '학생', '직장인')
       skin_type                 TEXT[]            -- 피부 타입 배열 (예: '건조함', '지성', '트러블성', '민감성', '복합성' 등 데이터에 저장된 표현 그대로 사용)
-      skin_concerns             TEXT[]            -- 피부 고민 배열 (예: '모공', '주름', '탄력', '미백', '수분', '트러블' 등 데이터에 저장된 표현 그대로 사용)
+      concerns                  TEXT[]            -- 고민 배열 (피부·헤어 통합, 예: '모공', '주름', '탈모', '두피 지성' 등)
       personal_color            TEXT              -- 퍼스널 컬러 ('웜톤', '쿨톤', '웜스프링', '웜오텀', '쿨썸머', '쿨윈터')
       shade_number              INTEGER           -- 파운데이션 셰이드 번호 (예: 21, 23)
       preferred_colors          TEXT[]            -- 선호 색상 배열 (예: ['코랄', '핑크', '레드'])
       preferred_ingredients     TEXT[]            -- 선호 성분 배열 (예: ['히알루론산', '나이아신아마이드', '레티놀'])
       avoided_ingredients       TEXT[]            -- 기피 성분 배열 (예: ['알코올', '파라벤', '향료'])
       preferred_scents          TEXT[]            -- 선호 향 배열 (예: ['플로럴', '시트러스', '머스크'])
-      values                    TEXT[]            -- 가치관/라이프스타일 배열 ['비건', '친환경', '가성비', '럭셔리']
-      skincare_routine          TEXT              -- 스킨케어 루틴 ('간단한 루틴', '복잡한 루틴', '기초만')
-      main_environment          TEXT              -- 주 활동 환경 ('실내', '실외', '혼합')
+      lifestyle_values          TEXT[]            -- 가치관/라이프스타일 배열 ['비건', '친환경', '가성비', '럭셔리']
+      skincare_routine          TEXT[]            -- 스킨케어 루틴 배열 (예: ['미니멀', '풀루틴'])
+      main_environment          TEXT[]            -- 주 활동 환경 배열 (예: ['실내', '야외활동'])
       preferred_texture         TEXT[]            -- 선호 제형 배열 ['에센스', '세럼', '크림', '젤', '오일']
-      pets                      TEXT              -- 반려동물 유무 ('있음', '없음')
+      hair_type                 TEXT[]            -- 헤어 타입 배열 (예: ['직모', '손상모', '곱슬'])
+      beauty_interests          TEXT[]            -- 관심 뷰티 카테고리 배열 (예: ['스킨케어', '헤어', '메이크업'])
+      pets                      TEXT[]            -- 반려동물 배열 (예: ['고양이', '강아지'])
       avg_sleep_hours           INTEGER           -- 평균 수면 시간 (시간, 정수)
       stress_level              TEXT              -- 스트레스 수준 ('낮음', '보통', '높음')
-      digital_device_usage_time INTEGER          -- 디지털 기기 사용 시간 (시간, 정수)
-      shopping_style            TEXT              -- 쇼핑 스타일 ('충동구매형', '신중형', '비교형', '브랜드충성형')
+      daily_screen_hours        INTEGER           -- 하루 스크린 사용 시간 (시간, 정수)
+      shopping_style            TEXT[]            -- 쇼핑 스타일 배열 (예: ['충동구매형', '신중형'])
       purchase_decision_factors TEXT[]            -- 구매 결정 요인 배열 ['리뷰', '성분', '가격', '브랜드', '추천']
+      price_sensitivity         TEXT              -- 가격 민감도 ('가성비중시', '프리미엄선호', '무관')
+      preferred_brands          TEXT[]            -- 선호 브랜드 배열 (예: ['설화수', '이니스프리'])
+      avoided_brands            TEXT[]            -- 기피 브랜드 배열
       persona_created_at        TIMESTAMPTZ       -- 생성 시각
 
     PostgreSQL Array 컬럼 조회 방법:

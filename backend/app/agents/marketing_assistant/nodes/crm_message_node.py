@@ -43,7 +43,7 @@ async def crm_message_node(state: MarketingAssistantState, config: RunnableConfi
             "product_id": t["product_id"],
             "product_name": t.get("product_info", {}).get("product_name", ""),
             "brand": t.get("product_info", {}).get("brand", ""),
-            "product_tag": t.get("product_info", {}).get("product_tag", ""),
+            "sub_tag": t.get("product_info", {}).get("sub_tag", ""),
             "purpose": t["purpose"],
             "message": _parse_message(t["message"]),
         }

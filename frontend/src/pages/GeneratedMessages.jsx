@@ -497,7 +497,7 @@ export default function GeneratedMessages() {
   const location = useLocation();
 
   const [filterOptions, setFilterOptions] = useState({ brands: [], product_tags: [], purposes: [] });
-  const [filters, setFilters] = useState({ brand: '', product_tag: '', purpose: '', start_date: '', end_date: '' });
+  const [filters, setFilters] = useState({ brand: '', sub_tag: '', purpose: '', start_date: '', end_date: '' });
   const [messages, setMessages] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -558,7 +558,7 @@ export default function GeneratedMessages() {
   };
 
   const handleReset = () => {
-    const empty = { brand: '', product_tag: '', purpose: '', start_date: '', end_date: '' };
+    const empty = { brand: '', sub_tag: '', purpose: '', start_date: '', end_date: '' };
     setFilters(empty);
     committedRef.current = {};
     setPage(1);
@@ -655,7 +655,7 @@ export default function GeneratedMessages() {
 
         <FilterGroup>
           <label>상품 태그</label>
-          <FilterSelect value={filters.product_tag} onChange={e => handleFilterChange('product_tag', e.target.value)}>
+          <FilterSelect value={filters.sub_tag} onChange={e => handleFilterChange('sub_tag', e.target.value)}>
             <option value="">전체</option>
             {filterOptions.product_tags.map(t => <option key={t} value={t}>{t}</option>)}
           </FilterSelect>
@@ -738,8 +738,8 @@ export default function GeneratedMessages() {
                     <TruncatedTd style={{ maxWidth: 160 }}>{msg.product_name || '-'}</TruncatedTd>
                     <Td>{msg.brand ? <TagBadge>{msg.brand}</TagBadge> : '-'}</Td>
                     <Td>
-                      {msg.product_tag
-                        ? <TagBadge style={{ background: '#F0F7FF', color: '#2B6CB0' }}>{msg.product_tag}</TagBadge>
+                      {msg.sub_tag
+                        ? <TagBadge style={{ background: '#F0F7FF', color: '#2B6CB0' }}>{msg.sub_tag}</TagBadge>
                         : '-'}
                     </Td>
                     <Td style={{ fontSize: 12, color: '#666' }}>{msg.purpose || '-'}</Td>
@@ -780,7 +780,7 @@ export default function GeneratedMessages() {
             <ModalClose onClick={() => { setSelectedMsg(null); setCopied(false); }}><X /></ModalClose>
             <ModalMeta>
               {selectedMsg.brand && <MetaChip>{selectedMsg.brand}</MetaChip>}
-              {selectedMsg.product_tag && <MetaChip>{selectedMsg.product_tag}</MetaChip>}
+              {selectedMsg.sub_tag && <MetaChip>{selectedMsg.sub_tag}</MetaChip>}
               {selectedMsg.purpose && <MetaChip>{selectedMsg.purpose}</MetaChip>}
               {selectedMsg.llm_score_overall != null && (
                 <QualityBadge $score={selectedMsg.llm_score_overall}>

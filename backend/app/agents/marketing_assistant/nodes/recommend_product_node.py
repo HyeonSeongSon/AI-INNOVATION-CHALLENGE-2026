@@ -51,7 +51,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     retrieval_product_ids = await _recommender.product_retriever(
         retrieval_query=search_queries["retrieval"],
         brands=parsed_data.get("brands") or None,
-        product_tag=parsed_data.get("product_categories") or None,
+        sub_tags=parsed_data.get("product_categories") or None,
         avoided_ingredients=None,
     )
 
@@ -75,7 +75,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     product_summary = "\n".join(
-        f"- [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('product_tag')}): {p.get('product_comment')}"
+        f"- [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('sub_tag')}): {p.get('product_comment')}"
         for p in recommended_products
     )
     return Command(

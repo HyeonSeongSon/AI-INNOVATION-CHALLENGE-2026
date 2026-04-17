@@ -251,9 +251,9 @@ class ProductMessageGenerator:
             stress = persona_info.get('스트레스 수준') or persona_info.get('stress_level')
             sections.append(f"스트레스 수준: {stress}")
 
-        if persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time'):
-            device_time = persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time')
-            sections.append(f"디지털 기기 사용시간: {device_time}시간")
+        if persona_info.get('스크린 사용시간') or persona_info.get('daily_screen_hours'):
+            device_time = persona_info.get('스크린 사용시간') or persona_info.get('daily_screen_hours')
+            sections.append(f"스크린 사용시간: {device_time}시간")
 
         return "\n".join(sections)
 
@@ -268,8 +268,8 @@ class ProductMessageGenerator:
         if product.get('brand'):
             sections.append(f"브랜드: {product['brand']}")
 
-        if product.get('product_tag'):
-            sections.append(f"카테고리: {product['product_tag']}")
+        if product.get('sub_tag'):
+            sections.append(f"카테고리: {product['sub_tag']}")
 
         # 가격 정보
         if product.get('sale_price'):
@@ -291,8 +291,8 @@ class ProductMessageGenerator:
             if isinstance(skin_types, list) and skin_types:
                 sections.append(f"적합 피부타입: {', '.join(skin_types)}")
 
-        if product.get('skin_concerns'):
-            concerns = product['skin_concerns']
+        if product.get('concerns'):
+            concerns = product['concerns']
             if isinstance(concerns, list) and concerns:
                 sections.append(f"타겟 고민: {', '.join(concerns)}")
 

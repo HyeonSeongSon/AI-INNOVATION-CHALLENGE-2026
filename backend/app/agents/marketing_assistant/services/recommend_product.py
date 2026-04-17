@@ -55,17 +55,17 @@ class ProductRecommender:
     async def filtered_products(
             self,
             brands: Optional[str],
-            products: Optional[List[str]],
+            sub_tags: Optional[List[str]],
             avoided_ingredients: Optional[List[str]]
         ):
-        # 레벨 1: brands + categories + avoided_ingredients(EXCLUDE)
+        # 레벨 1: brands + sub_tags + avoided_ingredients(EXCLUDE)
         filtered_products = await _product_client.get_filtered_products(
             brands=brands if brands else None,
-            product_categories=products if products else None,
+            product_categories=sub_tags if sub_tags else None,
             avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
         )
 
-        # 레벨 2: brands 제거 (카테고리 + EXCLUDE)
+        # 레벨 2: brands 제거 (sub_tags + EXCLUDE)
         if len(filtered_products) < settings.min_filtered_products and brands:
             logger.warning(
                 "filter_fallback_level2",
@@ -73,12 +73,12 @@ class ProductRecommender:
             )
             filtered_products = await _product_client.get_filtered_products(
                 brands=None,
-                product_categories=products if products else None,
+                product_categories=sub_tags if sub_tags else None,
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
             )
 
-        # 레벨 3: 카테고리도 제거 (EXCLUDE만)
-        if len(filtered_products) < settings.min_filtered_products and products:
+        # 레벨 3: sub_tags도 제거 (EXCLUDE만)
+        if len(filtered_products) < settings.min_filtered_products and sub_tags:
             logger.warning(
                 "filter_fallback_level3",
                 current_count=len(filtered_products),
@@ -104,7 +104,7 @@ class ProductRecommender:
             self,
             retrieval_query: str,
             brands: Optional[List[str]],
-            product_tag: Optional[List[str]],
+            sub_tags: Optional[List[str]],
             avoided_ingredients: Optional[List[str]],
             allowed_product_ids: Optional[List[str]] = None,
         ):
@@ -114,7 +114,7 @@ class ProductRecommender:
         else:
             filtered_product_ids = await self.filtered_products(
                 brands=brands if brands else None,
-                products=product_tag if product_tag else None,
+                sub_tags=sub_tags if sub_tags else None,
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None
             )
 

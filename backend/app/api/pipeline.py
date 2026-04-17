@@ -31,23 +31,28 @@ class PersonaCreateRequest(BaseModel):
     gender: Optional[str] = None
     occupation: Optional[str] = None
     skin_type: Optional[List[str]] = Field(default=[])
-    skin_concerns: Optional[List[str]] = Field(default=[])
+    concerns: Optional[List[str]] = Field(default=[])
     personal_color: Optional[str] = None
     shade_number: Optional[int] = None
     preferred_colors: Optional[List[str]] = Field(default=[])
     preferred_ingredients: Optional[List[str]] = Field(default=[])
     avoided_ingredients: Optional[List[str]] = Field(default=[])
     preferred_scents: Optional[List[str]] = Field(default=[])
-    values: Optional[List[str]] = Field(default=[])
-    skincare_routine: Optional[str] = None
-    main_environment: Optional[str] = None
+    lifestyle_values: Optional[List[str]] = Field(default=[])
+    skincare_routine: Optional[List[str]] = Field(default=[])
+    main_environment: Optional[List[str]] = Field(default=[])
     preferred_texture: Optional[Any] = None
-    pets: Optional[str] = None
+    hair_type: Optional[List[str]] = Field(default=[])
+    beauty_interests: Optional[List[str]] = Field(default=[])
+    pets: Optional[List[str]] = Field(default=[])
     avg_sleep_hours: Optional[int] = None
     stress_level: Optional[str] = None
-    digital_device_usage_time: Optional[int] = None
-    shopping_style: Optional[str] = None
+    daily_screen_hours: Optional[int] = None
+    shopping_style: Optional[List[str]] = Field(default=[])
     purchase_decision_factors: Optional[Any] = None
+    price_sensitivity: Optional[str] = None
+    preferred_brands: Optional[List[str]] = Field(default=[])
+    avoided_brands: Optional[List[str]] = Field(default=[])
     model: Optional[str] = None
 
 
@@ -145,23 +150,28 @@ async def create_and_analyze_persona(
             age=persona_data.get("age"),
             occupation=persona_data.get("occupation"),
             skin_type=persona_data.get("skin_type", []),
-            skin_concerns=persona_data.get("skin_concerns", []),
+            concerns=persona_data.get("concerns", []),
             personal_color=persona_data.get("personal_color"),
             shade_number=persona_data.get("shade_number"),
             preferred_colors=persona_data.get("preferred_colors", []),
             preferred_ingredients=persona_data.get("preferred_ingredients", []),
             avoided_ingredients=persona_data.get("avoided_ingredients", []),
             preferred_scents=persona_data.get("preferred_scents", []),
-            values=persona_data.get("values", []),
-            skincare_routine=persona_data.get("skincare_routine"),
-            main_environment=persona_data.get("main_environment"),
+            lifestyle_values=persona_data.get("lifestyle_values", []),
+            skincare_routine=persona_data.get("skincare_routine", []),
+            main_environment=persona_data.get("main_environment", []),
             preferred_texture=preferred_texture,
-            pets=persona_data.get("pets"),
+            hair_type=persona_data.get("hair_type", []),
+            beauty_interests=persona_data.get("beauty_interests", []),
+            pets=persona_data.get("pets", []),
             avg_sleep_hours=persona_data.get("avg_sleep_hours"),
             stress_level=persona_data.get("stress_level"),
-            digital_device_usage_time=persona_data.get("digital_device_usage_time"),
-            shopping_style=persona_data.get("shopping_style"),
+            daily_screen_hours=persona_data.get("daily_screen_hours"),
+            shopping_style=persona_data.get("shopping_style", []),
             purchase_decision_factors=purchase_decision_factors,
+            price_sensitivity=persona_data.get("price_sensitivity"),
+            preferred_brands=persona_data.get("preferred_brands", []),
+            avoided_brands=persona_data.get("avoided_brands", []),
             persona_summary=persona_summary,
         )
         db.add(persona)

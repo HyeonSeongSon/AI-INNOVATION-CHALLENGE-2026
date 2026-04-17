@@ -56,16 +56,16 @@ def get_forbidden_keywords() -> Dict[str, Any]:
 
 
 def get_categories() -> List[str]:
-    """categories.json에서 카테고리 목록을 1회 로드 후 캐시된 리스트 반환."""
+    """category.json에서 카테고리 목록을 1회 로드 후 캐시된 리스트 반환."""
     global _categories
     if _categories is None:
-        docker_path = Path("/app/data/categories.json")
-        local_path = _PROJECT_ROOT / "data" / "categories.json"
+        docker_path = Path("/app/data/category.json")
+        local_path = _PROJECT_ROOT / "data" / "category.json"
         path = docker_path if docker_path.exists() else local_path
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            _categories = data["category_type"]
+            _categories = data["sub_tags"]
             logger.info("categories_loaded", path=str(path), count=len(_categories))
         except Exception as e:
             logger.error("categories_load_failed", path=str(path), error=str(e))

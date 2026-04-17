@@ -279,7 +279,7 @@ def _map_to_persona_info(persona_data: Dict[str, Any]) -> Dict[str, Any]:
     backend/app/agents/crm_agent/services/recommend_products.py의 get_persona_info()와 동일한 매핑
     """
     avg_sleep = persona_data.get("avg_sleep_hours")
-    digital_usage = persona_data.get("digital_device_usage_time")
+    daily_screen = persona_data.get("daily_screen_hours")
 
     return {
         "이름": persona_data.get("name"),
@@ -287,23 +287,28 @@ def _map_to_persona_info(persona_data: Dict[str, Any]) -> Dict[str, Any]:
         "성별": persona_data.get("gender"),
         "직업": persona_data.get("occupation"),
         "피부타입": persona_data.get("skin_type", []),
-        "고민 키워드": persona_data.get("skin_concerns", []),
+        "고민 키워드": persona_data.get("concerns", []),
         "퍼스널 컬러": persona_data.get("personal_color"),
         "베이스 호수": persona_data.get("shade_number"),
         "메이크업 선호 색상": persona_data.get("preferred_colors", []),
         "선호 성분": persona_data.get("preferred_ingredients", []),
         "기피 성분": persona_data.get("avoided_ingredients", []),
         "선호 향": persona_data.get("preferred_scents", []),
-        "가치관": persona_data.get("values", []),
-        "스킨케어 루틴": persona_data.get("skincare_routine"),
-        "주 활동 환경": persona_data.get("main_environment"),
+        "가치관": persona_data.get("lifestyle_values", []),
+        "스킨케어 루틴": persona_data.get("skincare_routine", []),
+        "주 활동 환경": persona_data.get("main_environment", []),
         "선호 제형(텍스처)": persona_data.get("preferred_texture", []),
-        "반려동물": persona_data.get("pets"),
+        "헤어 타입": persona_data.get("hair_type", []),
+        "관심 뷰티 카테고리": persona_data.get("beauty_interests", []),
+        "반려동물": persona_data.get("pets", []),
         "수면 시간": f"{avg_sleep}시간" if avg_sleep else None,
         "스트레스": persona_data.get("stress_level"),
-        "디지털 기기 사용": f"하루 {digital_usage}시간" if digital_usage else None,
-        "쇼핑 스타일&예산": persona_data.get("shopping_style"),
+        "스크린 사용": f"하루 {daily_screen}시간" if daily_screen else None,
+        "쇼핑 스타일": persona_data.get("shopping_style", []),
         "구매 결정 요인": persona_data.get("purchase_decision_factors", []),
+        "가격 민감도": persona_data.get("price_sensitivity"),
+        "선호 브랜드": persona_data.get("preferred_brands", []),
+        "기피 브랜드": persona_data.get("avoided_brands", []),
     }
 
 

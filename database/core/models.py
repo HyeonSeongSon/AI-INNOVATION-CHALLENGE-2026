@@ -10,6 +10,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP,
     ForeignKey, ARRAY, UniqueConstraint, JSON, Boolean, Numeric
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func, text
 
@@ -35,7 +36,7 @@ class Persona(Base):
 
     # 피부 관련
     skin_type = Column(ARRAY(Text), default=[])
-    skin_concerns = Column(ARRAY(Text), default=[])
+    concerns = Column(ARRAY(Text), default=[])
     personal_color = Column(Text)
     shade_number = Column(Integer)
 
@@ -44,20 +45,25 @@ class Persona(Base):
     preferred_ingredients = Column(ARRAY(Text), default=[])
     avoided_ingredients = Column(ARRAY(Text), default=[])
     preferred_scents = Column(ARRAY(Text), default=[])
-    values = Column(ARRAY(Text), default=[])
+    lifestyle_values = Column(ARRAY(Text), default=[])
 
     # 라이프스타일
-    skincare_routine = Column(Text)
-    main_environment = Column(Text)
+    skincare_routine = Column(ARRAY(Text), default=[])
+    main_environment = Column(ARRAY(Text), default=[])
     preferred_texture = Column(ARRAY(Text), default=[])
-    pets = Column(Text)
+    hair_type = Column(ARRAY(Text), default=[])
+    beauty_interests = Column(ARRAY(Text), default=[])
+    pets = Column(ARRAY(Text), default=[])
     avg_sleep_hours = Column(Integer)
     stress_level = Column(Text)
-    digital_device_usage_time = Column(Integer)
+    daily_screen_hours = Column(Integer)
 
     # 쇼핑 성향
-    shopping_style = Column(Text)
+    shopping_style = Column(ARRAY(Text), default=[])
     purchase_decision_factors = Column(ARRAY(Text), default=[])
+    price_sensitivity = Column(Text)
+    preferred_brands = Column(ARRAY(Text), default=[])
+    avoided_brands = Column(ARRAY(Text), default=[])
 
     # AI 요약
     persona_summary = Column(Text)
@@ -126,10 +132,12 @@ class Product(Base):
     __tablename__ = 'products'
 
     product_id = Column(String(100), primary_key=True)
-    vectordb_id = Column(String(100), index=True)
+    vectordb_id = Column(JSONB)
     product_name = Column(String(500), nullable=False)
     brand = Column(String(100), index=True)
-    product_tag = Column(String(200))
+    category = Column(String(200), index=True)
+    tag = Column(String(200))
+    sub_tag = Column(String(200), index=True)
 
     # 평점/리뷰
     rating = Column(DECIMAL(3, 2))
@@ -142,12 +150,12 @@ class Product(Base):
 
     # 페르소나 매칭 속성
     skin_type = Column(ARRAY(Text), default=[])
-    skin_concerns = Column(ARRAY(Text), default=[])
+    concerns = Column(ARRAY(Text), default=[])
     preferred_colors = Column(ARRAY(Text), default=[])
     preferred_ingredients = Column(ARRAY(Text), default=[])
     avoided_ingredients = Column(ARRAY(Text), default=[])
     preferred_scents = Column(ARRAY(Text), default=[])
-    values = Column(ARRAY(Text), default=[])
+    lifestyle_values = Column(ARRAY(Text), default=[])
     exclusive_product = Column(String(200))
     personal_color = Column(ARRAY(Text), default=[])
     skin_shades = Column(ARRAY(Integer), default=[])
@@ -204,7 +212,7 @@ class GeneratedMessage(Base):
     product_id      = Column(String(100), nullable=False, index=True)
     product_name    = Column(String(500))
     brand           = Column(String(100))
-    product_tag     = Column(String(200))
+    sub_tag         = Column(String(200))
     purpose         = Column(String(200))
     title           = Column(Text)
     content         = Column(Text, nullable=False)

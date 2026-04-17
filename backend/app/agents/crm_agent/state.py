@@ -31,23 +31,28 @@ class PersonaInfo(TypedDict, total=False):
     성별: str                            # 성별
     직업: str                            # 직업
     피부타입: List[str]                  # 피부타입
-    고민_키워드: List[str]               # 고민 키워드
+    고민_키워드: List[str]               # 고민 키워드 (피부·헤어 통합)
     퍼스널_컬러: str                     # 퍼스널 컬러
     베이스_호수: Optional[str]           # 베이스 호수
     메이크업_선호_색상: List[str]        # 메이크업 선호 색상
     선호_성분: List[str]                 # 선호 성분
     기피_성분: List[str]                 # 기피 성분
     선호_향: List[str]                   # 선호 향
-    가치관: List[str]                    # 가치관
-    스킨케어_루틴: Optional[str]         # 스킨케어 루틴
-    주_활동_환경: Optional[str]          # 주 활동 환경
+    가치관: List[str]                    # 가치관/라이프스타일
+    스킨케어_루틴: List[str]             # 스킨케어 루틴
+    주_활동_환경: List[str]              # 주 활동 환경
     선호_제형: List[str]                 # 선호 제형(텍스처)
-    반려동물: Optional[str]              # 반려동물
+    헤어_타입: List[str]                 # 헤어 타입
+    관심_뷰티_카테고리: List[str]        # 관심 뷰티 카테고리
+    반려동물: List[str]                  # 반려동물
     수면_시간: Optional[str]             # 수면 시간
     스트레스: Optional[str]              # 스트레스 수준
-    디지털_기기_사용: Optional[str]      # 디지털 기기 사용 시간
-    쇼핑_스타일_예산: Optional[str]      # 쇼핑 스타일 & 예산
+    스크린_사용: Optional[str]           # 하루 스크린 사용 시간
+    쇼핑_스타일: List[str]               # 쇼핑 스타일
     구매_결정_요인: List[str]            # 구매 결정 요인
+    가격_민감도: Optional[str]           # 가격 민감도
+    선호_브랜드: List[str]               # 선호 브랜드
+    기피_브랜드: List[str]               # 기피 브랜드
 
 
 class RecommendedProduct(TypedDict, total=False):
@@ -55,13 +60,13 @@ class RecommendedProduct(TypedDict, total=False):
     product_id: str                      # 상품 ID
     product_name: str                    # 상품명
     brand: str                           # 브랜드
-    product_tag: str                     # 상품 태그/카테고리
+    sub_tag: str                         # 상품 소분류 태그
     sale_price: int                      # 판매 가격
     discount_rate: int                   # 할인율
     rating: float                        # 평점
     review_count: int                    # 리뷰 수
     skin_type: List[str]                 # 적합 피부타입
-    skin_concerns: List[str]             # 타겟 고민
+    concerns: List[str]                  # 타겟 고민
     preferred_ingredients: List[str]     # 주요 성분
     vector_search_score: float           # 벡터 검색 스코어
     product_page_url: str                # 상품 페이지 URL

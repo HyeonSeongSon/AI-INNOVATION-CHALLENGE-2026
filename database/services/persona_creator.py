@@ -6,7 +6,7 @@
 import os
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -20,23 +20,28 @@ class PersonaData(BaseModel):
     age: Optional[int] = Field(default=None, description="나이")
     occupation: Optional[str] = Field(default=None, description="직업 (예: 직장인, 대학생)")
     skin_type: List[str] = Field(default_factory=list, description="피부 타입 (예: 지성, 복합성, 건성), 피부 타입 외 작성 금지(예: 복합성(T존 번들거림))")
-    skin_concerns: List[str] = Field(default_factory=list, description="피부 고민 (예: 모공, 여드름, 색소침착)")
+    concerns: List[str] = Field(default_factory=list, description="고민 (피부·헤어 통합, 예: 모공, 여드름, 탈모)")
     personal_color: Optional[str] = Field(default=None, description="퍼스널 컬러 (예: 웜톤, 쿨톤, 봄웜)")
     shade_number: Optional[int] = Field(default=None, description="파운데이션 쉐이드 번호 (예: 21, 23, 25)")
     preferred_colors: List[str] = Field(default_factory=list, description="선호 색상 (예: 누드, 코럴, 레드)")
     preferred_ingredients: List[str] = Field(default_factory=list, description="선호 성분 (예: 히알루론산, 나이아신아마이드)")
     avoided_ingredients: List[str] = Field(default_factory=list, description="기피 성분 (예: 알코올, 향료, 파라벤)")
     preferred_scents: List[str] = Field(default_factory=list, description="선호 향 (예: 무향, 플로럴, 시트러스)")
-    values: List[str] = Field(default_factory=list, description="가치관/추구 (예: 비건, 친환경, 가성비)")
-    skincare_routine: Optional[str] = Field(default=None, description="스킨케어 루틴 유형 (예: 미니멀, 풀루틴)")
-    main_environment: Optional[str] = Field(default=None, description="주요 생활환경 (예: 실내사무실, 야외활동)")
+    lifestyle_values: List[str] = Field(default_factory=list, description="가치관/추구 (예: 비건, 친환경, 가성비)")
+    skincare_routine: List[str] = Field(default_factory=list, description="스킨케어 루틴 유형 (예: 미니멀, 풀루틴)")
+    main_environment: List[str] = Field(default_factory=list, description="주요 생활환경 (예: 실내사무실, 야외활동)")
     preferred_texture: List[str] = Field(default_factory=list, description="선호 텍스처 (예: 가벼운, 촉촉한, 매트)")
-    pets: Optional[str] = Field(default=None, description="반려동물 (예: 없음, 고양이, 강아지)")
+    hair_type: List[str] = Field(default_factory=list, description="헤어 타입 (예: 직모, 곱슬, 손상모)")
+    beauty_interests: List[str] = Field(default_factory=list, description="관심 뷰티 카테고리 (예: 스킨케어, 헤어, 메이크업)")
+    pets: List[str] = Field(default_factory=list, description="반려동물 (예: 고양이, 강아지)")
     avg_sleep_hours: Optional[int] = Field(default=None, description="평균 수면 시간 (시간 단위)")
     stress_level: Optional[str] = Field(default=None, description="스트레스 수준 (예: 높음, 보통, 낮음)")
-    digital_device_usage_time: Optional[int] = Field(default=None, description="하루 디지털 기기 사용 시간 (시간 단위)")
-    shopping_style: Optional[str] = Field(default=None, description="쇼핑 스타일 (예: 충동구매, 계획구매, 리뷰중시)")
+    daily_screen_hours: Optional[int] = Field(default=None, description="하루 스크린 사용 시간 (시간 단위)")
+    shopping_style: List[str] = Field(default_factory=list, description="쇼핑 스타일 (예: 충동구매, 계획구매, 리뷰중시)")
     purchase_decision_factors: List[str] = Field(default_factory=list, description="구매 결정 요인 (예: 성분, 가격, 브랜드, 리뷰)")
+    price_sensitivity: Optional[str] = Field(default=None, description="가격 민감도 (예: 가성비중시, 프리미엄선호, 무관)")
+    preferred_brands: List[str] = Field(default_factory=list, description="선호 브랜드")
+    avoided_brands: List[str] = Field(default_factory=list, description="기피 브랜드")
     persona_summary: Optional[str] = Field(default=None, description="페르소나 전반을 자연스럽게 요약한 설명문")
 
 
@@ -48,9 +53,30 @@ def _get_llm(model_name: str = None) -> ChatOpenAI:
     )
 
 
+_PERSONA_STRUCTURED_SYSTEM_PROMPT = """사용자 입력에서 직접 언급한 뷰티 상품 추천 관련 정보만 추출해 페르소나 필드를 채우세요.
+
+[절대 원칙]
+- 사용자 입력에 직접 적힌 내용만 필드에 넣습니다.
+- 언급되지 않은 내용은 추론·유추·확장하지 않습니다. 반드시 null 또는 빈 배열로 두세요.
+
+[추론 금지 필드 — 사용자가 직접 언급하지 않으면 반드시 빈 배열]
+- preferred_ingredients: 성분명이 명시된 경우에만 (예: "히알루론산 선호"처럼 적힌 경우)
+- avoided_ingredients: 기피 성분이 명시된 경우에만 (예: "알코올은 피하고 싶다"처럼 적힌 경우)
+- preferred_scents: 향 선호가 명시된 경우에만 (예: "무향 선호"처럼 적힌 경우)
+- preferred_colors: 색상이 명시된 경우에만 (예: "코랄 계열 선호"처럼 적힌 경우)
+- preferred_texture: 텍스처·발림감이 명시된 경우에만 (예: "가벼운 텍스처 선호"처럼 적힌 경우)
+
+[추론 금지 필드 — 사용자가 직접 언급하지 않으면 반드시 null]
+- main_environment: 생활 환경이 명시된 경우에만. 구체적인 장소·유형은 임의로 세분화하지 않습니다.
+
+persona_summary는 사용자 입력에 있는 내용만 사용해 2~3문장으로 자연스럽게 요약하세요."""
+
+
 async def generate_structured_persona_info(user_input: str, model_name: str = None) -> Dict[str, Any]:
     """
     자유 텍스트를 구조화된 페르소나 정보로 변환.
+
+    에이전트와 동일한 원칙: 사용자 입력에 직접 적힌 내용만 추출, 추론 금지.
 
     Args:
         user_input: 페르소나를 생성할 원본 사용자 입력 텍스트
@@ -59,18 +85,17 @@ async def generate_structured_persona_info(user_input: str, model_name: str = No
     Returns:
         PersonaData 스키마를 따르는 딕셔너리
     """
+    from langchain_core.messages import SystemMessage, HumanMessage
+
     llm = _get_llm(model_name)
     logger.info("generate_structured_persona_info_started | input_length=%d model=%s", len(user_input), llm.model_name)
 
     structured_llm = llm.with_structured_output(PersonaData)
-    prompt = f"""사용자 입력을 바탕으로 뷰티 상품 추천용 페르소나 정보를 구조화해서 추출하세요.
-명시되지 않은 필드는 입력 맥락에서 합리적으로 추론하거나, 추론이 불가능하면 null/빈 배열로 두세요.
-persona_summary는 페르소나 전반을 2~3문장으로 자연스럽게 요약하세요.
-
-사용자 입력:
-{user_input}
-"""
-    result = await structured_llm.ainvoke(prompt)
+    messages = [
+        SystemMessage(content=_PERSONA_STRUCTURED_SYSTEM_PROMPT),
+        HumanMessage(content=user_input),
+    ]
+    result = await structured_llm.ainvoke(messages)
     persona = result.model_dump()
     logger.info(
         "generate_structured_persona_info_completed | persona_name=%s skin_type=%s",
@@ -80,52 +105,137 @@ persona_summary는 페르소나 전반을 2~3문장으로 자연스럽게 요약
     return persona
 
 
-_SEARCH_QUERY_PROMPT_TEMPLATE = """
-당신은 뷰티·라이프스타일 상품 추천 시스템용 검색 쿼리 생성 전문가입니다.
-주어진 페르소나를 깊이 이해하고, 이 사용자에게 실제로 맞는 상품을 찾기 위한
-검색/매칭용 4개 쿼리(need / preference / retrieval / persona)를 생성하세요.
+_SEARCH_QUERY_SYSTEM_PROMPT = """대화에서 사용자가 직접 언급한 내용만 사용해서 검색/매칭용 4개 쿼리(need / preference / retrieval / persona)를 생성하세요.
 
-[쿼리 역할]
-- need: 사용자가 원하는 결과 상태 (자연스러운 문장형)
-- preference: 선호하는 제품 속성/사용감/스타일 (자연스러운 문장형)
-- retrieval: 검색창에 입력할 법한 짧고 응집된 검색 문구
-- persona: 이 상품이 필요한 사람 유형 묘사 (자연스러운 문장형, 추천 문장 금지)
+==================================================
+[절대 원칙 — 반드시 먼저 읽을 것]
+==================================================
 
-반드시 아래 JSON 형식만 반환하세요:
-{{
+◆ 사용자 발화에 명시된 표현만 쿼리에 포함할 수 있습니다.
+◆ 발화에 없는 내용은 아무리 자연스러운 추론이라도 추가 금지입니다.
+  - 제품 카테고리·피부 유형에서 구체적인 성분명을 추론하지 않습니다.
+  - 긍정 선호에서 기피 성분·기피 제형을 추론하지 않습니다.
+  - 언급된 장소·상황을 더 구체적으로 세분화하지 않습니다.
+  - 향, 색상, 가격대, 패키징 등 언급되지 않은 속성을 추가하지 않습니다.
+
+==================================================
+[파악 기준 — 사용자 발화에서 직접 추출]
+==================================================
+
+쿼리를 생성하기 전에 사용자 발화에서 다음을 찾아 그대로 메모하세요.
+
+1. 사용자가 원하는 결과 상태 (발화에 적힌 표현 그대로)
+2. 사용자가 직접 언급한 선호 속성·사용감·사용 방식 (발화에 적힌 표현 그대로)
+3. 사용자의 생활 패턴·사용 맥락 (발화에 적힌 표현 그대로)
+
+==================================================
+[출력 목표 — 4개 쿼리]
+==================================================
+
+1) need
+- product_function_desc 매칭용
+- 사용자가 이 상품을 통해 얻고 싶은 결과 / 바라는 상태
+- "무엇이 불편한가"보다 "그래서 어떤 상태를 원하나"에 초점을 둡니다.
+
+2) preference
+- product_attribute_desc 매칭용
+- 사용자 발화에 직접 적힌 선호 속성·사용감·사용 방식만 포함합니다.
+- need와 구분: need는 원하는 결과 상태, preference는 그 결과를 어떤 방식·속성으로 얻고 싶은지
+
+3) retrieval
+- 1차 검색 후보군 검색용
+- 상품의 핵심 기능 + 사용 맥락이 드러나는 짧고 응집된 검색 문구
+- 검색창에 입력할 법한 자연스러운 압축 표현으로 작성합니다.
+
+4) persona
+- product_target_user 매칭용
+- 이 상품이 필요한 "사람 유형" 자체를 설명합니다.
+- 사용자의 생활 패턴, 루틴, 사용 상황, 행동 특성을 중심으로 씁니다.
+- 반드시 사람 묘사로 끝나야 하며, 추천 문장처럼 쓰지 않습니다.
+
+==================================================
+[각 쿼리별 작성 규칙]
+==================================================
+
+[need 작성 규칙]
+- 자연스러운 문장형으로 작성합니다.
+- 불편을 해결했을 때 사용자가 원할 법한 상태를 자연스럽게 씁니다.
+- "문제 상황 설명"이 아니라 "원하는 결과 상태"가 중심이어야 합니다.
+
+[preference 작성 규칙]
+- 자연스러운 문장형으로 작성합니다.
+- 사용자 발화에 적힌 선호 표현만 사용합니다. 발화에 없으면 쓰지 않습니다.
+- need와 같은 의미를 반복하지 않습니다.
+포함 가능: 발화에 직접 나온 사용감·질감·제형 표현, 사용 방식, 선호 포인트
+포함 불가: 성분명, 기피 성분·제형, 향·색상·패키징, 발화에서 추론한 모든 것
+
+[retrieval 작성 규칙]
+- 검색용 핵심 표현만 담아 짧고 간단명료하게 작성합니다.
+- 나열형 키워드 덩어리가 아닌, 짧지만 자연스럽고 응집된 검색 문구 형태로 씁니다.
+- 상품의 핵심 기능과 구매 맥락이 바로 드러나야 합니다.
+
+[persona 작성 규칙]
+- 자연스러운 문장형으로 작성합니다.
+- 이 상품이 필요한 "사람 유형" 자체를 설명합니다.
+- 사용자의 생활 패턴, 루틴, 사용 상황, 행동 특성을 중심으로 씁니다.
+- 상품 기능이나 속성을 직접 설명하지 않습니다.
+- "~에 적합하다", "~에게 추천한다" 같은 추천 문장으로 쓰지 않습니다.
+- 반드시 "사람/사용자 자체를 묘사하는 형태"로 끝나야 합니다.
+
+==================================================
+[공통 작성 규칙]
+==================================================
+
+1. need / preference / persona가 서로 겹치지 않도록 역할을 엄격히 구분합니다.
+2. 사용자 발화에 직접 나온 표현만 반영합니다.
+3. retrieval에 부자연스러운 키워드 나열을 넣으면 안 됩니다.
+4. [출력 전 필수 자가 점검] 각 쿼리를 완성한 뒤 아래를 수행합니다.
+   - 쿼리에 포함된 단어·표현 하나하나를 사용자 발화에서 찾습니다.
+   - 발화에서 찾을 수 없는 단어가 있으면 해당 표현을 제거합니다.
+   - 제거 후 문장이 자연스럽지 않으면 발화에 있는 표현으로 다시 씁니다.
+
+==================================================
+[최종 출력 형식]
+==================================================
+
+출력은 반드시 아래 JSON 형식만 반환하세요.
+설명, 해설, 마크다운, 코드블록 없이 JSON만 출력하세요.
+
+{
   "need": "",
   "preference": "",
   "retrieval": "",
   "persona": ""
-}}
-
-Persona:
-{persona_str}
-"""
+}"""
 
 
-async def generate_search_query(persona_info: Union[Dict[str, Any], str], model_name: str = None) -> Dict[str, str]:
+async def generate_search_query(user_input: str, model_name: str = None) -> Dict[str, str]:
     """
-    페르소나 정보를 기반으로 상품 검색 쿼리 생성.
+    원문 사용자 입력을 기반으로 상품 검색 쿼리 생성.
+
+    에이전트와 동일한 원칙: 구조화된 데이터가 아닌 원문 텍스트를 사용.
+    발화에 없는 내용은 추가하지 않습니다.
 
     Args:
-        persona_info: 구조화된 페르소나 정보 딕셔너리 또는 문자열
+        user_input: 페르소나 생성에 사용된 원본 사용자 입력 텍스트
         model_name: 사용할 LLM 모델명 (없으면 환경변수에서 읽음)
 
     Returns:
         {"need": ..., "preference": ..., "retrieval": ..., "persona": ...}
     """
-    llm = _get_llm(model_name)
-    persona_str = json.dumps(persona_info, ensure_ascii=False, indent=2) if isinstance(persona_info, dict) else persona_info
-    persona_name = persona_info.get("name") if isinstance(persona_info, dict) else None
-    logger.info("generate_search_query_started | persona_name=%s model=%s", persona_name, llm.model_name)
+    from langchain_core.messages import SystemMessage, HumanMessage
 
-    prompt = _SEARCH_QUERY_PROMPT_TEMPLATE.format(persona_str=persona_str)
-    response = await llm.ainvoke(prompt)
+    llm = _get_llm(model_name)
+    logger.info("generate_search_query_started | input_length=%d model=%s", len(user_input), llm.model_name)
+
+    messages = [
+        SystemMessage(content=_SEARCH_QUERY_SYSTEM_PROMPT),
+        HumanMessage(content=user_input),
+    ]
+    response = await llm.ainvoke(messages)
     search_query = json.loads(response.content)
     logger.info(
-        "generate_search_query_completed | persona_name=%s query_keys=%s",
-        persona_name,
+        "generate_search_query_completed | query_keys=%s",
         list(search_query.keys()),
     )
     return search_query

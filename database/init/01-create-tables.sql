@@ -12,23 +12,28 @@ CREATE TABLE IF NOT EXISTS personas (
     age INTEGER,
     occupation VARCHAR(100),
     skin_type TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skin_concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
+    concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
     personal_color VARCHAR(50),
     shade_number INTEGER,
     preferred_colors TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     avoided_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_scents TEXT[] DEFAULT ARRAY[]::TEXT[],
-    values TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skincare_routine VARCHAR(100),
-    main_environment VARCHAR(100),
+    lifestyle_values TEXT[] DEFAULT ARRAY[]::TEXT[],
+    skincare_routine TEXT[] DEFAULT ARRAY[]::TEXT[],
+    main_environment TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_texture TEXT[] DEFAULT ARRAY[]::TEXT[],
-    pets VARCHAR(50),
+    hair_type TEXT[] DEFAULT ARRAY[]::TEXT[],
+    beauty_interests TEXT[] DEFAULT ARRAY[]::TEXT[],
+    pets TEXT[] DEFAULT ARRAY[]::TEXT[],
     avg_sleep_hours INTEGER,
     stress_level VARCHAR(50),
-    digital_device_usage_time INTEGER,
-    shopping_style VARCHAR(100),
+    daily_screen_hours INTEGER,
+    shopping_style TEXT[] DEFAULT ARRAY[]::TEXT[],
     purchase_decision_factors TEXT[] DEFAULT ARRAY[]::TEXT[],
+    price_sensitivity VARCHAR(50),
+    preferred_brands TEXT[] DEFAULT ARRAY[]::TEXT[],
+    avoided_brands TEXT[] DEFAULT ARRAY[]::TEXT[],
     persona_summary TEXT,
     user_input TEXT,
     persona_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -81,22 +86,24 @@ CREATE INDEX idx_search_queries_persona_type ON search_queries (persona_id, quer
 -- ============================================================
 CREATE TABLE IF NOT EXISTS products (
     product_id VARCHAR(100) PRIMARY KEY,
-    vectordb_id VARCHAR(100),
+    vectordb_id JSONB,
     product_name VARCHAR(500) NOT NULL,
     brand VARCHAR(100),
-    product_tag VARCHAR(200),
+    category VARCHAR(200),
+    tag VARCHAR(200),
+    sub_tag VARCHAR(200),
     rating NUMERIC(3, 2),
     review_count INTEGER DEFAULT 0,
     original_price INTEGER,
     discount_rate INTEGER,
     sale_price INTEGER,
     skin_type TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skin_concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
+    concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_colors TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     avoided_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_scents TEXT[] DEFAULT ARRAY[]::TEXT[],
-    values TEXT[] DEFAULT ARRAY[]::TEXT[],
+    lifestyle_values TEXT[] DEFAULT ARRAY[]::TEXT[],
     exclusive_product VARCHAR(200),
     personal_color TEXT[] DEFAULT ARRAY[]::TEXT[],
     skin_shades INTEGER[] DEFAULT ARRAY[]::INTEGER[],
@@ -107,8 +114,10 @@ CREATE TABLE IF NOT EXISTS products (
     product_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_products_vectordb_id ON products(vectordb_id);
+CREATE INDEX idx_products_vectordb_id ON products USING GIN (vectordb_id);
 CREATE INDEX idx_products_brand ON products(brand);
+CREATE INDEX idx_products_sub_tag ON products(sub_tag);
+CREATE INDEX idx_products_category ON products(category);
 
 -- ============================================================
 -- 5. 대화 세션 테이블 (conversations)
@@ -138,7 +147,7 @@ CREATE TABLE IF NOT EXISTS generated_messages (
     product_id      VARCHAR(100) NOT NULL,
     product_name    VARCHAR(500),
     brand           VARCHAR(100),               -- 브랜드명
-    product_tag     VARCHAR(200),               -- 상품 카테고리/태그 (예: 에센스&세럼&오일)
+    sub_tag         VARCHAR(200),               -- 상품 소분류 태그 (예: 전동마사지기)
 
     -- 메시지 생성 컨텍스트
     purpose         VARCHAR(200),               -- 발송 목적 (예: "베스트셀러 제품 소개")

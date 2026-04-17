@@ -164,11 +164,11 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
             skin_types = []
         skin_type_sql = array_to_sql(skin_types)
 
-        # skin_concerns (고민키워드)
+        # concerns (고민키워드)
         concerns = persona_tags.get('고민키워드', [])
         if not isinstance(concerns, list):
             concerns = []
-        skin_concerns_sql = array_to_sql(concerns)
+        concerns_sql = array_to_sql(concerns)
 
         # preferred_colors (선호포인트색상)
         colors = persona_tags.get('선호포인트색상', [])
@@ -194,7 +194,7 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
             scents = []
         preferred_scents_sql = array_to_sql(scents)
 
-        # values (가치관)
+        # lifestyle_values (가치관)
         values_list = persona_tags.get('가치관', [])
         if not isinstance(values_list, list):
             values_list = []
@@ -246,7 +246,7 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
     {discount_rate},
     {sale_price},
     {skin_type_sql},
-    {skin_concerns_sql},
+    {concerns_sql},
     {preferred_colors_sql},
     {preferred_ingredients_sql},
     {avoided_ingredients_sql},
@@ -267,9 +267,9 @@ def generate_product_sql(products_data: List[Dict[str, Any]], batch_size: int = 
 INSERT INTO products (
     product_id, vectordb_id, product_name, brand, product_tag,
     rating, review_count, original_price, discount_rate, sale_price,
-    skin_type, skin_concerns, preferred_colors,
+    skin_type, concerns, preferred_colors,
     preferred_ingredients, avoided_ingredients, preferred_scents,
-    values, exclusive_product, personal_color, skin_shades,
+    lifestyle_values, exclusive_product, personal_color, skin_shades,
     product_image_url, product_page_url, product_comment
 )
 VALUES

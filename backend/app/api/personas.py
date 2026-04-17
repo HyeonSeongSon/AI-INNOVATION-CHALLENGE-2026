@@ -41,23 +41,28 @@ class PersonaCreate(BaseModel):
     age: Optional[int] = Field(None, description="나이", examples=[28])
     occupation: Optional[str] = Field(None, description="직업", examples=["마케터"])
     skin_type: Optional[List[str]] = Field(default=[], description="피부 타입", examples=[["지성", "복합성"]])
-    skin_concerns: Optional[List[str]] = Field(default=[], description="피부 고민", examples=[["모공", "칙칙함"]])
+    concerns: Optional[List[str]] = Field(default=[], description="고민 (피부·헤어 등 통합)", examples=[["모공", "칙칙함"]])
     personal_color: Optional[str] = Field(None, description="퍼스널 컬러", examples=["웜톤"])
     shade_number: Optional[int] = Field(None, description="셰이드 번호", examples=[21])
     preferred_colors: Optional[List[str]] = Field(default=[], description="선호 색상", examples=[["코랄", "핑크"]])
     preferred_ingredients: Optional[List[str]] = Field(default=[], description="선호 성분", examples=[["히알루론산", "나이아신아마이드"]])
     avoided_ingredients: Optional[List[str]] = Field(default=[], description="기피 성분", examples=[["알코올", "파라벤"]])
     preferred_scents: Optional[List[str]] = Field(default=[], description="선호 향", examples=["플로럴"])
-    values: Optional[List[str]] = Field(default=[], description="가치관", examples=[["비건", "친환경"]])
-    skincare_routine: Optional[str] = Field(None, description="스킨케어 루틴", examples=["간단한 루틴"])
-    main_environment: Optional[str] = Field(None, description="주 활동 환경", examples=["실내"])
+    lifestyle_values: Optional[List[str]] = Field(default=[], description="가치관/라이프스타일", examples=[["비건", "친환경"]])
+    skincare_routine: Optional[List[str]] = Field(default=[], description="스킨케어 루틴", examples=[["간단한 루틴"]])
+    main_environment: Optional[List[str]] = Field(default=[], description="주 활동 환경", examples=[["실내"]])
     preferred_texture: Optional[List[str]] = Field(default=[], description="선호 제형", examples=[["에센스", "세럼"]])
-    pets: Optional[str] = Field(None, description="반려동물 유무", examples=["없음"])
+    hair_type: Optional[List[str]] = Field(default=[], description="헤어 타입", examples=[["직모"]])
+    beauty_interests: Optional[List[str]] = Field(default=[], description="관심 뷰티 카테고리", examples=[["스킨케어"]])
+    pets: Optional[List[str]] = Field(default=[], description="반려동물", examples=[["고양이"]])
     avg_sleep_hours: Optional[int] = Field(None, description="평균 수면 시간", examples=[6])
     stress_level: Optional[str] = Field(None, description="스트레스 수준", examples=["높음"])
-    digital_device_usage_time: Optional[int] = Field(None, description="디지털 기기 사용 시간", examples=[8])
-    shopping_style: Optional[str] = Field(None, description="쇼핑 스타일", examples=["신중형"])
+    daily_screen_hours: Optional[int] = Field(None, description="하루 스크린 사용 시간", examples=[8])
+    shopping_style: Optional[List[str]] = Field(default=[], description="쇼핑 스타일", examples=[["신중형"]])
     purchase_decision_factors: Optional[List[str]] = Field(default=[], description="구매 결정 요인", examples=[["리뷰", "성분"]])
+    price_sensitivity: Optional[str] = Field(None, description="가격 민감도", examples=["가성비중시"])
+    preferred_brands: Optional[List[str]] = Field(default=[], description="선호 브랜드", examples=[])
+    avoided_brands: Optional[List[str]] = Field(default=[], description="기피 브랜드", examples=[])
     persona_summary: Optional[str] = Field(None, description="AI 생성 페르소나 요약")
 
 
@@ -86,12 +91,12 @@ class ProductCreate(BaseModel):
     discount_rate: Optional[int] = Field(None, description="할인율", examples=[20])
     sale_price: Optional[int] = Field(None, description="판매가", examples=[40000])
     skin_type: Optional[List[str]] = Field(default=[], description="피부 타입")
-    skin_concerns: Optional[List[str]] = Field(default=[], description="피부 고민")
+    concerns: Optional[List[str]] = Field(default=[], description="고민")
     preferred_colors: Optional[List[str]] = Field(default=[], description="선호 색상")
     preferred_ingredients: Optional[List[str]] = Field(default=[], description="선호 성분")
     avoided_ingredients: Optional[List[str]] = Field(default=[], description="기피 성분")
     preferred_scents: Optional[List[str]] = Field(default=[], description="선호 향")
-    values: Optional[List[str]] = Field(default=[], description="가치관")
+    lifestyle_values: Optional[List[str]] = Field(default=[], description="가치관/라이프스타일")
     exclusive_product: Optional[str] = Field(None, description="전용 제품")
     personal_color: Optional[List[str]] = Field(default=[], description="퍼스널 컬러")
     skin_shades: Optional[List[int]] = Field(default=[], description="피부톤 번호")
@@ -119,12 +124,12 @@ class ProductFilterRequest(BaseModel):
 
     # 페르소나 정보 필터
     skin_type: Optional[List[str]] = Field(None, description="피부 타입 (OR 조건)")
-    skin_concerns: Optional[List[str]] = Field(None, description="피부 고민 (OR 조건)")
+    concerns: Optional[List[str]] = Field(None, description="고민 (OR 조건)")
     preferred_colors: Optional[List[str]] = Field(None, description="선호 색상 (OR 조건)")
     preferred_ingredients: Optional[List[str]] = Field(None, description="선호 성분 (OR 조건)")
     avoided_ingredients: Optional[List[str]] = Field(None, description="기피 성분 (제외 조건)")
     preferred_scents: Optional[List[str]] = Field(None, description="선호 향 (OR 조건)")
-    values: Optional[List[str]] = Field(None, description="가치관 (OR 조건)")
+    lifestyle_values: Optional[List[str]] = Field(None, description="가치관 (OR 조건)")
     personal_color: Optional[str] = Field(None, description="퍼스널 컬러")
     shade_number: Optional[int] = Field(None, description="셰이드 번호")
 
@@ -148,23 +153,28 @@ class PersonaDetailResponse(BaseModel):
     age: Optional[int] = None
     occupation: Optional[str] = None
     skin_type: Optional[List[str]] = None
-    skin_concerns: Optional[List[str]] = None
+    concerns: Optional[List[str]] = None
     personal_color: Optional[str] = None
     shade_number: Optional[int] = None
     preferred_colors: Optional[List[str]] = None
     preferred_ingredients: Optional[List[str]] = None
     avoided_ingredients: Optional[List[str]] = None
     preferred_scents: Optional[List[str]] = None
-    values: Optional[List[str]] = None
-    skincare_routine: Optional[str] = None
-    main_environment: Optional[str] = None
+    lifestyle_values: Optional[List[str]] = None
+    skincare_routine: Optional[List[str]] = None
+    main_environment: Optional[List[str]] = None
     preferred_texture: Optional[List[str]] = None
-    pets: Optional[str] = None
+    hair_type: Optional[List[str]] = None
+    beauty_interests: Optional[List[str]] = None
+    pets: Optional[List[str]] = None
     avg_sleep_hours: Optional[int] = None
     stress_level: Optional[str] = None
-    digital_device_usage_time: Optional[int] = None
-    shopping_style: Optional[str] = None
+    daily_screen_hours: Optional[int] = None
+    shopping_style: Optional[List[str]] = None
     purchase_decision_factors: Optional[List[str]] = None
+    price_sensitivity: Optional[str] = None
+    preferred_brands: Optional[List[str]] = None
+    avoided_brands: Optional[List[str]] = None
     persona_created_at: Optional[datetime] = None
     ai_analysis: Optional[dict] = None
 
@@ -225,12 +235,12 @@ class ProductDetailResponse(BaseModel):
     discount_rate: Optional[int] = None
     sale_price: Optional[int] = None
     skin_type: Optional[List[str]] = None
-    skin_concerns: Optional[List[str]] = None
+    concerns: Optional[List[str]] = None
     preferred_colors: Optional[List[str]] = None
     preferred_ingredients: Optional[List[str]] = None
     avoided_ingredients: Optional[List[str]] = None
     preferred_scents: Optional[List[str]] = None
-    values: Optional[List[str]] = None
+    lifestyle_values: Optional[List[str]] = None
     exclusive_product: Optional[str] = None
     personal_color: Optional[List[str]] = None
     skin_shades: Optional[List[int]] = None
@@ -311,23 +321,28 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
         age=persona.age,
         occupation=persona.occupation,
         skin_type=persona.skin_type,
-        skin_concerns=persona.skin_concerns,
+        concerns=persona.concerns,
         personal_color=persona.personal_color,
         shade_number=persona.shade_number,
         preferred_colors=persona.preferred_colors,
         preferred_ingredients=persona.preferred_ingredients,
         avoided_ingredients=persona.avoided_ingredients,
         preferred_scents=persona.preferred_scents,
-        values=persona.values,
+        lifestyle_values=persona.lifestyle_values,
         skincare_routine=persona.skincare_routine,
         main_environment=persona.main_environment,
         preferred_texture=persona.preferred_texture,
+        hair_type=persona.hair_type,
+        beauty_interests=persona.beauty_interests,
         pets=persona.pets,
         avg_sleep_hours=persona.avg_sleep_hours,
         stress_level=persona.stress_level,
-        digital_device_usage_time=persona.digital_device_usage_time,
+        daily_screen_hours=persona.daily_screen_hours,
         shopping_style=persona.shopping_style,
         purchase_decision_factors=persona.purchase_decision_factors,
+        price_sensitivity=persona.price_sensitivity,
+        preferred_brands=persona.preferred_brands,
+        avoided_brands=persona.avoided_brands,
         persona_created_at=persona.persona_created_at,
         ai_analysis=_build_ai_analysis(persona.persona_summary),
     )
@@ -355,23 +370,28 @@ async def list_personas(db: Session = Depends(get_db)):
             age=p.age,
             occupation=p.occupation,
             skin_type=p.skin_type,
-            skin_concerns=p.skin_concerns,
+            concerns=p.concerns,
             personal_color=p.personal_color,
             shade_number=p.shade_number,
             preferred_colors=p.preferred_colors,
             preferred_ingredients=p.preferred_ingredients,
             avoided_ingredients=p.avoided_ingredients,
             preferred_scents=p.preferred_scents,
-            values=p.values,
+            lifestyle_values=p.lifestyle_values,
             skincare_routine=p.skincare_routine,
             main_environment=p.main_environment,
             preferred_texture=p.preferred_texture,
+            hair_type=p.hair_type,
+            beauty_interests=p.beauty_interests,
             pets=p.pets,
             avg_sleep_hours=p.avg_sleep_hours,
             stress_level=p.stress_level,
-            digital_device_usage_time=p.digital_device_usage_time,
+            daily_screen_hours=p.daily_screen_hours,
             shopping_style=p.shopping_style,
             purchase_decision_factors=p.purchase_decision_factors,
+            price_sensitivity=p.price_sensitivity,
+            preferred_brands=p.preferred_brands,
+            avoided_brands=p.avoided_brands,
             persona_created_at=p.persona_created_at,
             ai_analysis=_build_ai_analysis(p.persona_summary),
         )
@@ -646,12 +666,12 @@ def _to_product_detail(p) -> ProductDetailResponse:
         discount_rate=p.discount_rate,
         sale_price=p.sale_price,
         skin_type=p.skin_type,
-        skin_concerns=p.skin_concerns,
+        concerns=p.concerns,
         preferred_colors=p.preferred_colors,
         preferred_ingredients=p.preferred_ingredients,
         avoided_ingredients=p.avoided_ingredients,
         preferred_scents=p.preferred_scents,
-        values=p.values,
+        lifestyle_values=p.lifestyle_values,
         exclusive_product=p.exclusive_product,
         personal_color=p.personal_color,
         skin_shades=p.skin_shades,
@@ -706,7 +726,7 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
     - product_categories: 상품 카테고리 리스트 (OR 조건)
     - exclusive_target: 전용 제품 (완전 일치)
     - skin_type: 피부 타입 (OR 조건 - 배열 겹침)
-    - skin_concerns: 피부 고민 (OR 조건 - 배열 겹침)
+    - concerns: 고민 (OR 조건 - 배열 겹침)
     - preferred_colors: 선호 색상 (OR 조건 - 배열 겹침)
     - preferred_ingredients: 선호 성분 (OR 조건 - 배열 겹침)
     - avoided_ingredients: 기피 성분 (제외 조건 - 배열 겹침 없음)
@@ -750,9 +770,9 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
     if request.skin_type:
         persona_conditions.append(Product.skin_type.op('&&')(cast(request.skin_type, ARRAY(Text))))
 
-    # 5. 피부 고민 필터
-    if request.skin_concerns:
-        persona_conditions.append(Product.skin_concerns.op('&&')(cast(request.skin_concerns, ARRAY(Text))))
+    # 5. 고민 필터
+    if request.concerns:
+        persona_conditions.append(Product.concerns.op('&&')(cast(request.concerns, ARRAY(Text))))
 
     # 6. 선호 색상 필터
     if request.preferred_colors:
@@ -767,8 +787,8 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
         persona_conditions.append(Product.preferred_scents.op('&&')(cast(request.preferred_scents, ARRAY(Text))))
 
     # 9. 가치관 필터
-    if request.values:
-        persona_conditions.append(Product.values.op('&&')(cast(request.values, ARRAY(Text))))
+    if request.lifestyle_values:
+        persona_conditions.append(Product.lifestyle_values.op('&&')(cast(request.lifestyle_values, ARRAY(Text))))
 
     # 10. 퍼스널 컬러 필터
     if request.personal_color:
