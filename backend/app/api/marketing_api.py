@@ -108,6 +108,7 @@ class ChatRequest(BaseModel):
     session_id: str
     conversation_id: Optional[str] = None  # None이면 신규 대화 레코드 생성
     model: Optional[str] = None
+    file_records: Optional[List[Dict[str, Any]]] = None  # 파일 업로드 시 파싱된 레코드 배열
 
     class Config:
         schema_extra = {
@@ -167,6 +168,7 @@ class MarketingResponse(BaseModel):
 # ============================================================
 # 엔드포인트
 # ============================================================
+
 
 @router.post("/chat", response_model=MarketingResponse)
 async def chat(
@@ -329,6 +331,7 @@ async def chat_v2(
             user_id=user_id,
             conversation_id=conv_id,
             model=request.model,
+            file_records=request.file_records,
         )
 
         result["conversation_id"] = conv_id

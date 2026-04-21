@@ -91,6 +91,7 @@ class MarketingAgent:
         user_id: str,
         conversation_id: str,
         model: Optional[str] = None,
+        file_records: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         대화 처리
@@ -98,6 +99,7 @@ class MarketingAgent:
         - thread_id = conversation_id 고정 (LangGraph checkpointer가 messages 보존)
         - init_node가 매 요청마다 task-scope 필드(generated_tasks 등)를 리셋
         - 현재 사용자 메시지만 initial_state에 포함 (이력은 checkpoint에서 자동 복원)
+        - file_records 제공 시 orchestrator가 bulk_persona_node로 fast-path 라우팅
 
         Returns:
             {
@@ -114,7 +116,11 @@ class MarketingAgent:
         config = self._build_config(thread_id, session_id, user_id, model)
 
         # 현재 메시지만 전달 — 이전 이력은 LangGraph checkpoint에서 자동 복원
-        initial_state: MarketingAssistantState = {"messages": [HumanMessage(content=user_input)]}
+        # file_records가 있으면 state에 포함 → orchestrator가 bulk_persona_node로 라우팅
+        initial_state: MarketingAssistantState = {
+            "messages": [HumanMessage(content=user_input)],
+            **({"file_records": file_records} if file_records else {}),
+        }
 
         try:
             result = await self.workflow.ainvoke(initial_state, config)

@@ -3,9 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import styled, { css } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import {
   Send, Settings, Sparkles, Wand2, ShoppingBag,
-  Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink, ChevronDown
+  Tag, Bot, Trash2, X, RefreshCw, Copy, Check, Image as ImageIcon, ExternalLink, ChevronDown,
+  Paperclip, Plus
 } from 'lucide-react';
 
 // API 및 Context
@@ -79,17 +82,17 @@ const TagContainer = styled.div` display: flex; flex-wrap: wrap; gap: 6px; margi
 const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-weight: 600; `;
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
 const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; `;
-const InputRow = styled.div` display: flex; gap: 12px; align-items: flex-end; `;
+const InputRow = styled.div` display: flex; gap: 8px; align-items: center; `;
 const ChatInput = styled.textarea`
   flex: 1;
-  padding: 12px 20px;
+  padding: 10px 18px;
   border: 1px solid #ddd;
   border-radius: 22px;
   font-size: 14px;
   outline: none;
   resize: none;
   overflow-y: auto;
-  min-height: 44px;
+  min-height: 36px;
   max-height: 200px;
   line-height: 1.6;
   font-family: inherit;
@@ -98,7 +101,7 @@ const ChatInput = styled.textarea`
   &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
 `;
-const SendBtn = styled.button` width: 44px; height: 44px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } &:disabled { background: #ccc; cursor: not-allowed; } `;
+const SendBtn = styled.button` width: 36px; height: 36px; border-radius: 50%; background: #6B4DFF; color: white; border: none; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; &:hover { background: #5a3de0; } &:disabled { background: #ccc; cursor: not-allowed; } `;
 const SelectedProductChip = styled.div`
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 10px 6px 12px; background: rgba(107, 77, 255, 0.08);
@@ -106,6 +109,27 @@ const SelectedProductChip = styled.div`
   font-size: 13px; color: #6B4DFF; font-weight: 600; align-self: flex-start;
   span { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button { background: none; border: none; cursor: pointer; color: #6B4DFF; display: flex; align-items: center; padding: 0; opacity: 0.6; &:hover { opacity: 1; } }
+`;
+
+const AttachBtn = styled.button`
+  width: 36px; height: 36px; min-width: 36px; min-height: 36px;
+  border-radius: 50%; background: #f4f4f4;
+  border: 1.5px solid #ddd; color: #444; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  font-size: 20px; font-weight: 400; line-height: 36px; padding: 0; box-sizing: border-box;
+  &:hover { background: #ebebeb; border-color: #bbb; color: #111; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+`;
+
+const FileChip = styled.div`
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 12px; background: rgba(107,77,255,0.08);
+  border: 1px solid rgba(107,77,255,0.3); border-radius: 20px;
+  font-size: 13px; color: #6B4DFF; font-weight: 600; align-self: flex-start;
+  span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { background: none; border: none; cursor: pointer; color: #6B4DFF;
+           display: flex; align-items: center; padding: 0; opacity: 0.6;
+           &:hover { opacity: 1; } }
 `;
 
 const CopyBtn = styled.button`
@@ -226,6 +250,57 @@ export default function Message() {
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   };
 
+  const parseFile = (file) => new Promise((resolve, reject) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'csv') {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (r) => resolve(r.data),
+        error: (e) => reject(new Error(`CSV 파싱 실패: ${e.message}`)),
+      });
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
+        } catch (err) { reject(new Error(`Excel 파싱 실패: ${err.message}`)); }
+      };
+      reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+      reader.readAsArrayBuffer(file);
+    } else if (ext === 'jsonl') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target.result
+            .split('\n').map((l) => l.trim()).filter(Boolean)
+            .map((line, i) => {
+              try { return JSON.parse(line); }
+              catch { throw new Error(`${i + 1}번째 줄 파싱 실패`); }
+            });
+          resolve(data);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      reject(new Error('CSV, XLSX, JSONL 파일만 지원합니다.'));
+    }
+  });
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // 동일 파일 재선택 허용
+    try {
+      const records = await parseFile(file);
+      if (records.length === 0) { alert('파일에 데이터가 없습니다.'); return; }
+      if (records.length > 50) { alert(`최대 50개까지 업로드 가능합니다. 현재: ${records.length}개`); return; }
+      setUploadedFile({ name: file.name, records });
+    } catch (err) { alert(err.message); }
+  };
+
   const [personas, setPersonas] = useState([]);
   const [config, setConfig] = useState({
     personaId: '', purpose: '신제품 홍보', category: '립스틱', brand: '이니스프리'
@@ -243,6 +318,10 @@ export default function Message() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState(null);
+
+  // 파일 업로드 상태
+  const [uploadedFile, setUploadedFile] = useState(null); // { name: string, records: [] }
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -312,17 +391,20 @@ export default function Message() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendChat = async () => {
+    if (uploadedFile) return handleSendBulkUpload();
     const text = chatInput.trim();
     if (!text || isChatLoading || isConvLoading) return;
 
     setChatInput('');
-    if (chatInputRef.current) chatInputRef.current.style.height = '44px';
+    if (chatInputRef.current) chatInputRef.current.style.height = '36px';
 
-    const userMsg = { id: Date.now(), role: 'user', text };
-    setMessages(prev => [...prev, userMsg]);
+    const userMsg    = { id: Date.now(),     role: 'user', text };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+    setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
 
-    const messagesWithUser = [...messagesRef.current, userMsg];
+    const messagesWithUser  = [...messagesRef.current, userMsg];              // DB 저장용 (로딩 없음)
+    const messagesWithLoading = [...messagesWithUser, loadingMsg];            // Context용 (로딩 포함)
     const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
     let targetConvId = convId;
 
@@ -338,12 +420,12 @@ export default function Message() {
         await loadConversations();
 
         // navigate 전에 Context 등록 → 새 컴포넌트가 마운트 즉시 상태를 찾을 수 있음
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
         navigate(`/message/${targetConvId}`, { replace: true });
         // 이후 코드는 구 컴포넌트 인스턴스에서 계속 실행 (targetConvId 클로저로 유지됨)
       } else {
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
       }
 
@@ -384,7 +466,7 @@ export default function Message() {
       }
 
       const aiMsg = {
-        id: Date.now() + 1, role: 'ai', text: aiText, isGenerated,
+        id: Date.now() + 2, role: 'ai', text: aiText, isGenerated,
         products: mappedProducts.length > 0 ? mappedProducts : undefined
       };
       const finalMessages = [...messagesWithUser, aiMsg];
@@ -398,22 +480,84 @@ export default function Message() {
     } catch (error) {
       console.error("채팅 전송 실패:", error);
       const errMsg = error.response?.data?.detail || error.message;
+      const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `오류가 발생했습니다: ${errMsg}` };
       if (targetConvId) {
-        const errMessages = [...messagesWithUser, {
-          id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}`
-        }];
+        const errMessages = [...messagesWithUser, errAiMsg];
         await saveMessages(targetConvId, errMessages).catch(() => {});
         setPendingConv(targetConvId, errMessages, false);
       } else {
-        // 대화 생성 전 실패 — Context 없음, 로컬 상태만 에러 표시
-        setMessages(prev => [...prev, {
-          id: Date.now(), role: 'ai', text: `오류가 발생했습니다: ${errMsg}`
-        }]);
+        // 대화 생성 전 실패 — 로딩 메시지 제거 후 에러 표시 (DB 저장 없음)
+        setMessages(prev => [...prev.filter(m => !m.isLoading), errAiMsg]);
         setIsChatLoading(false);
       }
     }
   };
 
+
+  const handleSendBulkUpload = async () => {
+    if (!uploadedFile || isChatLoading || isConvLoading) return;
+    const { name: filename, records } = uploadedFile;
+    const typedText = chatInput.trim();
+    const fileLabel = `📎 ${filename} (${records.length}명)`;
+    const userMsgText = typedText ? `${typedText}\n\n${fileLabel}` : fileLabel;
+
+    setUploadedFile(null);
+    setChatInput('');
+    if (chatInputRef.current) chatInputRef.current.style.height = '36px';
+
+    const userMsg    = { id: Date.now(),     role: 'user', text: userMsgText };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+
+    setMessages(prev => [...prev, userMsg, loadingMsg]);
+    setIsChatLoading(true);
+
+    const messagesWithUser = [...messagesRef.current, userMsg, loadingMsg];
+    const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
+    let targetConvId = convId;
+
+    try {
+      if (!targetConvId) {
+        const created = await dbApi.post('/conversations', {
+          user_id: USER_ID, session_id: currentSessionId, title: userMsgText.slice(0, 40),
+        });
+        targetConvId = created.data.id;
+        await loadConversations();
+        setPendingConv(targetConvId, messagesWithUser, true);
+        await saveMessages(targetConvId, messagesWithUser);
+        navigate(`/message/${targetConvId}`, { replace: true });
+      } else {
+        setPendingConv(targetConvId, messagesWithUser, true);
+        await saveMessages(targetConvId, messagesWithUser);
+      }
+
+      const response = await api.post('/marketing/chat/v2', {
+        user_input: typedText || fileLabel,
+        session_id: currentSessionId,
+        conversation_id: targetConvId,
+        file_records: records,
+      }, { headers: { 'X-User-Id': USER_ID } });
+
+      const result = response.data;
+      const aiText = result.messages?.[0]?.content || result.messages?.[0]?.text || '처리가 완료되었습니다.';
+
+      const aiMsg = { id: Date.now() + 2, role: 'ai', text: aiText };
+      const finalMessages = [...messagesWithUser.filter(m => !m.isLoading), aiMsg];
+      await saveMessages(targetConvId, finalMessages);
+      setPendingConv(targetConvId, finalMessages, false);
+
+    } catch (error) {
+      const errMsg = error.response?.data?.detail || error.message;
+      const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `파일 처리 오류: ${errMsg}` };
+      const errMessages = [...messagesWithUser.filter(m => !m.isLoading), errAiMsg];
+      if (targetConvId) {
+        await saveMessages(targetConvId, errMessages).catch(() => {});
+        setPendingConv(targetConvId, errMessages, false);
+      } else {
+        setMessages(errMessages);
+        setIsChatLoading(false);
+      }
+    }
+  };
 
   return (
     <Container>
@@ -425,7 +569,12 @@ export default function Message() {
           {(messages || []).map((msg, idx) => (
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
-              {msg.text && (
+              {msg.isLoading ? (
+                <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
+                  <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  처리 중...
+                </div>
+              ) : msg.text && (
                 <div className="bubble">
                   {msg.role === 'ai' ? (
                     <MarkdownBody>
@@ -491,19 +640,47 @@ export default function Message() {
           ))}
         </ChatScroll>
         <InputArea>
+          {uploadedFile && (
+            <FileChip>
+              <Paperclip size={13} />
+              <span>{uploadedFile.name} ({uploadedFile.records.length}명)</span>
+              <button onClick={() => setUploadedFile(null)}><X size={14} /></button>
+            </FileChip>
+          )}
           <InputRow>
-            <ShoppingBag size={20} color="#bbb" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,.jsonl"
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
+            <AttachBtn
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isChatLoading || isConvLoading}
+              title="CSV / XLSX / JSONL 업로드"
+            >
+              +
+            </AttachBtn>
             <ChatInput
               ref={chatInputRef}
-              placeholder="메시지를 입력하세요"
+              placeholder={uploadedFile ? `메시지를 입력하거나 그냥 Enter로 파일만 업로드` : '메시지를 입력하세요'}
               value={chatInput}
               onChange={(e) => { setChatInput(e.target.value); autoResize(e.target); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  uploadedFile ? handleSendBulkUpload() : handleSendChat();
+                }
+              }}
               disabled={isChatLoading || isConvLoading}
               rows={1}
             />
-            <SendBtn onClick={handleSendChat} disabled={isChatLoading || isConvLoading || !chatInput.trim()}>
-              {isChatLoading ? <RefreshCw size={18} className="spin" /> : <Send size={18} />}
+            <SendBtn
+              onClick={uploadedFile ? handleSendBulkUpload : handleSendChat}
+              disabled={isChatLoading || isConvLoading || (!chatInput.trim() && !uploadedFile)}
+            >
+              {isChatLoading ? <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
             </SendBtn>
           </InputRow>
         </InputArea>

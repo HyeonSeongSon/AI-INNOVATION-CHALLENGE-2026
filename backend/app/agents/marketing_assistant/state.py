@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, Any, List
+from typing import Annotated, Dict, Any, List, Optional
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 from ..base.base_state import BaseState
@@ -30,3 +30,8 @@ class MarketingAssistantState(BaseState):
     # 피드백 재시도
     # -------------------------
     feedback_retry_count: int                   # 피드백 적용 재시도 횟수
+
+    # -------------------------
+    # 파일 업로드 (페르소나 일괄 생성)
+    # -------------------------
+    file_records: Optional[List[Dict[str, Any]]]  # 업로드된 파일의 레코드 목록 (처리 후 None으로 초기화)

@@ -8,6 +8,7 @@ from .nodes.crm_message_node import crm_message_node
 from .nodes.quality_check_node import quality_check_node
 from .nodes.message_feedback_node import message_feedback_node
 from .nodes.generate_persona_node import generate_persona_node
+from .nodes.bulk_persona_node import bulk_persona_node
 
 
 async def init_node(state: MarketingAssistantState, config: RunnableConfig) -> dict:
@@ -35,6 +36,7 @@ def build_workflow(checkpointer=None):
     workflow.add_node("quality_check_node", quality_check_node)
     workflow.add_node("message_feedback_node", message_feedback_node)
     workflow.add_node("generate_persona_node", generate_persona_node)
+    workflow.add_node("bulk_persona_node", bulk_persona_node)
 
     workflow.add_edge(START, "init_node")
     workflow.add_edge("init_node", "orchestrator")
