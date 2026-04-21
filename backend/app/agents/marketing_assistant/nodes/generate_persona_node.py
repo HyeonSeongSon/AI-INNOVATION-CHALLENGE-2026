@@ -1,3 +1,4 @@
+import asyncio
 from ..state import MarketingAssistantState
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
@@ -14,16 +15,14 @@ async def generate_persona_node(state: MarketingAssistantState, config: Runnable
     messages = state.get("messages")
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
 
-    # 페르소나 정보 구조화 (전체 대화 기반)
-    structured_persona = await generate_structured_persona_info(messages, llm)
+    # 페르소나 정보 구조화 + 검색 쿼리 생성
+    structured_persona, raw_queries = await asyncio.gather(
+        generate_structured_persona_info(messages, llm),
+        generate_search_query(messages, llm),
+    )
 
     # DB 저장
     persona_id = await _persona_client.save_persona(structured_persona)
-
-    # 검색 쿼리 생성 (구조화 데이터가 아닌 원문 대화 기반)
-    raw_queries = await generate_search_query(messages, llm)
-
-    # 검색 쿼리 DB 저장
     await _persona_client.save_product_search_query(persona_id, raw_queries)
 
     # state 형식으로 변환
