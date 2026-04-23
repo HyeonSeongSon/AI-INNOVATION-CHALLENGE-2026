@@ -349,7 +349,7 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
 async def list_personas(db: Session = Depends(get_db)):
     from core.models import Persona
 
-    personas = db.query(Persona).order_by(Persona.persona_created_at.asc()).all()
+    personas = db.query(Persona).order_by(Persona.persona_created_at.desc()).all()
 
     return [
         PersonaDetailResponse(
@@ -400,6 +400,24 @@ async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": f"Persona '{persona_id}' deleted successfully"}
+
+
+class PersonaBulkDeleteRequest(BaseModel):
+    """페르소나 일괄 삭제 요청"""
+    ids: List[str] = Field(..., description="삭제할 페르소나 ID 목록")
+
+
+@router.delete("/personas", summary="페르소나 일괄 삭제")
+async def delete_personas_bulk(request: PersonaBulkDeleteRequest, db: Session = Depends(get_db)):
+    from core.models import Persona
+
+    if not request.ids:
+        return {"deleted": 0}
+
+    deleted = db.query(Persona).filter(Persona.persona_id.in_(request.ids)).delete(synchronize_session=False)
+    db.commit()
+
+    return {"deleted": deleted}
 
 
 @router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")

@@ -3,10 +3,13 @@ Pipeline API Router
 프론트엔드 요청을 받아 LLM 분석 + DB 저장까지 처리
 """
 
+import asyncio
+import csv
+import io
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 from sqlalchemy import text as sa_text
@@ -335,3 +338,187 @@ async def create_persona_from_text(
         db.rollback()
         logger.error("create_persona_from_text_failed | error=%s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# 파일 업로드 → 페르소나 일괄 생성 (SSE 스트리밍) 엔드포인트
+# ============================================================
+
+from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
+
+
+def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
+    """CSV / JSONL / JSON 파일을 텍스트 레코드 목록으로 변환"""
+    name_lower = filename.lower()
+
+    if name_lower.endswith(".csv"):
+        text_io = io.StringIO(content.decode("utf-8-sig"))
+        reader = csv.DictReader(text_io)
+        texts = []
+        for row in reader:
+            texts.append(", ".join(f"{k}: {v}" for k, v in row.items() if v))
+        return texts
+
+    if name_lower.endswith(".jsonl"):
+        texts = []
+        for line in content.decode("utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                texts.append(json.dumps(obj, ensure_ascii=False))
+            except json.JSONDecodeError:
+                texts.append(line)
+        return texts
+
+    if name_lower.endswith(".json"):
+        data = json.loads(content.decode("utf-8"))
+        if isinstance(data, list):
+            return [json.dumps(item, ensure_ascii=False) for item in data]
+        return [json.dumps(data, ensure_ascii=False)]
+
+    raise ValueError(f"지원하지 않는 파일 형식입니다: {filename} (CSV, JSON, JSONL만 허용)")
+
+
+async def _process_one_text(index: int, text: str, model_name: Optional[str]) -> Dict[str, Any]:
+    """단일 텍스트 레코드로 페르소나 생성 — 세션을 직접 생성해 동시성 안전"""
+    db = SessionLocal()
+    try:
+        structured_persona = await generate_structured_persona_info(text, model_name)
+
+        preferred_texture = structured_persona.get("preferred_texture", [])
+        if isinstance(preferred_texture, str):
+            preferred_texture = [preferred_texture] if preferred_texture else []
+
+        purchase_decision_factors = structured_persona.get("purchase_decision_factors", [])
+        if isinstance(purchase_decision_factors, str):
+            purchase_decision_factors = [purchase_decision_factors] if purchase_decision_factors else []
+
+        persona = Persona(
+            name=structured_persona.get("name"),
+            gender=structured_persona.get("gender"),
+            age=structured_persona.get("age"),
+            occupation=structured_persona.get("occupation"),
+            skin_type=structured_persona.get("skin_type", []),
+            concerns=structured_persona.get("concerns", []),
+            personal_color=structured_persona.get("personal_color"),
+            shade_number=structured_persona.get("shade_number"),
+            preferred_colors=structured_persona.get("preferred_colors", []),
+            preferred_ingredients=structured_persona.get("preferred_ingredients", []),
+            avoided_ingredients=structured_persona.get("avoided_ingredients", []),
+            preferred_scents=structured_persona.get("preferred_scents", []),
+            lifestyle_values=structured_persona.get("lifestyle_values", []),
+            skincare_routine=structured_persona.get("skincare_routine", []),
+            main_environment=structured_persona.get("main_environment", []),
+            preferred_texture=preferred_texture,
+            hair_type=structured_persona.get("hair_type", []),
+            beauty_interests=structured_persona.get("beauty_interests", []),
+            pets=structured_persona.get("pets", []),
+            avg_sleep_hours=structured_persona.get("avg_sleep_hours"),
+            stress_level=structured_persona.get("stress_level"),
+            daily_screen_hours=structured_persona.get("daily_screen_hours"),
+            shopping_style=structured_persona.get("shopping_style", []),
+            purchase_decision_factors=purchase_decision_factors,
+            price_sensitivity=structured_persona.get("price_sensitivity"),
+            preferred_brands=structured_persona.get("preferred_brands", []),
+            avoided_brands=structured_persona.get("avoided_brands", []),
+            persona_summary=structured_persona.get("persona_summary"),
+        )
+        db.add(persona)
+        db.commit()
+        db.refresh(persona)
+
+        raw_queries = await generate_search_query(text, model_name)
+
+        upsert_sql = sa_text("""
+            INSERT INTO search_queries (persona_id, query_type, query_text)
+            VALUES (:persona_id, CAST(:query_type AS query_type_enum), :query_text)
+            ON CONFLICT (persona_id, query_type)
+            DO UPDATE SET query_text = EXCLUDED.query_text
+        """)
+        for query_type in ("need", "preference", "retrieval", "persona"):
+            db.execute(upsert_sql, {
+                "persona_id": persona.persona_id,
+                "query_type": query_type,
+                "query_text": raw_queries.get(query_type, ""),
+            })
+        db.commit()
+
+        return {"index": index, "success": True, "persona_id": persona.persona_id, "name": structured_persona.get("name")}
+
+    except Exception as e:
+        db.rollback()
+        logger.error("create_from_file_record_failed | index=%d error=%s", index, str(e))
+        return {"index": index, "success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+@router.post("/personas/create-from-file")
+async def create_personas_from_file(file: UploadFile = File(...)):
+    """
+    CSV / JSONL / JSON 파일 업로드로 페르소나 일괄 생성 (SSE 스트리밍)
+
+    진행 이벤트: {"type":"progress","current":N,"total":N,"name":"...","success":bool}
+    완료 이벤트: {"type":"done","total":N,"succeeded":N,"failed":N}
+    오류 이벤트: {"type":"error","detail":"..."}
+    """
+    content = await file.read()
+
+    try:
+        texts = _parse_file_to_texts(file.filename or "", content)
+    except ValueError as e:
+        async def error_stream():
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+        return FastAPIStreamingResponse(error_stream(), media_type="text/event-stream")
+
+    if not texts:
+        async def empty_stream():
+            yield f"data: {json.dumps({'type': 'error', 'detail': '파일에서 유효한 레코드를 찾을 수 없습니다.'}, ensure_ascii=False)}\n\n"
+        return FastAPIStreamingResponse(empty_stream(), media_type="text/event-stream")
+
+    total = len(texts)
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+        semaphore = asyncio.Semaphore(5)
+
+        async def process_and_enqueue(i: int, text: str):
+            async with semaphore:
+                result = await _process_one_text(i, text, None)
+            await queue.put(result)
+
+        tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
+
+        succeeded = 0
+        failed = 0
+        for _ in range(total):
+            result = await queue.get()
+            if result["success"]:
+                succeeded += 1
+            else:
+                failed += 1
+            event = {
+                "type": "progress",
+                "current": succeeded + failed,
+                "total": total,
+                "name": result.get("name"),
+                "success": result["success"],
+                "persona_id": result.get("persona_id"),
+                "error": result.get("error"),
+            }
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        logger.info(
+            "create_from_file_completed | filename=%s total=%d succeeded=%d failed=%d",
+            file.filename, total, succeeded, failed,
+        )
+        done = {"type": "done", "total": total, "succeeded": succeeded, "failed": failed}
+        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
+
+    return FastAPIStreamingResponse(generate(), media_type="text/event-stream")
+
+

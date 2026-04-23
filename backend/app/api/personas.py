@@ -356,11 +356,11 @@ async def list_personas(db: Session = Depends(get_db)):
     **테이블:** personas
 
     **반환:**
-    - 모든 페르소나의 상세 정보 (생성일 기준 오름차순)
+    - 모든 페르소나의 상세 정보
     """
     from app.core.models import Persona
 
-    personas = db.query(Persona).order_by(Persona.persona_created_at.asc()).all()
+    personas = db.query(Persona).order_by(Persona.persona_created_at.desc()).all()
 
     return [
         PersonaDetailResponse(
@@ -419,6 +419,7 @@ async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": f"Persona '{persona_id}' deleted successfully"}
+
 
 
 @router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")
