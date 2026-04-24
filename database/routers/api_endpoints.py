@@ -243,6 +243,14 @@ class ProductDetailResponse(BaseModel):
     product_created_at: Optional[datetime] = None
 
 
+class ProductListResponse(BaseModel):
+    items: List[ProductDetailResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 class ProductSearchQueryCreate(BaseModel):
     """페르소나 검색 쿼리 저장 요청"""
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
@@ -669,6 +677,53 @@ def _to_product_detail(p) -> ProductDetailResponse:
         product_comment=p.product_comment,
         product_details=p.product_details,
         product_created_at=p.product_created_at,
+    )
+
+
+@router.get("/products", response_model=ProductListResponse, summary="상품 목록 조회 (필터/페이지네이션)")
+async def list_products(
+    search: Optional[str] = None,
+    brand: Optional[str] = None,
+    category: Optional[str] = None,
+    sub_tag: Optional[str] = None,
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    min_discount: Optional[int] = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+):
+    from core.models import Product
+
+    query = db.query(Product)
+
+    if search:
+        query = query.filter(
+            Product.product_name.ilike(f"%{search}%") | Product.product_id.ilike(f"%{search}%")
+        )
+    if brand:
+        query = query.filter(Product.brand.ilike(f"%{brand}%"))
+    if category:
+        query = query.filter(Product.category.ilike(f"%{category}%"))
+    if sub_tag:
+        query = query.filter(Product.sub_tag.ilike(f"%{sub_tag}%"))
+    if min_price is not None:
+        query = query.filter(Product.sale_price >= min_price)
+    if max_price is not None:
+        query = query.filter(Product.sale_price <= max_price)
+    if min_discount is not None:
+        query = query.filter(Product.discount_rate >= min_discount)
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    products = query.order_by(Product.product_created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    return ProductListResponse(
+        items=[_to_product_detail(p) for p in products],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
     )
 
 

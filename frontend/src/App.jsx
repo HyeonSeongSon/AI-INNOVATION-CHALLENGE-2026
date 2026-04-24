@@ -7,6 +7,7 @@ import Persona from './pages/Persona';
 import Message from './pages/Message';
 import Settings from './pages/Settings';
 import GeneratedMessages from './pages/GeneratedMessages';
+import Products from './pages/Products';
 
 // ToastProvider 불러오기
 import { ToastProvider } from './components/Toast'; 
@@ -76,6 +77,7 @@ function App() {
                 <Route path="message" element={<Message key="new" />} />
                 <Route path="message/:convId" element={<MessageWithKey />} />
                 <Route path="generated-messages" element={<GeneratedMessages />} />
+                <Route path="products" element={<Products />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
 

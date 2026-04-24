@@ -143,13 +143,17 @@ const CheckTd = styled(Td)`
 
 const TruncatedTd = styled(Td)`
   max-width: 360px;
+`;
+
+const ClampedText = styled.div`
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   white-space: normal;
   line-height: 1.5;
   font-size: 12px;
+  color: #666;
 `;
 
 const Checkbox = styled.input.attrs({ type: 'checkbox' })`
@@ -228,21 +232,30 @@ const Pagination = styled.div`
 `;
 
 const PageBtn = styled.button`
-  width: 32px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   height: 32px;
-  border: 1px solid #D8D8D8;
+  padding: 0 12px;
+  border: 1.5px solid #D8D8D8;
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: #555;
-  transition: all 0.15s;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.18s;
+  white-space: nowrap;
 
-  &:hover:not(:disabled) { background: #F0EDFF; border-color: #6B4DFF; color: #6B4DFF; }
-  &:disabled { opacity: 0.35; cursor: not-allowed; }
-  svg { width: 15px; height: 15px; }
+  &:hover:not(:disabled) {
+    background: #F0EDFF;
+    border-color: #6B4DFF;
+    color: #6B4DFF;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(107, 77, 255, 0.15);
+  }
+  &:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+  svg { width: 14px; height: 14px; flex-shrink: 0; }
 `;
 
 const CurrentPage = styled.span`
@@ -605,8 +618,8 @@ export default function PersonaManager() {
                         ? p.skinConcerns.slice(0, 2).map(c => <ConcernBadge key={c}>{c}</ConcernBadge>)
                         : <span style={{ color: '#ccc' }}>-</span>}
                     </Td>
-                    <TruncatedTd style={{ color: '#666' }}>
-                      {p.aiAnalysis?.reasoning || '-'}
+                    <TruncatedTd>
+                      <ClampedText>{p.aiAnalysis?.reasoning || '-'}</ClampedText>
                     </TruncatedTd>
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDate(p.persona_created_at)}
@@ -626,12 +639,12 @@ export default function PersonaManager() {
               : ''}
           </span>
           <PageBtn onClick={() => { setPage(p => p - 1); setSelectedIds(new Set()); }} disabled={page <= 1}>
-            <ChevronLeft />
+            <ChevronLeft /> 이전
           </PageBtn>
           <CurrentPage>{page}</CurrentPage>
           <span style={{ color: '#AAA' }}>/ {totalPages}</span>
           <PageBtn onClick={() => { setPage(p => p + 1); setSelectedIds(new Set()); }} disabled={page >= totalPages}>
-            <ChevronRight />
+            다음 <ChevronRight />
           </PageBtn>
         </Pagination>
       </TableCard>

@@ -326,8 +326,9 @@ const Pagination = styled.div`
 `;
 
 const PageBtn = styled.button`
-  width: 32px;
   height: 32px;
+  padding: 0 12px;
+  gap: 4px;
   border: 1px solid #D8D8D8;
   border-radius: 8px;
   background: #fff;
@@ -335,6 +336,7 @@ const PageBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 13px;
   color: #555;
   transition: all 0.15s;
 
@@ -622,7 +624,7 @@ export default function GeneratedMessages() {
     <Container>
       <PageHeader>
         <FileText size={22} />
-        <h1>생성 메시지 조회</h1>
+        <h1>생성 메시지 관리</h1>
         <TotalBadge>총 {total.toLocaleString()}건</TotalBadge>
       </PageHeader>
 
@@ -763,12 +765,12 @@ export default function GeneratedMessages() {
             {total > 0 ? `${(page - 1) * LIMIT + 1}–${Math.min(page * LIMIT, total)} / ${total}` : ''}
           </span>
           <PageBtn onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
-            <ChevronLeft />
+            <ChevronLeft /> 이전
           </PageBtn>
           <CurrentPage>{page}</CurrentPage>
           <span style={{ color: '#AAA' }}>/ {totalPages}</span>
           <PageBtn onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>
-            <ChevronRight />
+            다음 <ChevronRight />
           </PageBtn>
         </Pagination>
       </TableCard>

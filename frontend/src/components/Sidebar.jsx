@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
-import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2 } from 'lucide-react';
+import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2, Package } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 
 /* --- 스타일 컴포넌트 --- */
@@ -226,10 +226,13 @@ export default function Sidebar() {
           <Home /> 홈
         </MenuItem>
         <MenuItem to="/persona" $active={location.pathname.startsWith('/persona')}>
-          <User /> 페르소나 조회
+          <User /> 페르소나 관리
         </MenuItem>
         <MenuItem to="/generated-messages" $active={location.pathname.startsWith('/generated-messages')}>
-          <FileText /> 메시지 조회
+          <FileText /> 메시지 관리
+        </MenuItem>
+        <MenuItem to="/products" $active={location.pathname.startsWith('/products')}>
+          <Package /> 상품 목록
         </MenuItem>
         <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
           <MessageSquare /> 마케팅 어시스턴트
