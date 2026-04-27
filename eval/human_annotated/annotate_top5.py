@@ -24,11 +24,12 @@ sys.stdout.reconfigure(encoding="utf-8")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-TOP5_FILE = os.path.join(BASE_DIR, "human_annotated_top5_results_v3.jsonl")
+TOP5_FILE = os.path.join(os.path.dirname(BASE_DIR),"human_annotated", "[f]human_annotated_top5_results.jsonl")
 PERSONA_FILE = os.path.join(
-    os.path.dirname(BASE_DIR), "human_annotated_eval_data_set.jsonl"
+    os.path.dirname(BASE_DIR), "human_annotated", "human_annotated_eval_data_set.jsonl"
 )
 OUTPUT_FILE = os.path.join(BASE_DIR, "annotated_results.jsonl")
+REFERENCE_FILE = os.path.join(BASE_DIR, "result", "annotated_results_1.jsonl")
 
 PRODUCT_FILES = [
     os.path.join(DATA_DIR, f)
@@ -88,6 +89,24 @@ def load_completed_keys():
             r = json.loads(line)
             completed.add((r["persona_id"], r["product_tag"], r["product_id"]))
     return completed
+
+
+def load_reference_ratings():
+    """annotated_results_1.jsonl에서 product_id → rating 딕셔너리 구성.
+    같은 product_id가 여러 번 나오면 먼저 나온 것을 사용."""
+    if not os.path.exists(REFERENCE_FILE):
+        return {}
+    ref = {}
+    with open(REFERENCE_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            r = json.loads(line)
+            pid = r["product_id"]
+            if pid not in ref:
+                ref[pid] = r["rating"]
+    return ref
 
 
 # ── 출력 헬퍼 ─────────────────────────────────────────────────────────────────
@@ -208,7 +227,10 @@ def main():
     persona_index = load_persona_index()
     top5_list = load_jsonl(TOP5_FILE)
     completed = load_completed_keys()
+    reference_ratings = load_reference_ratings()
 
+    if reference_ratings:
+        print(f"  → 참조 파일 {len(reference_ratings)}개 상품 로드 (공통 상품 자동 채움)")
     if completed:
         print(f"  → 이전 진행분 {len(completed)}개 항목 이어서 진행합니다.\n")
 
@@ -252,7 +274,6 @@ def main():
 
         print(f"\n{'='*70}")
         print(f"  페르소나 [{p_idx+1}/{total_personas}]")
-        print_persona(persona_id, product_tag, information)
 
         session_top3_ratings = list(saved_top3_ratings)  # 이미 저장된 것 포함
 
@@ -271,12 +292,24 @@ def main():
                 print(f"\n  ✓ Top3 모두 적합(2) → 이 페르소나 평가 완료 (4, 5위 스킵)\n")
                 break
 
+            # 참조 파일에 같은 product_id가 있으면 기존 rating 재사용
+            if product_id in reference_ratings:
+                rating = reference_ratings[product_id]
+                save_result(persona_id, product_tag, product_id, rank, rating, rrf_score)
+                print(f"  ↩  [{rank}/{len(top5)}] {product_id}  공통 상품 → 참조값 사용 (rating={rating})")
+                if rank <= 3:
+                    session_top3_ratings.append(rating)
+                if rank == 3 and len(session_top3_ratings) >= 3 and all(r == 2 for r in session_top3_ratings[:3]):
+                    print(f"\n  ✓ Top3 모두 적합(2) → 이 페르소나 평가 완료 (4, 5위 스킵)\n")
+                    break
+                continue
+
             product = product_index.get(product_id)
             if not product:
                 print(f"\n  ⚠  product_id {product_id} 데이터 없음 — 건너뜀")
                 continue
 
-            print_sep()
+            print_persona(persona_id, product_tag, information)
             print_product(rank, product, rrf_score)
 
             rating = ask_rating(persona_id, product_tag, rank, len(top5))

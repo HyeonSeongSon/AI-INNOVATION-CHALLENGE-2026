@@ -38,7 +38,15 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGSMITH_TRACING"] = "false"
 
 _EVAL_DIR   = Path(__file__).parent
-_DATA_PATH  = _ROOT / "data" / "product_data_251231.jsonl"
+_V3_DATA_PATHS = [
+    _ROOT / "data" / "v3_product_data_rewritten_beauty_tool.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_color_tone.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_fragrance_body.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_hair.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_inner_beauty.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_living_supplies.jsonl",
+    _ROOT / "data" / "v3_product_data_rewritten_skincare.jsonl",
+]
 
 DEFAULT_PERSONA_PATH = _EVAL_DIR / "human_annotated_eval_data_set.jsonl"
 DEFAULT_RESULT_PATH  = _EVAL_DIR / "human_annotated_top5_results.jsonl"
@@ -60,41 +68,47 @@ def load_jsonl(path: Path) -> list[dict]:
     return records
 
 
-def load_product_db(path: Path) -> dict[str, dict]:
-    """product_id → 상품 정보 딕셔너리"""
+def load_product_db(paths: list[Path]) -> dict[str, dict]:
+    """product_id → 상품 정보 딕셔너리 (v3 JSONL 파일들에서 로드)"""
     db: dict[str, dict] = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                p = json.loads(line)
-                pid = p.get("product_id")
-                if pid:
-                    db[pid] = p
+    for path in paths:
+        if not path.exists():
+            print(f"[WARN] 파일 없음, 건너뜀: {path.name}")
+            continue
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    p = json.loads(line)
+                    pid = p.get("product_id")
+                    if pid:
+                        db[pid] = p
     return db
 
 
 def format_product_summary(product: dict) -> str:
-    """LLM에 넘길 상품 요약 텍스트 생성"""
-    name   = product.get("상품명", "")
-    brand  = product.get("브랜드", "")
-    intro  = product.get("한줄소개", "")
-    ptag   = product.get("페르소나태그", {}) or {}
+    """LLM에 넘길 상품 요약 텍스트 생성 (product_details/structured 기반)"""
+    name  = product.get("상품명", "")
+    brand = product.get("브랜드", "")
+    det   = product.get("structured") or product.get("product_details") or {}
 
-    concerns   = ", ".join(ptag.get("고민키워드", []) or [])
-    ingr_pref  = ", ".join(ptag.get("선호성분",   []) or [])
-    ingr_avoid = ", ".join(ptag.get("기피성분",   []) or [])
-    skin       = ", ".join(ptag.get("피부타입",   []) or [])
-    scent      = ", ".join(ptag.get("선호향",     []) or [])
-    value      = ", ".join(ptag.get("가치관",     []) or [])
+    summary     = det.get("summary", "")
+    target_user = det.get("target_user", "")
+    concerns    = ", ".join(det.get("concern",       []) or [])
+    ingredients = ", ".join(det.get("ingredient",    []) or [])
+    skin        = ", ".join(det.get("suitable_for",  []) or [])
+    functions   = ", ".join(det.get("function",      []) or [])
+    texture     = ", ".join(det.get("texture",       []) or [])
+    value       = ", ".join(det.get("value",         []) or [])
 
-    lines = [f"  상품명: {brand} {name}", f"  소개: {intro}"]
-    if skin:       lines.append(f"  피부타입: {skin}")
-    if concerns:   lines.append(f"  대상고민: {concerns}")
-    if ingr_pref:  lines.append(f"  함유성분: {ingr_pref}")
-    if ingr_avoid: lines.append(f"  기피성분: {ingr_avoid}")
-    if scent:      lines.append(f"  향: {scent}")
-    if value:      lines.append(f"  가치관: {value}")
+    lines = [f"  상품명: {brand} {name}", f"  소개: {summary}"]
+    if skin:        lines.append(f"  적합피부: {skin}")
+    if concerns:    lines.append(f"  대상고민: {concerns}")
+    if ingredients: lines.append(f"  주요성분: {ingredients}")
+    if functions:   lines.append(f"  기능: {functions}")
+    if texture:     lines.append(f"  제형: {texture}")
+    if value:       lines.append(f"  가치: {value}")
+    if target_user: lines.append(f"  타겟: {target_user}")
     return "\n".join(lines)
 
 
@@ -316,7 +330,7 @@ async def main(
     print(f"추천 가중치 평가 (LLM-as-Judge)")
     print(f"  페르소나: {persona_path.name}")
     print(f"  추천결과: {result_path.name}")
-    print(f"  상품DB  : {_DATA_PATH.name}")
+    print(f"  상품DB  : v3 JSONL ({len(_V3_DATA_PATHS)}개 파일)")
     print(f"  출력    : {output_path.name}")
     print(f"  LLM     : {settings.chatgpt_model_name}")
     print(f"  동시실행: {concurrency}")
@@ -334,7 +348,7 @@ async def main(
 
     personas  = {r["persona_id"]: r for r in load_jsonl(persona_path)}
     results   = {r["persona_id"]: r for r in load_jsonl(result_path)}
-    product_db = load_product_db(_DATA_PATH)
+    product_db = load_product_db(_V3_DATA_PATHS)
     print(f"상품 DB 로드: {len(product_db)}개\n")
 
     # 페르소나 & 결과 매핑
