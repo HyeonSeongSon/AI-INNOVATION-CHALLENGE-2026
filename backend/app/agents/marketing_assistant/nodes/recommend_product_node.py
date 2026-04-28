@@ -62,7 +62,14 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     # 3차원 하이브리드 검색 + RRF로 최종 추천 상품 선정
-    recommended_products = await _recommender.recommend(search_queries, retrieval_product_ids)
+    # product_categories 첫 번째 값을 product_tag로 전달 → 카테고리별 가중치 적용
+    product_categories = parsed_data.get("product_categories") or []
+    product_tag = product_categories[0] if product_categories else None
+    recommended_products = await _recommender.recommend(
+        search_queries,
+        retrieval_product_ids,
+        product_tag=product_tag,
+    )
     recommended_products = [
         {k: v for k, v in p.items() if not k.endswith("_vector")}
         for p in recommended_products

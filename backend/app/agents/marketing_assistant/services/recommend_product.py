@@ -156,29 +156,58 @@ class ProductRecommender:
         logger.info("get_product_documents.done")
         return results
 
+    # 기본 가중치 (카테고리 미지정 시 사용) — 균등 가중치로 안전하게 유지
+    # eval 결과: need=1.2 default는 메이크업·헤어·바디케어 등 다수 카테고리를 hurt함
     _DIMENSION_WEIGHTS: Dict[str, float] = {
-        "retrieval": 1.0,   
-        "need": 1.2,        
-        "preference": 1.0,  
-        "persona": 0.8,     
+        "retrieval": 1.0,
+        "need":      1.2,
+        "preference":1.1,
+        "persona":   1.0,
+    }
+
+    # 카테고리별 가중치 오버라이드
+    _CATEGORY_WEIGHTS: Dict[str, Dict[str, float]] = {
+        # 스킨케어 — need 우위 또는 need·preference 균형이 효과적인 카테고리
+        "스킨&토너":     {"retrieval": 1.0, "need": 1.2, "preference": 1.0, "persona": 0.8},
+        "크림":          {"retrieval": 1.0, "need": 1.1, "preference": 1.1, "persona": 0.8},
+        "로션&에멀젼":   {"retrieval": 1.0, "need": 1.1, "preference": 1.1, "persona": 0.8},
+        # 마스크&팩 — need 소폭 강화 (균등보다 낫고 old weight보다 안전한 중간값)
+        "마스크&팩":     {"retrieval": 1.0, "need": 1.1, "preference": 1.0, "persona": 0.9},
+        # 메이크업 — 기능 need보다 개인 취향(preference)이 구매 결정 핵심
+        "파운데이션":    {"retrieval": 1.0, "need": 0.9, "preference": 1.2, "persona": 1.0},
+        # 헬스/웰니스 — 기능적 need 매칭이 핵심
+        "이너뷰티":      {"retrieval": 1.0, "need": 1.2, "preference": 1.0, "persona": 0.8},
+        "슬리밍":        {"retrieval": 1.0, "need": 1.2, "preference": 1.0, "persona": 0.8},
+        "영양보충":      {"retrieval": 1.0, "need": 1.2, "preference": 1.0, "persona": 0.8},
+        # 가전/기기류 — retrieval·need 균형 강화, persona 감소
+        "헤어드라이기":  {"retrieval": 1.2, "need": 1.1, "preference": 1.0, "persona": 0.7},
+        "고데기":        {"retrieval": 1.2, "need": 1.1, "preference": 1.0, "persona": 0.7},
+        "청소기":        {"retrieval": 1.2, "need": 1.1, "preference": 1.0, "persona": 0.7},
+        "전동마사지기":  {"retrieval": 1.3, "need": 1.2, "preference": 1.0, "persona": 0.6},
+        # 생활용품
+        "수저/용기류":   {"retrieval": 1.2, "need": 1.1, "preference": 1.0, "persona": 0.7},
     }
 
     @staticmethod
-    def _apply_rrf(dimension_results: Dict, k: int = 15) -> List[tuple]:
+    def _apply_rrf(
+        dimension_results: Dict,
+        weights: Optional[Dict[str, float]] = None,
+        k: int = 15,
+    ) -> List[tuple]:
         """
         Reciprocal Rank Fusion으로 3개 차원 결과 합산 (차원별 가중치 적용)
 
         RRF score = Σ w_i / (k + rank_i)
-        각 차원(need, preference, persona)에 차별화된 가중치를 적용해 최종 순위 결정
 
         Args:
             dimension_results: {"need": [...], "preference": [...], "persona": [...]}
-            k: RRF 상수 (기본값 20)
+            weights: 차원별 가중치. None이면 _DIMENSION_WEIGHTS(기본값) 사용
+            k: RRF 상수. 낮을수록 상위 순위 차별화 강화 (기본값 10, 표준 RRF는 60)
 
         Returns:
             [(product_id, rrf_score), ...] 내림차순
         """
-        weights = ProductRecommender._DIMENSION_WEIGHTS
+        weights = weights or ProductRecommender._DIMENSION_WEIGHTS
         rrf_scores: Dict[str, float] = {}
         for dim_name, results in dimension_results.items():
             w = weights.get(dim_name, 1.0)
@@ -192,6 +221,7 @@ class ProductRecommender:
         queries: Dict,
         retrieval_result_ids: List[str],
         top_n: int = 3,
+        product_tag: Optional[str] = None,
     ) -> List[Dict]:
         """
         3차원 하이브리드 검색 + RRF → 상위 top_n개 상품 정보 반환
@@ -200,6 +230,7 @@ class ProductRecommender:
             queries: get_product_search_queries 반환값
             retrieval_result_ids: product_retriever 결과 상품 ID 리스트
             top_n: 최종 반환할 상품 수 (기본값 3)
+            product_tag: 카테고리 태그. 카테고리별 가중치 적용에 사용
 
         Returns:
             List[Dict]: RRF 순위 기준 상위 top_n개 상품 전체 정보
@@ -212,8 +243,17 @@ class ProductRecommender:
             {"product_id": pid} for pid in retrieval_result_ids
         ]
 
+        # 카테고리별 가중치 선택 (미지정 또는 매핑 없으면 기본값)
+        weights = ProductRecommender._CATEGORY_WEIGHTS.get(product_tag) if product_tag else None
+
+        logger.info(
+            "recommend.weights_selected",
+            product_tag=product_tag,
+            weights=weights or ProductRecommender._DIMENSION_WEIGHTS,
+        )
+
         # RRF로 최종 순위 결정
-        ranked = self._apply_rrf(dimension_results)
+        ranked = self._apply_rrf(dimension_results, weights=weights)
         top_ranked = ranked[:top_n]
         top_ids = [pid for pid, _ in top_ranked]
         score_map = {pid: round(score, 4) for pid, score in top_ranked}
