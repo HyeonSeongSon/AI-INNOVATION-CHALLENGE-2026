@@ -7,25 +7,25 @@ import json
 import functools
 import pathlib
 
-from backend.app.agents.marketing_assistant.prompts.document_skin_care_prompts import (
+from ..prompts.document_skin_care_prompts import (
     build_skin_care_category_product_prompt,
 )
-from backend.app.agents.marketing_assistant.prompts.document_hair_prompt import (
+from ..prompts.document_hair_prompt import (
     build_hair_category_product_prompt,
 )
-from backend.app.agents.marketing_assistant.prompts.document_color_prompts import (
+from ..prompts.document_color_prompts import (
     build_color_tone_category_product_prompts,
 )
-from backend.app.agents.marketing_assistant.prompts.document_fragrance_and_body_prompt import (
+from ..prompts.document_fragrance_and_body_prompt import (
     build_fragrance_body_category_product_prompt,
 )
-from backend.app.agents.marketing_assistant.prompts.document_inner_beauty_prompt import (
+from ..prompts.document_inner_beauty_prompt import (
     build_inner_beauty_category_product_prompt,
 )
-from backend.app.agents.marketing_assistant.prompts.document_living_supplies_prompt import (
+from ..prompts.document_living_supplies_prompt import (
     build_daily_goods_product_prompt,
 )
-from backend.app.agents.marketing_assistant.prompts.document_beauty_tool_prompt import (
+from ..prompts.document_beauty_tool_prompt import (
     build_beauty_device_category_product_prompt,
 )
 

@@ -498,7 +498,7 @@ export default function Message() {
     if (!uploadedFile || isChatLoading || isConvLoading) return;
     const { name: filename, records } = uploadedFile;
     const typedText = chatInput.trim();
-    const fileLabel = `📎 ${filename} (${records.length}명)`;
+    const fileLabel = `📎 ${filename} (${records.length}건)`;
     const userMsgText = typedText ? `${typedText}\n\n${fileLabel}` : fileLabel;
 
     setUploadedFile(null);
@@ -643,7 +643,7 @@ export default function Message() {
           {uploadedFile && (
             <FileChip>
               <Paperclip size={13} />
-              <span>{uploadedFile.name} ({uploadedFile.records.length}명)</span>
+              <span>{uploadedFile.name} ({uploadedFile.records.length}건)</span>
               <button onClick={() => setUploadedFile(null)}><X size={14} /></button>
             </FileChip>
           )}
@@ -664,7 +664,7 @@ export default function Message() {
             </AttachBtn>
             <ChatInput
               ref={chatInputRef}
-              placeholder={uploadedFile ? `메시지를 입력하거나 그냥 Enter로 파일만 업로드` : '메시지를 입력하세요'}
+              placeholder={uploadedFile ? `해당 파일로 무슨 작업을 할지 입력해 주세요 (예: 상품 등록, 페르소나 생성)` : '메시지를 입력하세요'}
               value={chatInput}
               onChange={(e) => { setChatInput(e.target.value); autoResize(e.target); }}
               onKeyDown={(e) => {

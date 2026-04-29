@@ -32,12 +32,11 @@ class MarketingAssistantState(BaseState):
     feedback_retry_count: int                   # 피드백 적용 재시도 횟수
 
     # -------------------------
-    # 파일 업로드 (페르소나 일괄 생성)
+    # 파일 업로드 (페르소나 일괄 생성 / 상품 일괄 등록 공용)
     # -------------------------
     file_records: Optional[List[Dict[str, Any]]]  # 업로드된 파일의 레코드 목록 (처리 후 None으로 초기화)
 
     # -------------------------
     # 상품 일괄 등록
     # -------------------------
-    product_file_records: Optional[List[Dict[str, Any]]]       # 등록할 상품 레코드 (처리 후 None으로 초기화)
     product_registration_results: Optional[Dict[str, Any]]     # 등록 결과 요약

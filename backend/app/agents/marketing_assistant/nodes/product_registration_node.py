@@ -16,12 +16,12 @@ _service = get_product_registration_service()
 
 async def product_registration_node(state: MarketingAssistantState, config: RunnableConfig):
     """
-    product_file_records에 담긴 JSONL 레코드를 병렬 처리해 상품을 일괄 등록한다.
+    file_records에 담긴 JSONL 레코드를 병렬 처리해 상품을 일괄 등록한다.
 
     각 레코드는 register_product()를 통해:
     구조화 → 멀티벡터 생성 → OpenSearch 색인 → PostgreSQL 저장
     """
-    records = state.get("product_file_records") or []
+    records = state.get("file_records") or []
     semaphore = asyncio.Semaphore(3)  # 동시 3개 제한
 
     async def _bounded(rec: dict) -> dict:
@@ -50,7 +50,7 @@ async def product_registration_node(state: MarketingAssistantState, config: Runn
     return Command(
         update={
             "messages": [AIMessage(content=summary)],
-            "product_file_records": None,
+            "file_records": None,
             "product_registration_results": {
                 "succeeded": len(succeeded),
                 "failed": len(failed),

@@ -10,9 +10,9 @@ import httpx
 from PIL import Image
 from langchain_core.messages import HumanMessage
 
-from backend.app.core.llm_factory import get_llm
-from backend.app.config.settings import Settings, settings
-from backend.app.agents.marketing_assistant.prompts.multivector_document_prompts import (
+from ....core.llm_factory import get_llm
+from ....config.settings import Settings, settings
+from ..prompts.multivector_document_prompts import (
     GROUP_REQUIRED_COUNTS,
     _MULTIVECTOR_FIELDS,
     build_multivector_prompt,
@@ -440,6 +440,10 @@ class ProductRegistrationService:
                 val = record.get(jsonl_key)
                 if val is not None:
                     product_data[key] = val
+
+            # structured["category"]는 LLM이 출력하는 sub_tag 값 (예: "클렌징폼")
+            if "category" in structured:
+                product_data["sub_tag"] = structured["category"]
 
             # structured → 테이블 컬럼 매핑 (TEXT[], INTEGER[] 등)
             for field in _STRUCTURED_TABLE_FIELDS:

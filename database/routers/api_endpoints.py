@@ -105,6 +105,7 @@ class ProductCreate(BaseModel):
     product_image_url: Optional[List[str]] = Field(default=[], description="상품 이미지 URL")
     product_page_url: Optional[str] = Field(None, description="상품 페이지 URL")
     product_comment: Optional[str] = Field(None, description="상품 한줄소개")
+    product_details: Optional[dict] = Field(None, description="구조화 상품 정보 (JSONB)")
 
 
 class ProductByTagRequest(BaseModel):

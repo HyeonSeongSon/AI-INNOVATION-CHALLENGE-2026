@@ -6,13 +6,13 @@
 
 import json
 
-from backend.app.agents.marketing_assistant.prompts.prompts_group_a import build_group_a_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_b import build_group_b_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_c import build_group_c_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_d import build_group_d_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_e import build_group_e_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_f import build_group_f_prompt
-from backend.app.agents.marketing_assistant.prompts.prompts_group_g import build_group_g_prompt
+from .prompts_group_a import build_group_a_prompt
+from .prompts_group_b import build_group_b_prompt
+from .prompts_group_c import build_group_c_prompt
+from .prompts_group_d import build_group_d_prompt
+from .prompts_group_e import build_group_e_prompt
+from .prompts_group_f import build_group_f_prompt
+from .prompts_group_g import build_group_g_prompt
 
 # ──────────────────────────────────────────────────────
 # 그룹별 필드 카운트 (정확히 이 수만큼 생성되어야 유효)

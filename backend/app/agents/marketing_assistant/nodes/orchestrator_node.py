@@ -11,16 +11,13 @@ logger = get_logger("orchestrator_node")
 
 async def orchestrator_node(state: MarketingAssistantState, config: RunnableConfig):
     try:
-        # fast-path: 파일 업로드 감지 → LLM 호출 없이 즉시 라우팅
-        if state.get("product_file_records"):
-            logger.info("orchestrator_decision", next_step="product_registration_node", reason="product_file_records detected")
-            return Command(goto="product_registration_node")
+        from langchain_core.messages import SystemMessage as _SystemMessage
+        messages = list(state.get("messages") or [])
 
+        # 파일 첨부 여부를 시스템 메시지로 LLM에게 전달
         if state.get("file_records"):
-            logger.info("orchestrator_decision", next_step="bulk_persona_node", reason="file_records detected")
-            return Command(goto="bulk_persona_node")
+            messages = [_SystemMessage(content="[파일 첨부됨] 사용자가 파일을 업로드했습니다.")] + messages
 
-        messages = state.get("messages")
         model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0)
         decision = await _orchestrator.orchestrator(messages, llm)
