@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { MessageSquare, Users, Zap, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
+import { MessageSquare, Users, Package, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
 import api, { pipelineApi, dbApi } from '../api';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
@@ -93,7 +93,7 @@ const StatValue = styled.div`
 /* 배너 영역 */
 const Banner = styled.div`
   width: 100%;
-  padding: 30px;
+  padding: 20px 28px;
   background: linear-gradient(135deg, #6B4DFF 0%, #9F85FF 100%);
   border-radius: 16px;
   color: white;
@@ -245,11 +245,12 @@ const DateInfo = styled.span`
   color: #aaa;
 `;
 
-/* 인기 페르소나 랭킹 스타일 */
-const RankItem = styled.div`
+/* 최근 페르소나 리스트 스타일 */
+const PersonaItem = styled.div`
   display: flex;
   align-items: center;
-  padding: 12px 0;
+  justify-content: space-between;
+  padding: 10px 0;
   border-bottom: 1px solid #f5f5f5;
 
   &:last-child {
@@ -257,26 +258,15 @@ const RankItem = styled.div`
   }
 `;
 
-const RankNumber = styled.span`
-  font-size: 16px;
-  font-weight: 800;
-  color: ${props => props.$top ? '#6B4DFF' : '#bbb'};
-  width: 30px;
-`;
-
-const RankName = styled.span`
+const PersonaName = styled.span`
   font-size: 14px;
   font-weight: 600;
-  color: #444;
-  flex: 1;
+  color: #333;
 `;
 
-const RankCount = styled.span`
+const PersonaMeta = styled.span`
   font-size: 12px;
-  color: #999;
-  background: #f5f5f5;
-  padding: 2px 8px;
-  border-radius: 10px;
+  color: #aaa;
 `;
 
 
@@ -287,6 +277,7 @@ export default function Home() {
   const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
   const [recentMessages, setRecentMessages] = useState([]);
   const [messageCount, setMessageCount] = useState(null);
+  const [productCount, setProductCount] = useState(null);
 
   useEffect(() => {
     dbApi.get('/generated-messages', { params: { user_id: 'son', limit: 3 } })
@@ -294,6 +285,10 @@ export default function Home() {
         setRecentMessages(res.data?.items || []);
         setMessageCount(res.data?.total ?? null);
       })
+      .catch(() => {});
+
+    dbApi.get('/products', { params: { page_size: 1 } })
+      .then(res => setProductCount(res.data?.total ?? null))
       .catch(() => {});
   }, []);
 
@@ -319,13 +314,10 @@ export default function Home() {
 
         // 백엔드 응답 구조에 따라 데이터 추출 (배열인지, 객체 안의 배열인지 확인)
         const data = Array.isArray(response.data) ? response.data : (response.data.personas || []);
-        
-        // 최신순으로 정렬 (ID 기준 역순 가정)
-        const sorted = [...data].reverse();
 
         setPersonaStats({
-          count: data.length, // 실제 개수
-          list: sorted.slice(0, 5) // 실제 목록 (최대 5개)
+          count: data.length,
+          list: data.slice(0, 5)
         });
       } catch (error) {
         console.error("페르소나 데이터 로드 실패:", error);
@@ -344,7 +336,7 @@ export default function Home() {
 
       {/* 상단 통계 카드 */}
       <StatsGrid>
-        <StatCard>
+        <StatCard onClick={() => navigate('/generated-messages')} style={{ cursor: 'pointer' }}>
           <StatHeader>
             <StatLabel>생성된 메시지</StatLabel>
             <StatIcon $bg="#E0F2F1" $color="#00695C"><MessageSquare size={20} /></StatIcon>
@@ -361,12 +353,12 @@ export default function Home() {
           <StatValue>{personaStats.count} <span>개</span></StatValue>
         </StatCard>
         
-        <StatCard>
+        <StatCard onClick={() => navigate('/products')} style={{ cursor: 'pointer' }}>
           <StatHeader>
-            <StatLabel>AI 최적화 상태</StatLabel>
-            <StatIcon $bg="#FFF3E0" $color="#E65100"><Zap size={20} /></StatIcon>
+            <StatLabel>등록된 상품</StatLabel>
+            <StatIcon $bg="#FFF3E0" $color="#E65100"><Package size={20} /></StatIcon>
           </StatHeader>
-          <StatValue style={{fontSize: '24px', color: '#E65100'}}>Optimal</StatValue>
+          <StatValue>{productCount ?? '-'} <span>개</span></StatValue>
         </StatCard>
       </StatsGrid>
 
@@ -392,14 +384,14 @@ export default function Home() {
         {/* 왼쪽: 최근 생성 이력 (하드코딩 유지 - DB에 메시지 저장 기능 없음) */}
         <SectionBox>
           <SectionHeader>
-            <SectionTitle><History size={18}/> 최근 생성 내역</SectionTitle>
+            <SectionTitle><History size={18}/> 최근 생성 메시지 내역</SectionTitle>
           </SectionHeader>
           
           {Array.from({ length: 3 }).map((_, i) => {
             const item = recentMessages[i];
             if (item) {
               return (
-                <MessageItem key={item.id} onDoubleClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
+                <MessageItem key={item.id} onClick={() => handleMessageClick(item)} style={{cursor:'pointer'}}>
                   <MessageInfo>
                     <MessageTag>{parseTag(item)}</MessageTag>
                     <MessageTitle>"{item.title || '(제목 없음)'}"</MessageTitle>
@@ -431,29 +423,21 @@ export default function Home() {
             <SectionTitle><TrendingUp size={18}/> 최근 등록된 페르소나</SectionTitle>
           </SectionHeader>
           
-          {/* DB에 데이터가 있으면 실제 목록 표시, 없으면 하드코딩된 예시 표시 */}
           {personaStats.list.length > 0 ? (
             personaStats.list.map((persona, index) => (
-              <RankItem key={persona.id || index}>
-                <RankNumber $top={index < 3}>{index + 1}</RankNumber>
-                <RankName>{persona.name} ({persona.age}세)</RankName>
-                <RankCount>New</RankCount>
-              </RankItem>
+              <PersonaItem
+                key={persona.id || index}
+                onClick={() => navigate('/persona', { state: { openPersonaId: persona.persona_id || persona.id } })}
+                style={{ cursor: 'pointer' }}
+              >
+                <PersonaName>{persona.name}{persona.age ? ` · ${persona.age}세` : ''}</PersonaName>
+                <PersonaMeta>{formatDate(persona.persona_created_at)}</PersonaMeta>
+              </PersonaItem>
             ))
           ) : (
-            // 데이터가 없을 때 보여줄 기본(하드코딩) 예시
-            <>
-              <RankItem>
-                <RankNumber $top>1</RankNumber>
-                <RankName>20대 수부지 대학생</RankName>
-                <RankCount>Example</RankCount>
-              </RankItem>
-              <RankItem>
-                <RankNumber $top>2</RankNumber>
-                <RankName>30대 뷰티 고관여</RankName>
-                <RankCount>Example</RankCount>
-              </RankItem>
-            </>
+            <PersonaItem>
+              <PersonaName style={{ color: '#bbb', fontStyle: 'italic' }}>등록된 페르소나가 없습니다.</PersonaName>
+            </PersonaItem>
           )}
         </SectionBox>
       </BottomSection>

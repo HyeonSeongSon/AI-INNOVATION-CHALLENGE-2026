@@ -724,7 +724,7 @@ export default function GeneratedMessages() {
                 messages.map(msg => (
                   <Tr
                     key={msg.id}
-                    onClick={() => setSelectedMsg(msg)}
+                    onDoubleClick={() => setSelectedMsg(msg)}
                     style={selectedIds.has(msg.id) ? { background: '#F5F2FF' } : {}}
                   >
                     <CheckTd>

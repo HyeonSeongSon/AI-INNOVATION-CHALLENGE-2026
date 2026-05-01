@@ -232,7 +232,7 @@ export default function Sidebar() {
           <FileText /> 메시지 관리
         </MenuItem>
         <MenuItem to="/products" $active={location.pathname.startsWith('/products')}>
-          <Package /> 상품 목록
+          <Package /> 상품 관리
         </MenuItem>
         <MenuItem to="/message" $active={location.pathname.startsWith('/message')}>
           <MessageSquare /> 마케팅 어시스턴트

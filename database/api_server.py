@@ -12,7 +12,6 @@ load_dotenv()
 
 from core.database import init_db
 from routers.api_endpoints import router as db_router
-from routers.pipeline_router import router as pipeline_router
 from routers.conversations_router import router as conversations_router
 from routers.generated_messages_router import router as generated_messages_router
 
@@ -34,7 +33,6 @@ app.add_middleware(
 )
 
 app.include_router(db_router)
-app.include_router(pipeline_router)
 app.include_router(conversations_router)
 app.include_router(generated_messages_router)
 

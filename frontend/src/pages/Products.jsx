@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import styled from 'styled-components';
-import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star } from 'lucide-react';
+import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star, Upload, Sparkles } from 'lucide-react';
 import { dbApi } from '../api';
+import { useToast } from '../components/Toast';
 import brandsData from '../../data/brands.json';
 import categoryData from '../../data/category.json';
 
@@ -22,8 +23,14 @@ const Container = styled.div`
 const PageHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
   margin-bottom: 20px;
+
+  .left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
   h1 {
     font-size: 22px;
@@ -33,6 +40,52 @@ const PageHeader = styled.div`
   }
 
   svg { color: #6B4DFF; }
+`;
+
+const RegisterButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  background: white;
+  color: #6B4DFF;
+  border: 1.5px solid #6B4DFF;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: #F5F0FF; }
+`;
+
+const PulseRing = styled.div`
+  width: 80px;
+  height: 80px;
+  background: rgba(107, 77, 255, 0.1);
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+
+  &::before, &::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #6B4DFF;
+    animation: pulse 2s linear infinite;
+    opacity: 0;
+  }
+  &::after { animation-delay: 1s; }
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
 `;
 
 const TotalBadge = styled.span`
@@ -689,6 +742,15 @@ export default function Products() {
   const [loading, setLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
+  // 상품 등록 모달 상태
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+  // registerProgress: null | { total, current, done, succeeded, failed, results: [{name, success, product_id?, error?}] }
+  const [registerProgress, setRegisterProgress] = useState(null);
+
+  const { addToast } = useToast();
+
   const committedRef = useRef({});
 
   const availableSubTags = useMemo(() => getSubTagsForCategory(filters.category), [filters.category]);
@@ -746,12 +808,88 @@ export default function Products() {
     if (e.key === 'Enter') handleSearch();
   };
 
+  const handleRegisterFromFile = async () => {
+    if (!uploadFile) return addToast('파일을 선택해주세요.', 'error');
+    setIsRegistering(true);
+    setRegisterProgress(null);
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+
+    try {
+      const response = await fetch('http://localhost:8005/api/pipeline/products/register', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: response.statusText }));
+        addToast(`등록 실패: ${err.detail || response.statusText}`, 'error');
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+
+        for (const chunk of chunks) {
+          const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
+          if (!dataLine) continue;
+          const event = JSON.parse(dataLine.slice(6));
+
+          if (event.type === 'error') {
+            addToast(`등록 실패: ${event.detail}`, 'error');
+            return;
+          }
+
+          if (event.type === 'progress') {
+            setRegisterProgress(prev => ({
+              total: event.total,
+              current: event.current,
+              done: false,
+              succeeded: (prev?.succeeded ?? 0) + (event.success ? 1 : 0),
+              failed: (prev?.failed ?? 0) + (event.success ? 0 : 1),
+              results: [...(prev?.results ?? []), {
+                name: event.name,
+                success: event.success,
+                product_id: event.product_id,
+                error: event.error,
+              }],
+            }));
+          }
+
+          if (event.type === 'done') {
+            setRegisterProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
+            doFetch(committedRef.current, page);
+          }
+        }
+      }
+    } catch (error) {
+      addToast(`등록 실패: ${error.message}`, 'error');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   return (
     <Container>
       <PageHeader>
-        <Package size={22} />
-        <h1>상품 목록</h1>
-        <TotalBadge>총 {total.toLocaleString()}개</TotalBadge>
+        <div className="left">
+          <Package size={22} />
+          <h1>상품 목록</h1>
+          <TotalBadge>총 {total.toLocaleString()}개</TotalBadge>
+        </div>
+        <RegisterButton onClick={() => { setShowRegisterModal(true); setUploadFile(null); setRegisterProgress(null); }}>
+          <Upload size={15} /> 상품 등록
+        </RegisterButton>
       </PageHeader>
 
       {/* 필터 바 */}
@@ -872,7 +1010,7 @@ export default function Products() {
                 <EmptyRow><td colSpan={8}>조건에 맞는 상품이 없습니다.</td></EmptyRow>
               ) : (
                 products.map(p => (
-                  <Tr key={p.product_id} onClick={() => setSelectedProduct(p)}>
+                  <Tr key={p.product_id} onDoubleClick={() => setSelectedProduct(p)}>
                     <Td><IdText>{p.product_id}</IdText></Td>
                     <TruncatedTd style={{ maxWidth: 220, fontWeight: 600 }}>{p.product_name}</TruncatedTd>
                     <Td>{p.brand ? <TagBadge>{p.brand}</TagBadge> : '-'}</Td>
@@ -932,6 +1070,142 @@ export default function Products() {
 
       {selectedProduct && (
         <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+      )}
+
+      {/* 상품 등록 모달 */}
+      {showRegisterModal && (
+        <ModalOverlay onClick={() => { if (!isRegistering) { setShowRegisterModal(false); setUploadFile(null); setRegisterProgress(null); } }}>
+          <ModalBox onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#333', margin: 0 }}>상품 등록</h2>
+              <button
+                onClick={() => { if (!isRegistering) { setShowRegisterModal(false); setUploadFile(null); setRegisterProgress(null); } }}
+                style={{ background: 'none', border: 'none', cursor: isRegistering ? 'not-allowed' : 'pointer', color: '#aaa', padding: 4, display: 'flex', alignItems: 'center' }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* 파일 선택 화면 */}
+            {!registerProgress && !isRegistering && (
+              <>
+                <p style={{ fontSize: 14, color: '#666', marginBottom: 16, lineHeight: 1.6 }}>
+                  JSONL, CSV, XLSX 파일을 업로드하면 Vision AI가 이미지를 분석하여 상품을 자동 등록합니다.
+                </p>
+                <p style={{ fontSize: 12, color: '#999', marginBottom: 16, lineHeight: 1.7 }}>
+                  필수 컬럼: <code style={{ background: '#F5F5F5', padding: '1px 6px', borderRadius: 4 }}>상품명</code>,{' '}
+                  <code style={{ background: '#F5F5F5', padding: '1px 6px', borderRadius: 4 }}>상품상세_이미지</code>,{' '}
+                  <code style={{ background: '#F5F5F5', padding: '1px 6px', borderRadius: 4 }}>브랜드</code>
+                </p>
+                <label style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 10, padding: '32px 20px', border: '2px dashed', borderRadius: 12,
+                  cursor: 'pointer', background: uploadFile ? '#F5F0FF' : '#fafafa',
+                  borderColor: uploadFile ? '#6B4DFF' : '#ddd', transition: '0.2s',
+                }}>
+                  <Upload size={28} color={uploadFile ? '#6B4DFF' : '#aaa'} />
+                  <span style={{ fontSize: 14, color: uploadFile ? '#6B4DFF' : '#999', fontWeight: uploadFile ? 700 : 400 }}>
+                    {uploadFile ? uploadFile.name : '파일을 클릭하거나 드래그하세요'}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#bbb' }}>지원 형식: .jsonl, .csv, .xlsx</span>
+                  <input
+                    type="file"
+                    accept=".jsonl,.csv,.xlsx"
+                    style={{ display: 'none' }}
+                    onChange={e => setUploadFile(e.target.files[0] || null)}
+                  />
+                </label>
+                <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                  <button
+                    onClick={() => { setShowRegisterModal(false); setUploadFile(null); }}
+                    style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: '#f0f0f0', color: '#555', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleRegisterFromFile}
+                    disabled={!uploadFile}
+                    style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: '#6B4DFF', color: 'white', fontWeight: 700, fontSize: 15, cursor: uploadFile ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: uploadFile ? 1 : 0.5 }}
+                  >
+                    <Upload size={16} /> 등록 시작
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 초기 로딩 (첫 progress 이벤트 오기 전) */}
+            {isRegistering && !registerProgress && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '24px 0' }}>
+                <PulseRing><Sparkles size={28} color="#6B4DFF" fill="#6B4DFF" /></PulseRing>
+                <span style={{ fontSize: 14, color: '#888' }}>파일을 분석하는 중...</span>
+              </div>
+            )}
+
+            {/* 진행 중 화면 */}
+            {isRegistering && registerProgress && !registerProgress.done && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, color: '#333' }}>{registerProgress.current} / {registerProgress.total} 등록 중...</span>
+                    <span>{Math.round((registerProgress.current / registerProgress.total) * 100)}%</span>
+                  </div>
+                  <div style={{ height: 8, background: '#eee', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#6B4DFF', borderRadius: 99, width: `${(registerProgress.current / registerProgress.total) * 100}%`, transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {registerProgress.results.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 10px', borderRadius: 8, background: r.success ? '#F0FFF4' : '#FFF1F2' }}>
+                      <span>{r.success ? '✅' : '❌'}</span>
+                      <span style={{ fontWeight: 600, color: '#333' }}>{r.name || '(이름 없음)'}</span>
+                      {r.success && r.product_id && (
+                        <span style={{ fontSize: 11, color: '#888', marginLeft: 'auto', fontFamily: 'monospace' }}>{r.product_id}</span>
+                      )}
+                      {!r.success && <span style={{ color: '#EF4444', fontSize: 11, marginLeft: 'auto' }}>{r.error}</span>}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 10px', borderRadius: 8, background: '#F5F0FF', color: '#6B4DFF' }}>
+                    <Sparkles size={14} />
+                    <span>Vision AI 분석 중...</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 완료 화면 */}
+            {registerProgress?.done && (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>{registerProgress.failed === 0 ? '🎉' : '⚠️'}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#333' }}>등록 완료</div>
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginBottom: registerProgress.failed > 0 ? 16 : 24 }}>
+                  <div style={{ flex: 1, padding: '14px', borderRadius: 12, background: '#F0FFF4', textAlign: 'center' }}>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: '#22C55E' }}>{registerProgress.succeeded}</div>
+                    <div style={{ fontSize: 12, color: '#16A34A', marginTop: 2 }}>성공</div>
+                  </div>
+                  <div style={{ flex: 1, padding: '14px', borderRadius: 12, background: registerProgress.failed > 0 ? '#FFF1F2' : '#f5f5f5', textAlign: 'center' }}>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: registerProgress.failed > 0 ? '#EF4444' : '#bbb' }}>{registerProgress.failed}</div>
+                    <div style={{ fontSize: 12, color: registerProgress.failed > 0 ? '#DC2626' : '#bbb', marginTop: 2 }}>실패</div>
+                  </div>
+                </div>
+                {registerProgress.failed > 0 && (
+                  <div style={{ background: '#FFF1F2', borderRadius: 10, padding: '10px 14px', marginBottom: 16, maxHeight: 100, overflowY: 'auto' }}>
+                    {registerProgress.results.filter(r => !r.success).map((r, i) => (
+                      <div key={i} style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>· {r.name || `${i + 1}번`}: {r.error}</div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setShowRegisterModal(false); setUploadFile(null); setRegisterProgress(null); }}
+                  style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#6B4DFF', color: 'white', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+                >
+                  닫기
+                </button>
+              </>
+            )}
+          </ModalBox>
+        </ModalOverlay>
       )}
     </Container>
   );

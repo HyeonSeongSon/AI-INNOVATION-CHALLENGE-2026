@@ -7,3 +7,5 @@ pydantic
 openai
 langchain-openai
 python-multipart
+httpx
+openpyxl

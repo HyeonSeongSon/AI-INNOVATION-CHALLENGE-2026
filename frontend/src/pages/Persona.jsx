@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import {
   Plus, X, User, Sparkles, AlertCircle, ChevronLeft, ChevronRight, Trash2, Upload
 } from 'lucide-react';
 
 import { useToast } from '../components/Toast';
-import { pipelineApi } from '../api';
+import api, { pipelineApi } from '../api';
 
 const PAGE_SIZE = 20;
 
@@ -141,8 +142,13 @@ const CheckTd = styled(Td)`
   padding: 11px 0 11px 14px;
 `;
 
+const ConcernTd = styled(Td)`
+  max-width: 200px;
+  width: 200px;
+`;
+
 const TruncatedTd = styled(Td)`
-  max-width: 360px;
+  max-width: 400px;
 `;
 
 const ClampedText = styled.div`
@@ -347,6 +353,7 @@ function formatDate(dt) {
    ============================================================ */
 
 export default function PersonaManager() {
+  const location = useLocation();
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -395,6 +402,13 @@ export default function PersonaManager() {
   };
 
   useEffect(() => { fetchPersonas(); }, []);
+
+  useEffect(() => {
+    const openId = location.state?.openPersonaId;
+    if (!openId || personas.length === 0) return;
+    const target = personas.find(p => p.id === openId);
+    if (target) handleRowClick(target);
+  }, [personas, location.state?.openPersonaId]);
 
   /* 페이지네이션 */
   const totalPages = Math.max(1, Math.ceil(personas.length / PAGE_SIZE));
@@ -452,7 +466,7 @@ export default function PersonaManager() {
     if (!personaText.trim()) return addToast('페르소나 설명을 입력해주세요.', 'error');
     setIsCreating(true);
     try {
-      await pipelineApi.post('/pipeline/personas/create-from-text', { text: personaText });
+      await api.post('/pipeline/personas/create-from-text', { text: personaText });
       await fetchPersonas();
       addToast('페르소나 생성 완료!', 'success');
       setShowTextModal(false);
@@ -477,7 +491,7 @@ export default function PersonaManager() {
     formData.append('file', uploadFile);
 
     try {
-      const response = await fetch('http://localhost:8020/api/pipeline/personas/create-from-file', {
+      const response = await fetch('http://localhost:8005/api/pipeline/personas/create-from-file', {
         method: 'POST',
         body: formData,
       });
@@ -547,7 +561,7 @@ export default function PersonaManager() {
           <TotalBadge>총 {personas.length}개</TotalBadge>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <FileButton onClick={() => { setShowFileModal(true); setFileResult(null); setUploadFile(null); }}>
+          <FileButton onClick={() => { setShowFileModal(true); setFileProgress(null); setUploadFile(null); }}>
             <Upload size={15} /> 파일로 페르소나 만들기
           </FileButton>
           <AddButton onClick={() => setShowTextModal(true)}>
@@ -579,12 +593,12 @@ export default function PersonaManager() {
                     onClick={e => e.stopPropagation()}
                   />
                 </CheckTh>
-                <Th>이름</Th>
-                <Th>나이 / 성별 / 직업</Th>
-                <Th>페르소나 ID</Th>
-                <Th>고민</Th>
+                <Th style={{ width: 120, minWidth: 120 }}>이름</Th>
+                <Th style={{ width: 240, minWidth: 240 }}>나이 / 성별 / 직업</Th>
+                <Th style={{ width: 120, minWidth: 120 }}>페르소나 ID</Th>
+                <Th style={{ width: 500, minWidth: 400 }}>고민</Th>
                 <Th>요약</Th>
-                <Th>등록일</Th>
+                <Th style={{ width: 120, minWidth: 120 }}>등록일</Th>
               </tr>
             </thead>
             <tbody>
@@ -607,17 +621,17 @@ export default function PersonaManager() {
                       />
                     </CheckTd>
                     <Td style={{ fontWeight: 700 }}>{p.name}</Td>
-                    <Td style={{ color: '#666' }}>
+                    <Td style={{ color: '#666', maxWidth: 160, width: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[p.age ? `${p.age}세` : null, p.gender, p.occupation].filter(Boolean).join(' / ') || '-'}
                     </Td>
                     <Td style={{ fontFamily: 'monospace', fontSize: 11, color: '#999', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.id || <span style={{ color: '#ccc' }}>-</span>}
                     </Td>
-                    <Td>
+                    <ConcernTd>
                       {p.skinConcerns?.length > 0
                         ? p.skinConcerns.slice(0, 2).map(c => <ConcernBadge key={c}>{c}</ConcernBadge>)
                         : <span style={{ color: '#ccc' }}>-</span>}
-                    </Td>
+                    </ConcernTd>
                     <TruncatedTd>
                       <ClampedText>{p.aiAnalysis?.reasoning || '-'}</ClampedText>
                     </TruncatedTd>

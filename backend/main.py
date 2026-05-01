@@ -12,6 +12,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 from app.api import marketing_api
 from app.api import generated_messages
+from app.api import products_pipeline
+from app.api import persona_pipeline
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
 from app.core.database import init_db
@@ -75,6 +77,8 @@ app.add_middleware(
 # 라우터 등록
 app.include_router(marketing_api.router)
 app.include_router(generated_messages.router)
+app.include_router(products_pipeline.router)
+app.include_router(persona_pipeline.router)
 
 
 @app.get("/")
