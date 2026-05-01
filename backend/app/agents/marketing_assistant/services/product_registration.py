@@ -23,6 +23,9 @@ from .category_config import (
     resolve_extra_category,
     PROMPT_BUILDERS as _PROMPT_BUILDERS,
 )
+from ....core.logging import get_logger
+
+logger = get_logger("product_registration")
 
 # ──────────────────────────────────────────────────────
 # 이미지 처리 상수
@@ -36,7 +39,11 @@ MAX_CHUNKS       = 10
 # ──────────────────────────────────────────────────────
 
 async def _download_image(url: str) -> Image.Image:
-    async with httpx.AsyncClient(timeout=30) as client:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Referer": "https://www.amoremall.com/",
+    }
+    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
         response = await client.get(url)
         response.raise_for_status()
     return Image.open(io.BytesIO(response.content)).convert("RGB")
@@ -397,6 +404,12 @@ class ProductRegistrationService:
         try:
             image_urls = record.get("상품상세_이미지", [])
 
+            logger.info(
+                "register_product_start",
+                product_name=product_name,
+                image_count=len(image_urls),
+            )
+
             # 1. 카테고리 자동 분류 + 구조화 + 멀티벡터 생성
             result = await self.create_product_document_auto(
                 image_urls=image_urls,
@@ -404,6 +417,12 @@ class ProductRegistrationService:
                 include_multivector=True,
             )
             if not result.get("classified"):
+                logger.warning(
+                    "register_product_classify_failed",
+                    product_name=product_name,
+                    confidence=result.get("confidence"),
+                    reason=result.get("reason"),
+                )
                 return {
                     "success": False,
                     "product_name": product_name,
@@ -414,6 +433,14 @@ class ProductRegistrationService:
             structured = result["structured"]
             multivector = result["multivector"]
             group = multivector.pop("_group", "")
+
+            logger.info(
+                "register_product_classified",
+                product_name=product_name,
+                main_category=main_category,
+                tag=tag,
+                confidence=result.get("confidence"),
+            )
 
             # 2. product_id 생성
             code = _CATEGORY_CODE.get(main_category, "X")
@@ -456,6 +483,12 @@ class ProductRegistrationService:
                 product_data["product_details"] = product_details
 
             # 4. OpenSearch 먼저 색인 → vectordb_id 수집
+            logger.info(
+                "register_product_opensearch_start",
+                product_name=product_name,
+                product_id=product_id,
+                group=group,
+            )
             async with httpx.AsyncClient(timeout=60) as client:
                 r = await client.post(
                     f"{settings.opensearch_api_url}/api/product/index-multivector",
@@ -467,8 +500,10 @@ class ProductRegistrationService:
                 )
                 r.raise_for_status()
                 product_data["vectordb_id"] = r.json().get("vectordb_id", {})
+            logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 
             # 5. DB 저장 (vectordb_id 포함)
+            logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
             async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.post(
                     f"{settings.database_api_url}/api/products",
@@ -476,9 +511,23 @@ class ProductRegistrationService:
                 )
                 r.raise_for_status()
 
+            logger.info(
+                "register_product_success",
+                product_name=product_name,
+                product_id=product_id,
+                main_category=main_category,
+                tag=tag,
+            )
             return {"success": True, "product_id": product_id, "product_name": product_name}
 
         except Exception as e:
+            logger.error(
+                "register_product_error",
+                product_name=product_name,
+                error_type=type(e).__name__,
+                error=str(e),
+                exc_info=True,
+            )
             return {"success": False, "product_name": product_name, "error": str(e)}
 
 
