@@ -90,7 +90,6 @@ class QualityChecker:
                     "rule_check_passed": bool,
                     "rule_check_issues": List[str],
                     "semantic_check_passed": bool,
-                    "semantic_check_degraded": bool,  # API 오류로 Stage 2 스킵 여부
                     "semantic_check_results": List[dict],
                     "llm_judge_passed": bool,
                     "llm_judge_scores": dict | None,
@@ -107,7 +106,6 @@ class QualityChecker:
                 "rule_check_passed": False,
                 "rule_check_issues": [],
                 "semantic_check_passed": False,
-                "semantic_check_degraded": False,
                 "semantic_check_results": [],
                 "llm_judge_passed": False,
                 "llm_judge_scores": None,
@@ -120,7 +118,6 @@ class QualityChecker:
             "rule_check_passed": False,
             "rule_check_issues": [],
             "semantic_check_passed": False,
-            "semantic_check_degraded": False,
             "semantic_check_results": [],
             "llm_judge_passed": False,
             "llm_judge_scores": None,
@@ -154,24 +151,22 @@ class QualityChecker:
 
         # Stage 2: Semantic Similarity Check
         logger.info("stage2_semantic_check_started")
-        passed, similar_results, semantic_degraded = await self._run_semantic_similarity_check(title, message_text)
-        result["semantic_check_degraded"] = semantic_degraded
-        if semantic_degraded:
-            logger.warning("stage2_semantic_skipped_degraded")
-        elif not passed:
-            result["semantic_check_passed"] = False
-            result["semantic_check_results"] = similar_results
+        passed, similar_results = await self._run_semantic_similarity_check(title, message_text)
+        result["semantic_check_passed"] = passed
+        result["semantic_check_results"] = similar_results
+        if not passed:
             result["failed_stage"] = "semantic_check"
-            triggered_details = "; ".join([
-                f"'{r['query_sentence'][:40]}' → {r['source'].get('label', '금지표현')} (유사도 {r['score']:.2f})"
-                for r in similar_results[:2]
-            ])
-            result["failure_reason"] = f"금지 표현 유사 문장 감지: {triggered_details}"
+            if similar_results and similar_results[0].get("error") == "api_unavailable":
+                result["failure_reason"] = "의미 유사도 검사 불가 (API 오류)"
+            else:
+                triggered_details = "; ".join([
+                    f"'{r['query_sentence'][:40]}' → {r['source'].get('label', '금지표현')} (유사도 {r['score']:.2f})"
+                    for r in similar_results[:2]
+                ])
+                result["failure_reason"] = f"금지 표현 유사 문장 감지: {triggered_details}"
             logger.warning("stage2_semantic_failed", triggered=similar_results)
             return result
-        else:
-            result["semantic_check_passed"] = True
-            logger.info("stage2_semantic_passed")
+        logger.info("stage2_semantic_passed")
 
         # Stage 3: LLM-as-a-Judge
         if llm is None:
@@ -350,7 +345,7 @@ class QualityChecker:
         self,
         title: str,
         message: str,
-    ) -> Tuple[bool, List[Dict[str, Any]], bool]:
+    ) -> Tuple[bool, List[Dict[str, Any]]]:
         """
         생성된 메시지를 문장 단위로 분리 후 각 문장을
         /api/search/similar-sentences 엔드포인트로 유사도 검색.
@@ -358,11 +353,13 @@ class QualityChecker:
         모든 문장의 top-K 결과를 하나의 리스트에 누적하여
         임계값(SEMANTIC_THRESHOLD) 초과 score가 하나라도 있으면 실패.
 
+        API 오류 시에도 실패 처리 — 약사법·화장품법 위반 탐지는 컴플라이언스 의무이므로
+        검사 불가 상태에서 메시지를 통과시키지 않습니다.
+
         Returns:
-            (passed: bool, triggered_results: List[dict], degraded: bool)
-            - passed=True,  degraded=False → 금지 표현 없음, 정상 통과
-            - passed=False, degraded=False → 임계값 초과 결과 목록 반환
-            - passed=True,  degraded=True  → API 오류로 검사 스킵 (Stage 3으로 진행)
+            (passed: bool, triggered_results: List[dict])
+            - passed=True  → 금지 표현 없음
+            - passed=False → 임계값 초과 결과 목록 또는 API 오류 마커 반환
         """
         endpoint = f"{settings.opensearch_api_url}/api/search/similar-sentences"
 
@@ -376,7 +373,7 @@ class QualityChecker:
         ]
 
         if not sentences:
-            return True, [], False
+            return True, []
 
         all_results: List[Dict[str, Any]] = []
 
@@ -384,15 +381,15 @@ class QualityChecker:
             search_tasks = [self._search_sentence(client, s, endpoint) for s in sentences]
             results_per_sentence = await asyncio.gather(*search_tasks)
 
-        # API 오류 시 Stage 2 스킵 후 Stage 3으로 진행 (graceful degradation)
+        # API 오류 시 검사 불가 → 실패 처리 (컴플라이언스 의무)
         api_errors = [s for s, r in zip(sentences, results_per_sentence) if r is None]
         if api_errors:
             logger.warning(
-                "semantic_check_api_failed_degraded",
+                "semantic_check_api_failed",
                 failed_count=len(api_errors),
                 total=len(sentences),
             )
-            return True, [], True
+            return False, [{"error": "api_unavailable"}]
 
         for results in results_per_sentence:
             all_results.extend(results)
@@ -421,9 +418,9 @@ class QualityChecker:
                 threshold=self._SEMANTIC_THRESHOLD,
                 triggered_count=len(triggered),
             )
-            return False, triggered, False
+            return False, triggered
 
-        return True, [], False
+        return True, []
 
     async def _search_sentence(
         self,
