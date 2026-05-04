@@ -8,6 +8,18 @@ import json
 from langchain_core.messages import SystemMessage, HumanMessage
 from typing import List, Dict, Any
 
+_FEEDBACK_PRODUCT_FIELDS = {
+    "product_name", "brand", "product_tag",
+    "concern", "key_benefits", "target_user",
+    "ingredients", "features", "description",
+    "skin_type", "volume", "usage",
+    "price", "discount_rate",
+}
+
+
+def _filter_product_info(product_info: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in product_info.items() if k in _FEEDBACK_PRODUCT_FIELDS and v}
+
 
 def build_apply_feedback_prompt(
     existing_title: str,
@@ -29,7 +41,7 @@ def build_apply_feedback_prompt(
     Returns:
         [SystemMessage, HumanMessage] 리스트
     """
-    product_summary = json.dumps(product_info, ensure_ascii=False, indent=2)
+    product_summary = json.dumps(_filter_product_info(product_info), ensure_ascii=False, indent=2)
 
     system_prompt = """당신은 CRM 마케팅 메시지 편집 전문가입니다.
 기존 메시지를 피드백에 따라 개선하는 것이 목표입니다.
@@ -42,11 +54,7 @@ def build_apply_feedback_prompt(
 - 상품 정보에 있는 사실만 사용하세요. 없는 수치·근거·성분은 절대 추가하지 마세요
 - 과장·허위 표현 금지
 - 의학적 효능 암시 금지
-- 강압적 표현 금지 (예: "지금 바로!", "서두르세요!")
-
-## 출력 형식
-반드시 다음 JSON 형식으로만 출력하세요. 다른 설명 없이 JSON만 출력하세요:
-{"title": "제목", "message": "본문"}"""
+- 강압적 표현 금지 (예: "지금 바로!", "서두르세요!")"""
 
     human_prompt = f"""## 기존 메시지
 제목: {existing_title}

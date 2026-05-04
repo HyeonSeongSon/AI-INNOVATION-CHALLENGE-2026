@@ -1,5 +1,5 @@
 import asyncio
-from ....core.data_loader import get_brand_tones
+from ....core.data_loader import get_brand_tone
 from .product_client import ProductClient
 from typing import Dict, List
 from ..prompts.purpose_prompt import PurPosePrompts
@@ -22,16 +22,6 @@ class CrmMessageGenerator:
             "피부타입/고민 강조 소개": self._purpose.build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": self._purpose.build_purpose_lifestyle_and_age_point_prompt,
         }
-
-    def _get_brand_tone(self, brand_name: str) -> str:
-        brand_tones = get_brand_tones().get('brand_ton_prompt', {})
-
-        if brand_name in brand_tones:
-            return brand_tones[brand_name]
-
-        for key, value in brand_tones.items():
-            if key.lower() == brand_name.lower():
-                return value
 
     async def _get_product_info(self, product_id: str) -> dict:
         db_products = await self._product_client.get_products_detail_from_db([product_id])
@@ -57,7 +47,7 @@ class CrmMessageGenerator:
         result = [
             {**item, "brand_tone": brand_tone}
             for item in tasks
-            if (brand_tone := self._get_brand_tone(item["product_info"]["brand"]))
+            if (brand_tone := get_brand_tone(item["product_info"]["brand"]))
         ]
 
         skipped = len(tasks) - len(result)

@@ -8,6 +8,18 @@ import json
 from langchain_core.messages import SystemMessage, HumanMessage
 from typing import List, Dict, Any
 
+_JUDGE_PRODUCT_FIELDS = {
+    "product_name", "brand", "product_tag",
+    "concern", "key_benefits", "target_user",
+    "ingredients", "features", "description",
+    "skin_type", "volume", "usage",
+    "price", "discount_rate",
+}
+
+
+def _filter_product_info(product_info: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in product_info.items() if k in _JUDGE_PRODUCT_FIELDS and v}
+
 
 def build_quality_check_prompt(
     brand_name: str,
@@ -41,7 +53,7 @@ def build_quality_check_prompt(
     concern_text = ", ".join(concern) if concern else "정보 없음"
     key_benefits_text = "\n".join(f"- {b}" for b in key_benefits) if key_benefits else "정보 없음"
 
-    product_summary = json.dumps(product_info, ensure_ascii=False, indent=2)
+    product_summary = json.dumps(_filter_product_info(product_info), ensure_ascii=False, indent=2)
 
     system_prompt = """당신은 뷰티 CRM 마케팅 메시지 품질 평가 전문가입니다.
 아래 5가지 기준으로 메시지를 평가하세요. 금지 표현·약사법 위반 여부는 이미 사전 검증되었으므로 평가하지 않습니다.

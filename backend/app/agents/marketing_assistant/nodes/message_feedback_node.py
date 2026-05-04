@@ -76,7 +76,7 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
                 "llm_judge_scores": {"feedback": parsed["feedback"]},
             },
         }
-        updated_task = await get_applier().apply_feedback(task, llm)
+        updated_task = await get_applier().apply_feedback(task, llm, product_info=product_info)
         return Command(
             goto="quality_check_node",
             update={

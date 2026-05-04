@@ -55,6 +55,21 @@ def get_forbidden_keywords() -> Dict[str, Any]:
     return _forbidden_keywords
 
 
+_DEFAULT_BRAND_TONE = "친근하면서도 전문적이고 신뢰감 있는 어조"
+
+
+def get_brand_tone(brand_name: str) -> str:
+    """브랜드명으로 톤 가이드 조회. 없으면 기본값 반환."""
+    brand_tones = get_brand_tones().get("brand_ton_prompt", {})
+    if brand_name in brand_tones:
+        return brand_tones[brand_name]
+    for key, value in brand_tones.items():
+        if key.lower() == brand_name.lower():
+            return value
+    logger.warning("brand_tone_not_found", brand_name=brand_name)
+    return _DEFAULT_BRAND_TONE
+
+
 def get_categories() -> List[str]:
     """category.json에서 카테고리 목록을 1회 로드 후 캐시된 리스트 반환."""
     global _categories

@@ -18,7 +18,7 @@ from kiwipiepy import Kiwi
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
-from ....core.data_loader import get_brand_tones, get_forbidden_keywords
+from ....core.data_loader import get_forbidden_keywords, get_brand_tone
 from ....config.settings import settings
 from .product_client import ProductClient
 
@@ -90,6 +90,7 @@ class QualityChecker:
                     "rule_check_passed": bool,
                     "rule_check_issues": List[str],
                     "semantic_check_passed": bool,
+                    "semantic_check_degraded": bool,  # API 오류로 Stage 2 스킵 여부
                     "semantic_check_results": List[dict],
                     "llm_judge_passed": bool,
                     "llm_judge_scores": dict | None,
@@ -106,6 +107,7 @@ class QualityChecker:
                 "rule_check_passed": False,
                 "rule_check_issues": [],
                 "semantic_check_passed": False,
+                "semantic_check_degraded": False,
                 "semantic_check_results": [],
                 "llm_judge_passed": False,
                 "llm_judge_scores": None,
@@ -118,6 +120,7 @@ class QualityChecker:
             "rule_check_passed": False,
             "rule_check_issues": [],
             "semantic_check_passed": False,
+            "semantic_check_degraded": False,
             "semantic_check_results": [],
             "llm_judge_passed": False,
             "llm_judge_scores": None,
@@ -151,22 +154,24 @@ class QualityChecker:
 
         # Stage 2: Semantic Similarity Check
         logger.info("stage2_semantic_check_started")
-        passed, similar_results = await self._run_semantic_similarity_check(title, message_text)
-        result["semantic_check_passed"] = passed
-        result["semantic_check_results"] = similar_results
-        if not passed:
+        passed, similar_results, semantic_degraded = await self._run_semantic_similarity_check(title, message_text)
+        result["semantic_check_degraded"] = semantic_degraded
+        if semantic_degraded:
+            logger.warning("stage2_semantic_skipped_degraded")
+        elif not passed:
+            result["semantic_check_passed"] = False
+            result["semantic_check_results"] = similar_results
             result["failed_stage"] = "semantic_check"
-            if similar_results and similar_results[0].get("error") == "api_unavailable":
-                result["failure_reason"] = "의미 유사도 검사 불가 (API 오류)"
-            else:
-                triggered_details = "; ".join([
-                    f"'{r['query_sentence'][:40]}' → {r['source'].get('label', '금지표현')} (유사도 {r['score']:.2f})"
-                    for r in similar_results[:2]
-                ])
-                result["failure_reason"] = f"금지 표현 유사 문장 감지: {triggered_details}"
+            triggered_details = "; ".join([
+                f"'{r['query_sentence'][:40]}' → {r['source'].get('label', '금지표현')} (유사도 {r['score']:.2f})"
+                for r in similar_results[:2]
+            ])
+            result["failure_reason"] = f"금지 표현 유사 문장 감지: {triggered_details}"
             logger.warning("stage2_semantic_failed", triggered=similar_results)
             return result
-        logger.info("stage2_semantic_passed")
+        else:
+            result["semantic_check_passed"] = True
+            logger.info("stage2_semantic_passed")
 
         # Stage 3: LLM-as-a-Judge
         if llm is None:
@@ -345,7 +350,7 @@ class QualityChecker:
         self,
         title: str,
         message: str,
-    ) -> Tuple[bool, List[Dict[str, Any]]]:
+    ) -> Tuple[bool, List[Dict[str, Any]], bool]:
         """
         생성된 메시지를 문장 단위로 분리 후 각 문장을
         /api/search/similar-sentences 엔드포인트로 유사도 검색.
@@ -354,9 +359,10 @@ class QualityChecker:
         임계값(SEMANTIC_THRESHOLD) 초과 score가 하나라도 있으면 실패.
 
         Returns:
-            (passed: bool, triggered_results: List[dict])
-            - passed=True  → 금지 표현 없음
-            - passed=False → 임계값 초과 결과 목록 반환
+            (passed: bool, triggered_results: List[dict], degraded: bool)
+            - passed=True,  degraded=False → 금지 표현 없음, 정상 통과
+            - passed=False, degraded=False → 임계값 초과 결과 목록 반환
+            - passed=True,  degraded=True  → API 오류로 검사 스킵 (Stage 3으로 진행)
         """
         endpoint = f"{settings.opensearch_api_url}/api/search/similar-sentences"
 
@@ -370,7 +376,7 @@ class QualityChecker:
         ]
 
         if not sentences:
-            return True, []
+            return True, [], False
 
         all_results: List[Dict[str, Any]] = []
 
@@ -378,15 +384,15 @@ class QualityChecker:
             search_tasks = [self._search_sentence(client, s, endpoint) for s in sentences]
             results_per_sentence = await asyncio.gather(*search_tasks)
 
-        # API 오류가 하나라도 있으면 검증 불가 -> 안전하게 실패 처리
+        # API 오류 시 Stage 2 스킵 후 Stage 3으로 진행 (graceful degradation)
         api_errors = [s for s, r in zip(sentences, results_per_sentence) if r is None]
         if api_errors:
             logger.warning(
-                "semantic_check_api_failed",
+                "semantic_check_api_failed_degraded",
                 failed_count=len(api_errors),
                 total=len(sentences),
             )
-            return False, [{"error": "api_unavailable"}]
+            return True, [], True
 
         for results in results_per_sentence:
             all_results.extend(results)
@@ -415,9 +421,9 @@ class QualityChecker:
                 threshold=self._SEMANTIC_THRESHOLD,
                 triggered_count=len(triggered),
             )
-            return False, triggered
+            return False, triggered, False
 
-        return True, []
+        return True, [], False
 
     async def _search_sentence(
         self,
@@ -466,6 +472,8 @@ class QualityChecker:
                     max_retries=self._SEMANTIC_MAX_RETRIES,
                     error=str(e),
                 )
+                if attempt < self._SEMANTIC_MAX_RETRIES:
+                    await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
         return None  # 재시도 소진: 빈 결과(정상)와 구분
 
 # ============================================================
@@ -508,7 +516,7 @@ class QualityChecker:
             LLM 호출 오류 시 ``(False, {"feedback": 오류 메시지})``.
         """
         try:
-            brand_tone = self._get_brand_tone(brand_name)
+            brand_tone = get_brand_tone(brand_name)
 
             prompt_messages = build_quality_check_prompt(
                 brand_name=brand_name,
@@ -521,7 +529,10 @@ class QualityChecker:
             )
 
             judge = llm.with_structured_output(LLMJudgeOutput)
-            result: LLMJudgeOutput = await judge.ainvoke(prompt_messages)
+            result: LLMJudgeOutput = await asyncio.wait_for(
+                judge.ainvoke(prompt_messages),
+                timeout=30,
+            )
 
             scores = {
                 "accuracy": result.accuracy,
@@ -548,27 +559,3 @@ class QualityChecker:
             logger.error("llm_judge_failed", error=str(e), exc_info=True)
             return False, {"feedback": f"LLM 평가 중 오류: {str(e)}"}
 
-    def _get_brand_tone(self, brand_name: str) -> str:
-        """
-        브랜드명에 맞는 톤 가이드 문자열을 반환합니다.
-
-        brand_tone.yaml의 ``brand_ton_prompt`` 섹션에서 대소문자 무관하게 조회합니다.
-        일치하는 항목이 없으면 기본값 "친근하면서도 전문적이고 신뢰감 있는 어조"를 반환합니다.
-
-        Args:
-            brand_name: 조회할 브랜드명.
-
-        Returns:
-            해당 브랜드의 톤 가이드 문자열.
-        """
-        brand_tones = get_brand_tones().get("brand_ton_prompt", {})
-
-        if brand_name in brand_tones:
-            return brand_tones[brand_name]
-
-        for key, value in brand_tones.items():
-            if key.lower() == brand_name.lower():
-                return value
-
-        logger.warning("brand_tone_not_found", brand_name=brand_name)
-        return "친근하면서도 전문적이고 신뢰감 있는 어조"
