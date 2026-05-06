@@ -12,23 +12,30 @@ CREATE TABLE IF NOT EXISTS personas (
     age INTEGER,
     occupation VARCHAR(100),
     skin_type TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skin_concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
+    concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
     personal_color VARCHAR(50),
     shade_number INTEGER,
     preferred_colors TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     avoided_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_scents TEXT[] DEFAULT ARRAY[]::TEXT[],
-    values TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skincare_routine VARCHAR(100),
-    main_environment VARCHAR(100),
+    lifestyle_values TEXT[] DEFAULT ARRAY[]::TEXT[],
+    skincare_routine TEXT[] DEFAULT ARRAY[]::TEXT[],
+    main_environment TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_texture TEXT[] DEFAULT ARRAY[]::TEXT[],
-    pets VARCHAR(50),
+    hair_type TEXT[] DEFAULT ARRAY[]::TEXT[],
+    beauty_interests TEXT[] DEFAULT ARRAY[]::TEXT[],
+    pets TEXT[] DEFAULT ARRAY[]::TEXT[],
     avg_sleep_hours INTEGER,
     stress_level VARCHAR(50),
-    digital_device_usage_time INTEGER,
-    shopping_style VARCHAR(100),
+    daily_screen_hours INTEGER,
+    shopping_style TEXT[] DEFAULT ARRAY[]::TEXT[],
     purchase_decision_factors TEXT[] DEFAULT ARRAY[]::TEXT[],
+    price_sensitivity VARCHAR(50),
+    preferred_brands TEXT[] DEFAULT ARRAY[]::TEXT[],
+    avoided_brands TEXT[] DEFAULT ARRAY[]::TEXT[],
+    persona_summary TEXT,
+    user_input TEXT,
     persona_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -47,46 +54,135 @@ CREATE TABLE IF NOT EXISTS analysis_results (
 CREATE INDEX idx_analysis_results_persona_id ON analysis_results(persona_id);
 
 -- ============================================================
--- 3. 검색 쿼리 테이블 (search_queries)
+-- 3. 상품 검색 쿼리 테이블 (search_queries)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS search_queries (
-    query_id SERIAL PRIMARY KEY,
-    analysis_id INTEGER REFERENCES analysis_results(analysis_id) ON DELETE CASCADE,
-    search_query TEXT,
-    query_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TYPE IF NOT EXISTS query_type_enum AS ENUM (
+    'need',
+    'preference',
+    'retrieval',
+    'persona'
 );
 
-CREATE INDEX idx_search_queries_analysis_id ON search_queries(analysis_id);
+CREATE TABLE IF NOT EXISTS search_queries (
+    search_query_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    persona_id VARCHAR(50) NOT NULL,
+    query_type query_type_enum NOT NULL,
+    query_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_search_queries_persona
+        FOREIGN KEY (persona_id)
+        REFERENCES personas(persona_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT unique_persona_query_type
+        UNIQUE (persona_id, query_type)
+);
+
+CREATE INDEX idx_search_queries_persona_type ON search_queries (persona_id, query_type);
 
 -- ============================================================
 -- 4. 상품 테이블 (products)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS products (
     product_id VARCHAR(100) PRIMARY KEY,
-    vectordb_id VARCHAR(100),
+    vectordb_id JSONB,
     product_name VARCHAR(500) NOT NULL,
     brand VARCHAR(100),
-    product_tag VARCHAR(200),
+    category VARCHAR(200),
+    tag VARCHAR(200),
+    sub_tag VARCHAR(200),
     rating NUMERIC(3, 2),
     review_count INTEGER DEFAULT 0,
     original_price INTEGER,
     discount_rate INTEGER,
     sale_price INTEGER,
     skin_type TEXT[] DEFAULT ARRAY[]::TEXT[],
-    skin_concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
+    concerns TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_colors TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     avoided_ingredients TEXT[] DEFAULT ARRAY[]::TEXT[],
     preferred_scents TEXT[] DEFAULT ARRAY[]::TEXT[],
-    values TEXT[] DEFAULT ARRAY[]::TEXT[],
+    lifestyle_values TEXT[] DEFAULT ARRAY[]::TEXT[],
     exclusive_product VARCHAR(200),
     personal_color TEXT[] DEFAULT ARRAY[]::TEXT[],
     skin_shades INTEGER[] DEFAULT ARRAY[]::INTEGER[],
     product_image_url TEXT[] DEFAULT ARRAY[]::TEXT[],
     product_page_url TEXT,
     product_comment TEXT,
+    product_details JSONB,
     product_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_products_vectordb_id ON products(vectordb_id);
+CREATE INDEX idx_products_vectordb_id ON products USING GIN (vectordb_id);
 CREATE INDEX idx_products_brand ON products(brand);
+CREATE INDEX idx_products_sub_tag ON products(sub_tag);
+CREATE INDEX idx_products_category ON products(category);
+
+-- ============================================================
+-- 5. 대화 세션 테이블 (conversations)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS conversations (
+    id             VARCHAR(36) PRIMARY KEY,
+    user_id        VARCHAR(100) NOT NULL,
+    thread_id      VARCHAR(36) NOT NULL UNIQUE,
+    session_id     VARCHAR(100),
+    title          VARCHAR(500) DEFAULT '새 대화',
+    messages       JSONB DEFAULT '[]'::JSONB,
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX idx_conversations_thread_id ON conversations(thread_id);
+
+-- ============================================================
+-- 6. 생성된 마케팅 메시지 테이블 (generated_messages)
+-- 품질 검사(3단계)를 통과한 최종 메시지만 저장
+-- ============================================================
+CREATE TABLE IF NOT EXISTS generated_messages (
+    id              VARCHAR(36) PRIMARY KEY,
+    conversation_id VARCHAR(36) REFERENCES conversations(id) ON DELETE SET NULL,
+    user_id         VARCHAR(100) NOT NULL,
+    product_id      VARCHAR(100) NOT NULL,
+    product_name    VARCHAR(500),
+    brand           VARCHAR(100),               -- 브랜드명
+    sub_tag         VARCHAR(200),               -- 상품 소분류 태그 (예: 전동마사지기)
+
+    -- 메시지 생성 컨텍스트
+    purpose         VARCHAR(200),               -- 발송 목적 (예: "베스트셀러 제품 소개")
+    user_input      TEXT,                       -- 유저 원문 요청
+
+    -- 메시지 내용
+    title           TEXT,
+    content         TEXT NOT NULL,
+
+    -- 품질 평가 요약 (집계/필터용 flat columns)
+    quality_passed        BOOLEAN,
+    quality_failed_stage  VARCHAR(50),          -- rule_check | semantic_check | llm_judge
+    quality_failure_reason TEXT,
+
+    -- LLM-as-a-Judge 점수 (항목별 집계/필터용)
+    llm_score_accuracy        SMALLINT,         -- 1~5
+    llm_score_tone            SMALLINT,         -- 1~5
+    llm_score_personalization SMALLINT,         -- 1~5
+    llm_score_naturalness     SMALLINT,         -- 1~5
+    llm_score_cta_clarity     SMALLINT,         -- 1~5
+    llm_score_overall         NUMERIC(3, 2),    -- 1.00~5.00
+    llm_feedback              TEXT,             -- LLM 종합 피드백
+
+    -- 품질 평가 상세 (rule_check_issues 배열, semantic 결과 등 raw 데이터)
+    quality_details   JSONB,
+
+    -- 재생성 추적
+    regeneration_count SMALLINT DEFAULT 0,      -- feedback 루프 횟수
+
+    thread_id       VARCHAR(36),                -- LangSmith 트레이싱용
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_generated_messages_conversation_id ON generated_messages(conversation_id);
+CREATE INDEX idx_generated_messages_user_id_created ON generated_messages(user_id, created_at DESC);
+CREATE INDEX idx_generated_messages_product_id ON generated_messages(product_id);
+CREATE INDEX idx_generated_messages_quality_passed ON generated_messages(quality_passed);
+CREATE INDEX idx_generated_messages_llm_score_overall ON generated_messages(llm_score_overall);

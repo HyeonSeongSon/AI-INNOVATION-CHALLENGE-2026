@@ -37,7 +37,7 @@ def _load_json(filename: str) -> dict:
 # 외부 파일에서 스키마 로드
 # ============================================================
 
-_SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "persona_table_schema.yaml"
+_SCHEMA_PATH = Path(__file__).parent / "schemas" / "persona_table_schema.yaml"
 with open(_SCHEMA_PATH, encoding="utf-8") as _f:
     _PERSONA_SCHEMA = yaml.safe_load(_f)["schemas"]["persona_table_schema"]
 

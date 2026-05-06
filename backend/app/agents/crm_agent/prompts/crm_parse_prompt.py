@@ -1,4 +1,4 @@
-def build_crm_parse_prompt(categories: list[str]) -> str:
+def build_crm_parse_prompt(categories) -> str:
     """
     사용자 요청에서 페르소나id, 브랜드, 상품 카테고리, 목적을 파싱하는 프롬프트
 
@@ -8,7 +8,7 @@ def build_crm_parse_prompt(categories: list[str]) -> str:
     Returns:
         prompt
     """
-    categories_list = "\n".join(f"- {c}" for c in categories)
+   #  categories_list = "\n".join(f"- {c}" for c in categories)
 
     return f"""당신은 CRM 메시지 요청을 파싱하는 전문가입니다.
 
@@ -78,16 +78,16 @@ def build_crm_parse_prompt(categories: list[str]) -> str:
   - "에스쁘아 립스틱 광고" → "브랜드/제품 첫소개"
 
 **페르소나 매핑 (단일 값만):**
-- "P123", "P456", "P789" 등 ID 형식이면 → 그대로 사용 (예: "P123" → persona_id: "P123")
-- "20대 여성" → persona_id: "P123"
-- "30대 남성" → persona_id: "P456"
-- "40대 여성" → persona_id: "P789"
+- 페르소나는 반드시  PERSONA_[숫자+대문자 영어] 형태입니다.
+- 페르소나 6E6354965AB9 → persona_id: "PERSONA_6E6354965AB9"
+- persona_6E6354965AB9 → persona_id: "PERSONA_6E6354965AB9"
+
 
 **상품 카테고리(product_categories) 매핑 - 절대 규칙:**
 **경고: product_categories는 반드시 아래 허용된 카테고리 목록 중에서만 선택해야 합니다.**
 
 **허용된 카테고리 목록 (반드시 이 중에서만 선택):**
-{categories_list}
+{categories}
 
 **매핑 규칙:**
 1. ❌ 위 목록에 없는 카테고리는 절대 사용 불가

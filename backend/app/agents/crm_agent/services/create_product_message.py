@@ -11,6 +11,7 @@ from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from langchain_core.messages import HumanMessage, AIMessage
 import os
 import yaml
 import httpx
@@ -250,9 +251,9 @@ class ProductMessageGenerator:
             stress = persona_info.get('스트레스 수준') or persona_info.get('stress_level')
             sections.append(f"스트레스 수준: {stress}")
 
-        if persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time'):
-            device_time = persona_info.get('디지털 기기 사용시간') or persona_info.get('digital_device_usage_time')
-            sections.append(f"디지털 기기 사용시간: {device_time}시간")
+        if persona_info.get('스크린 사용시간') or persona_info.get('daily_screen_hours'):
+            device_time = persona_info.get('스크린 사용시간') or persona_info.get('daily_screen_hours')
+            sections.append(f"스크린 사용시간: {device_time}시간")
 
         return "\n".join(sections)
 
@@ -267,8 +268,8 @@ class ProductMessageGenerator:
         if product.get('brand'):
             sections.append(f"브랜드: {product['brand']}")
 
-        if product.get('product_tag'):
-            sections.append(f"카테고리: {product['product_tag']}")
+        if product.get('sub_tag'):
+            sections.append(f"카테고리: {product['sub_tag']}")
 
         # 가격 정보
         if product.get('sale_price'):
@@ -290,8 +291,8 @@ class ProductMessageGenerator:
             if isinstance(skin_types, list) and skin_types:
                 sections.append(f"적합 피부타입: {', '.join(skin_types)}")
 
-        if product.get('skin_concerns'):
-            concerns = product['skin_concerns']
+        if product.get('concerns'):
+            concerns = product['concerns']
             if isinstance(concerns, list) and concerns:
                 sections.append(f"타겟 고민: {', '.join(concerns)}")
 
@@ -380,7 +381,6 @@ class ProductMessageGenerator:
             "피부타입/고민 강조 소개": build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": build_purpose_lifestyle_and_age_point_prompt
         }
-        from langchain_core.messages import HumanMessage, AIMessage
 
         build_func = PURPOSE_PROMPT_MAP.get(purpose)
         prompt_text = build_func(brand_name, product.get('product_name'), product_text, product_document, brand_tone, persona_text)

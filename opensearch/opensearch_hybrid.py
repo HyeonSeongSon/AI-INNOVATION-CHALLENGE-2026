@@ -169,37 +169,34 @@ class OpenSearchHybridClient:
         print(f"Pipeline ID: {pipeline_id}")
         print(f"Query: {query_text}")
 
-        try:
-            # 벡터 임베딩 생성
-            query_vector = self.model.encode(query_text).tolist()
-            print(f"생성된 벡터 차원: {len(query_vector)}")
+        if query_body is None:
+            logging.error("query_body가 None입니다. 검색을 실행할 수 없습니다.")
+            return []
 
+        try:
             # Search pipeline 파라미터 설정
             params = {"search_pipeline": pipeline_id}
 
             # 검색 실행
             response = self.client.search(index=index_name, body=query_body, params=params)
-            
+
             # 결과 처리
             hits = response.get("hits", {}).get("hits", [])
             results = []
-            
+
             print(f"✅ Search pipeline 검색 완료: {len(hits)}개 결과")
-            
+
             for i, hit in enumerate(hits):
                 result = {
                     "score": hit["_score"],
                     "source": hit["_source"]
                 }
                 results.append(result)
-                
+
                 # 결과 출력
                 source = hit["_source"]
                 print(f"\n{i+1}. Pipeline 점수: {hit['_score']:.6f}")
-                print(f"   문서명: {source.get('문서명', 'N/A')}")
-                print(f"   장: {source.get('장', 'N/A')}")
-                print(f"   조: {source.get('조', 'N/A')}")
-                print(f"   내용: {source.get('문서내용', 'N/A')[:100]}...")
+                print(f"   product_id: {source.get('product_id', 'N/A')}")
 
             return results
             
@@ -208,6 +205,299 @@ class OpenSearchHybridClient:
             logging.error(f"Search pipeline 검색 상세 오류: {e}")
             return []
         
+    def _create_combined_query_body(
+        self,
+        query_vector: list,
+        product_ids: list,
+        top_k: int,
+        bm25_fields: list = None,
+        vector_field: str = "combined_vector",
+    ) -> dict:
+        """
+        combined_vector(KNN) + retrieval_query(BM25) 하이브리드 쿼리 보디 생성
+
+        Args:
+            bm25_fields: BM25 multi_match 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)
+            vector_field: KNN 대상 벡터 필드 (기본: combined_vector)
+        """
+        if bm25_fields is None:
+            bm25_fields = ["search_tags^2.0", "search_phrases"]
+
+        return {
+            "size": top_k,
+            "query": {
+                "hybrid": {
+                    "queries": [
+                        # BM25 - search_tags + search_phrases 매칭
+                        {
+                            "bool": {
+                                "must": {
+                                    "multi_match": {
+                                        "query": "",  # 호출 시 치환
+                                        "fields": bm25_fields,
+                                        "type": "best_fields",
+                                    }
+                                },
+                                "filter": {
+                                    "terms": {"product_id": product_ids}
+                                }
+                            }
+                        },
+                        # KNN - vector_field 유사도 검색
+                        {
+                            "bool": {
+                                "must": {
+                                    "knn": {
+                                        vector_field: {
+                                            "vector": query_vector,
+                                            "k": top_k * 10,
+                                            "filter": {
+                                                "terms": {"product_id": product_ids}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "_source": ["product_id"]
+        }
+
+    def search_combined(
+        self,
+        query_text: str,
+        product_ids: list,
+        top_k: int = 10,
+        index_name: str = "product_index_v3",
+        pipeline_id: str = "hybrid-minmax-pipeline",
+        bm25_fields: list = None,
+        vector_field: str = "combined_vector",
+    ) -> list:
+        """
+        combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색 실행
+
+        Args:
+            query_text: 검색 쿼리 텍스트 (retrieval_query)
+            product_ids: 검색 범위를 제한할 상품 ID 리스트
+            top_k: 반환할 최대 결과 수
+            index_name: 검색 대상 인덱스
+            pipeline_id: 사용할 search pipeline ID
+            bm25_fields: BM25 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)
+            vector_field: KNN 대상 벡터 필드 (기본: combined_vector)
+
+        Returns:
+            List[Dict]: 검색 결과 (score + source)
+        """
+        query_vector = self.model.encode(query_text).tolist()
+        query_body = self._create_combined_query_body(
+            query_vector, product_ids, top_k, bm25_fields, vector_field
+        )
+
+        # BM25 query 텍스트 주입
+        query_body["query"]["hybrid"]["queries"][0]["bool"]["must"]["multi_match"]["query"] = query_text
+
+        return self.search_with_pipeline(
+            query_text=query_text,
+            pipeline_id=pipeline_id,
+            index_name=index_name,
+            query_body=query_body,
+            top_k=top_k,
+        )
+
+    def _create_field_specific_query_body(
+        self,
+        query_vector: list,
+        bm25_fields: list,
+        vector_field: str,
+        product_ids: list,
+        top_k: int,
+    ) -> dict:
+        """
+        특정 필드를 대상으로 한 하이브리드 쿼리 보디 생성
+        BM25: bm25_fields multi_match / KNN: vector_field
+        """
+        return {
+            "size": top_k,
+            "query": {
+                "hybrid": {
+                    "queries": [
+                        {
+                            "bool": {
+                                "must": {
+                                    "multi_match": {
+                                        "query": "",  # 호출 시 치환
+                                        "fields": bm25_fields,
+                                        "type": "best_fields",
+                                    }
+                                },
+                                "filter": {"terms": {"product_id": product_ids}},
+                            }
+                        },
+                        {
+                            "bool": {
+                                "must": {
+                                    "knn": {
+                                        vector_field: {
+                                            "vector": query_vector,
+                                            "k": top_k * 10,
+                                            "filter": {
+                                                "terms": {"product_id": product_ids}
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    ]
+                }
+            },
+            "_source": ["product_id"],
+        }
+
+    def search_by_field(
+        self,
+        query_text: str,
+        bm25_fields: list,
+        vector_field: str,
+        product_ids: list,
+        top_k: int = 50,
+        index_name: str = "product_index_v3",
+        pipeline_id: str = "hybrid-minmax-pipeline",
+    ) -> list:
+        """
+        특정 필드를 대상으로 한 하이브리드 검색 실행
+
+        Args:
+            query_text: 검색 쿼리 텍스트
+            bm25_fields: BM25 multi_match 대상 필드 리스트
+                         (예: ["function_tags", "function_desc"])
+            vector_field: KNN 검색 대상 벡터 필드 (예: function_desc_vector)
+            product_ids: 검색 범위를 제한할 상품 ID 리스트
+            top_k: 반환할 최대 결과 수
+            index_name: 검색 대상 인덱스
+            pipeline_id: 사용할 search pipeline ID
+
+        Returns:
+            List[Dict]: score + product_id 검색 결과
+        """
+        query_vector = self.model.encode(query_text).tolist()
+        query_body = self._create_field_specific_query_body(
+            query_vector, bm25_fields, vector_field, product_ids, top_k
+        )
+        # BM25 쿼리 텍스트 주입
+        query_body["query"]["hybrid"]["queries"][0]["bool"]["must"]["multi_match"]["query"] = query_text
+
+        return self.search_with_pipeline(
+            query_text=query_text,
+            pipeline_id=pipeline_id,
+            index_name=index_name,
+            query_body=query_body,
+            top_k=top_k,
+        )
+
+    def search_multivector_field(
+        self,
+        query_text: str,
+        index_name: str,
+        product_ids: list,
+        top_k: int = 100,
+        aggregation: str = "max",
+        topk_k: int = 2,
+        pipeline_id: str = "hybrid-minmax-pipeline",
+    ) -> list:
+        """
+        멀티벡터 인덱스(문장 단위 문서)에서 하이브리드 검색 후 product_id별 스코어 집계
+
+        v4 인덱스 공통 필드: text (BM25), vector (KNN)
+        동일 상품의 여러 문장 히트를 aggregation 방식으로 product_id당 1개 스코어로 집계
+
+        Args:
+            query_text: 검색 쿼리 텍스트
+            index_name: 검색 대상 인덱스 (예: product_v4_combined)
+            product_ids: 검색 범위를 제한할 상품 ID 리스트
+            top_k: 최종 반환할 상품 수
+            aggregation: 집계 방식 "max" | "topk_avg"
+            topk_k: topk_avg 사용 시 상위 k개 문장 수 (기본 2)
+            pipeline_id: 하이브리드 파이프라인 ID
+
+        Returns:
+            [{"product_id": str, "score": float}, ...] 내림차순 top_k개
+        """
+        from collections import defaultdict
+
+        query_vector = self.model.encode(query_text).tolist()
+
+        # 문장이 상품당 최대 6~7개이므로 size를 충분히 크게
+        fetch_size = top_k * 10
+
+        query_body = {
+            "size": fetch_size,
+            "query": {
+                "hybrid": {
+                    "queries": [
+                        {
+                            "bool": {
+                                "must": {
+                                    "match": {
+                                        "text": {
+                                            "query": query_text,
+                                        }
+                                    }
+                                },
+                                "filter": {"terms": {"product_id": product_ids}},
+                            }
+                        },
+                        {
+                            "bool": {
+                                "must": {
+                                    "knn": {
+                                        "vector": {
+                                            "vector": query_vector,
+                                            "k": fetch_size,
+                                            "filter": {
+                                                "terms": {"product_id": product_ids}
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    ]
+                }
+            },
+            "_source": ["product_id"],
+        }
+
+        raw_results = self.search_with_pipeline(
+            query_text=query_text,
+            pipeline_id=pipeline_id,
+            index_name=index_name,
+            query_body=query_body,
+            top_k=fetch_size,
+        )
+
+        # product_id별 스코어 수집
+        product_scores: dict = defaultdict(list)
+        for item in raw_results:
+            pid = item.get("source", {}).get("product_id")
+            score = item.get("score", 0.0)
+            if pid:
+                product_scores[pid].append(score)
+
+        # 집계
+        aggregated = []
+        for pid, scores in product_scores.items():
+            if aggregation == "max":
+                agg_score = max(scores)
+            else:  # topk_avg
+                top = sorted(scores, reverse=True)[:topk_k]
+                agg_score = sum(top) / len(top)
+            aggregated.append({"product_id": pid, "score": agg_score})
+
+        return sorted(aggregated, key=lambda x: x["score"], reverse=True)[:top_k]
+
     def _create_search_pipe_line_body(self):
         pipeline_body = {
             "description": "하이브리드 점수 정규화 및 결합 파이프라인",

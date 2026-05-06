@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 import logging
 import os
 from dotenv import load_dotenv
@@ -40,18 +40,28 @@ opensearch_client = None
 class ProductIDSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
     product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
-    index_name: str = Field(default="product_index", description="검색할 인덱스 이름")
+    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 결과 개수 (1-100)")
+    bm25_fields: Optional[List[str]] = Field(
+        default=None,
+        description="BM25 multi_match 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)"
+    )
+    vector_field: Optional[str] = Field(
+        default="combined_vector",
+        description="KNN 대상 벡터 필드 (기본: combined_vector)"
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "촉촉한 립스틱",
                 "product_ids": ["PROD001", "PROD002", "PROD003"],
-                "index_name": "product_index",
+                "index_name": "product_index_v3",
                 "pipeline_id": "hybrid-minmax-pipeline",
-                "top_k": 3
+                "top_k": 3,
+                "bm25_fields": ["search_tags^2.0", "search_phrases"],
+                "vector_field": "combined_vector"
             }
         }
 
@@ -105,6 +115,74 @@ class SearchResponse(BaseModel):
     query: str
     product_id_filter: Optional[List[str]] = None
     results: List[ProductResult]
+
+
+class CombinedSearchResult(BaseModel):
+    score: float
+    product_id: str
+
+
+class CombinedSearchResponse(BaseModel):
+    success: bool
+    total_results: int
+    query: str
+    results: List[CombinedSearchResult]
+
+
+class FieldSearchRequest(BaseModel):
+    query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
+    bm25_fields: List[str] = Field(
+        ...,
+        description="BM25 multi_match 대상 필드 리스트 (예: ['function_tags', 'function_desc'])"
+    )
+    vector_field: str = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
+    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
+    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
+    pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
+    top_k: int = Field(default=50, ge=1, le=200, description="반환할 결과 개수 (1-200)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "보습에 특화된 세럼",
+                "bm25_fields": ["function_tags", "function_desc"],
+                "vector_field": "function_desc_vector",
+                "product_ids": ["PROD001", "PROD002"],
+                "index_name": "product_index_v3",
+                "pipeline_id": "hybrid-minmax-pipeline",
+                "top_k": 50,
+            }
+        }
+
+
+class FieldSearchResult(BaseModel):
+    score: float
+    product_id: str
+
+
+class FieldSearchResponse(BaseModel):
+    success: bool
+    total_results: int
+    query: str
+    bm25_fields: List[str]
+    results: List[FieldSearchResult]
+
+
+class MultiVectorSearchRequest(BaseModel):
+    query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
+    index_name: str = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
+    product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_items=1)
+    top_k: int = Field(default=100, ge=1, le=500, description="반환할 상품 수")
+    aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
+    pipeline_id: str = Field(default="hybrid-minmax-pipeline")
+
+
+class MultiVectorSearchResponse(BaseModel):
+    success: bool
+    total_results: int
+    query: str
+    index_name: str
+    results: List[FieldSearchResult]
 
 
 def get_opensearch_client() -> OpenSearchHybridClient:
@@ -417,6 +495,153 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
             status_code=500,
             detail=f"검색 중 오류가 발생했습니다: {str(e)}"
         )
+    
+@app.post("/api/search/combined", response_model=CombinedSearchResponse)
+async def search_by_combined_vector(request: ProductIDSearchRequest):
+    """
+    combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색 엔드포인트
+    score와 product_id만 반환
+    """
+    try:
+        logging.info(f"combined_vector 검색 요청 - 쿼리: '{request.query}', product_ids: {len(request.product_ids)}개")
+
+        client = get_opensearch_client()
+
+        pipeline_body = client._create_search_pipe_line_body()
+        client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
+
+        raw_results = client.search_combined(
+            query_text=request.query,
+            product_ids=request.product_ids,
+            top_k=request.top_k,
+            index_name=request.index_name,
+            pipeline_id=request.pipeline_id,
+            bm25_fields=request.bm25_fields,
+            vector_field=request.vector_field or "combined_vector",
+        )
+
+        results = [
+            CombinedSearchResult(
+                score=item.get("score", 0.0),
+                product_id=item.get("source", {}).get("product_id", ""),
+            )
+            for item in raw_results
+        ]
+
+        logging.info(f"combined_vector 검색 완료 - 결과: {len(results)}개")
+
+        return CombinedSearchResponse(
+            success=True,
+            total_results=len(results),
+            query=request.query,
+            results=results,
+        )
+
+    except Exception as e:
+        logging.error(f"combined_vector 검색 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+
+
+@app.post("/api/search/by-field", response_model=FieldSearchResponse)
+async def search_by_field(request: FieldSearchRequest):
+    """
+    특정 필드를 대상으로 한 하이브리드 검색 (BM25 multi_match + KNN)
+
+    페르소나 차원별 검색에 사용:
+    - need       → bm25_fields: [function_tags, function_desc],   vector_field: function_desc_vector
+    - preference → bm25_fields: [attribute_tags, attribute_desc], vector_field: combined_vector
+    - persona    → bm25_fields: [target_tags, target_user],       vector_field: target_user_vector
+    """
+    try:
+        logging.info(
+            f"by-field 검색 요청 - 쿼리: '{request.query}', "
+            f"필드: {request.bm25_fields}, product_ids: {len(request.product_ids)}개"
+        )
+
+        client = get_opensearch_client()
+
+        pipeline_body = client._create_search_pipe_line_body()
+        client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
+
+        raw_results = client.search_by_field(
+            query_text=request.query,
+            bm25_fields=request.bm25_fields,
+            vector_field=request.vector_field,
+            product_ids=request.product_ids,
+            top_k=request.top_k,
+            index_name=request.index_name,
+            pipeline_id=request.pipeline_id,
+        )
+
+        results = [
+            FieldSearchResult(
+                score=item.get("score", 0.0),
+                product_id=item.get("source", {}).get("product_id", ""),
+            )
+            for item in raw_results
+        ]
+
+        logging.info(f"by-field 검색 완료 - 결과: {len(results)}개")
+
+        return FieldSearchResponse(
+            success=True,
+            total_results=len(results),
+            query=request.query,
+            bm25_fields=request.bm25_fields,
+            results=results,
+        )
+
+    except Exception as e:
+        logging.error(f"by-field 검색 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+
+
+@app.post("/api/search/multivector", response_model=MultiVectorSearchResponse)
+async def search_multivector(request: MultiVectorSearchRequest):
+    """
+    멀티벡터 인덱스(v4) 하이브리드 검색 엔드포인트
+
+    문장 단위로 색인된 v4 인덱스에서 검색 후 product_id별로 스코어를 집계해 반환.
+    aggregation: "max" (기본) | "topk_avg"
+    """
+    try:
+        logging.info(
+            f"multivector 검색 요청 - 쿼리: '{request.query}', "
+            f"인덱스: {request.index_name}, product_ids: {len(request.product_ids)}개"
+        )
+
+        client = get_opensearch_client()
+
+        pipeline_body = client._create_search_pipe_line_body()
+        client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
+        
+        raw_results = client.search_multivector_field(
+            query_text=request.query,
+            index_name=request.index_name,
+            product_ids=request.product_ids,
+            top_k=request.top_k,
+            aggregation=request.aggregation,
+            pipeline_id=request.pipeline_id,
+        )
+
+        results = [
+            FieldSearchResult(score=item["score"], product_id=item["product_id"])
+            for item in raw_results
+        ]
+
+        logging.info(f"multivector 검색 완료 - 결과: {len(results)}개 상품")
+
+        return MultiVectorSearchResponse(
+            success=True,
+            total_results=len(results),
+            query=request.query,
+            index_name=request.index_name,
+            results=results,
+        )
+
+    except Exception as e:
+        logging.error(f"multivector 검색 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
 
 
 if __name__ == "__main__":

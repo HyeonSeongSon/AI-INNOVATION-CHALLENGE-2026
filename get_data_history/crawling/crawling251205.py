@@ -32,7 +32,7 @@ class BrandPageCrawler:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         self.driver = None
-        self.max_products = 20
+        self.max_products = 500
 
     def init_driver(self):
         """Selenium WebDriver 초기화"""
@@ -58,17 +58,96 @@ class BrandPageCrawler:
             logger.error(f"Selenium error: {e}")
             return None
 
-    def get_product_links(self) -> List[str]:
-        """XPath를 사용하여 상품 링크 추출 (div[3~8] 패턴 모두 시도)"""
-        product_links = []
+    def debug_print_all_buttons(self):
+        """페이지에 있는 모든 버튼 목록 출력 (더보기 버튼 위치 파악용)"""
         try:
-            # div[3]부터 div[8]까지 모두 시도
-            for div_idx in range(3, 6):
+            buttons = self.driver.find_elements(By.TAG_NAME, 'button')
+            logger.info(f"=== 페이지 내 버튼 총 {len(buttons)}개 ===")
+            for i, btn in enumerate(buttons):
+                try:
+                    text = btn.text.strip().replace('\n', ' ')
+                    classes = btn.get_attribute('class') or ''
+                    visible = btn.is_displayed()
+                    xpath = self.driver.execute_script("""
+                        function getXPath(el) {
+                            if (el.id) return '//*[@id="' + el.id + '"]';
+                            if (el === document.body) return '/html/body';
+                            var ix = 0;
+                            var siblings = el.parentNode.childNodes;
+                            for (var i = 0; i < siblings.length; i++) {
+                                var sibling = siblings[i];
+                                if (sibling === el) return getXPath(el.parentNode) + '/' + el.tagName.toLowerCase() + '[' + (ix+1) + ']';
+                                if (sibling.nodeType === 1 && sibling.tagName === el.tagName) ix++;
+                            }
+                        }
+                        return getXPath(arguments[0]);
+                    """, btn)
+                    logger.info(f"  [{i}] text='{text}' visible={visible} class='{classes[:50]}' xpath={xpath}")
+                except Exception:
+                    logger.info(f"  [{i}] 버튼 정보 추출 실패")
+            logger.info("=== 버튼 목록 끝 ===")
+        except Exception as e:
+            logger.error(f"버튼 목록 출력 오류: {e}")
+
+    def click_load_more_until_done(self):
+        """더보기 버튼이 사라질 때까지 반복 클릭"""
+        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
+
+        self.debug_print_all_buttons()
+
+        load_more_xpaths = [
+            '//button[contains(., "더 보기")]',
+            '//button[contains(., "더보기")]',
+            '//button[contains(., "more")]',
+            '//*[@id="__next"]/section/section[1]/section/div[5]/button',
+            '//*[@id="__next"]/section/section[1]/section/div[4]/button',
+            '//*[@id="__next"]/section/section[1]/section/div[6]/button',
+            '//*[@id="__next"]/section/section[1]/section/div[7]/button',
+        ]
+        click_count = 0
+
+        while True:
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1)
+
+            clicked = False
+            for xpath in load_more_xpaths:
+                try:
+                    button = WebDriverWait(self.driver, 2).until(
+                        EC.element_to_be_clickable((By.XPATH, xpath))
+                    )
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", button)
+                    time.sleep(0.5)
+                    self.driver.execute_script("arguments[0].click();", button)
+                    click_count += 1
+                    logger.info(f"더보기 버튼 클릭 ({click_count}회) [XPath: {xpath}]")
+                    time.sleep(2)
+                    clicked = True
+                    break
+                except Exception:
+                    continue
+
+            if not clicked:
+                logger.info(f"더보기 버튼 없음 (총 {click_count}회 클릭). 모든 상품 로드 완료.")
+                break
+
+    def get_product_links(self) -> List[str]:
+        """XPath를 사용하여 상품 링크 추출 (title 또는 텍스트가 '전체상품'인 섹션 AND 조건 포함)"""
+        product_links = []
+        # "전체상품" title/문구가 포함된 div AND 상품 링크를 동시에 만족하는 경우만 추출
+        all_products_cond = '[.//*[@title="전체상품"] or .//*[normalize-space(text())="전체상품"]]'
+        try:
+            for div_idx in range(2, 10):
                 logger.info(f"div[{div_idx}] 패턴으로 상품 링크 추출 시도...")
                 div_product_count = 0
 
                 for i in range(1, self.max_products + 1):
-                    xpath = f'//*[@id="__next"]/section/section[1]/section/div[{div_idx}]/div[2]/div[{i}]/a'
+                    xpath = (
+                        f'//*[@id="__next"]/section/section[1]/section'
+                        f'/div[{div_idx}]{all_products_cond}'
+                        f'/div[2]/div[{i}]/a'
+                    )
                     try:
                         element = self.driver.find_element(By.XPATH, xpath)
                         href = element.get_attribute('href')
@@ -80,13 +159,11 @@ class BrandPageCrawler:
                     except Exception as e:
                         logger.debug(f"(div[{div_idx}]) 상품 {i} 링크 추출 실패: {e}")
                         if div_product_count > 0:
-                            # 이미 상품을 찾았으면 다음 div로 이동
                             break
                         continue
 
                 if div_product_count > 0:
                     logger.info(f"div[{div_idx}]에서 {div_product_count}개 상품 추출 완료. 다른 div는 생략.")
-                    # 성공했으므로 나머지 div는 시도하지 않음
                     break
 
             logger.info(f"총 찾은 상품 수: {len(product_links)}")
@@ -370,161 +447,234 @@ class BrandPageCrawler:
 
         return images
 
+    def _extract_images_from_next_data(self) -> List[str]:
+        """__NEXT_DATA__의 detailDesc HTML에서 img src를 추출 (lazy loading 우회, 외부 CDN 포함)"""
+        try:
+            urls = self.driver.execute_script("""
+                try {
+                    var el = document.getElementById('__NEXT_DATA__');
+                    if (!el) return [];
+                    var text = el.textContent;
+                    // detailDesc 키의 JSON 문자열 값 추출
+                    var key = '"detailDesc":"';
+                    var keyIdx = text.indexOf(key);
+                    if (keyIdx === -1) return [];
+                    var start = keyIdx + key.length;
+                    var end = start;
+                    while (end < text.length) {
+                        if (text[end] === '\\\\') { end += 2; continue; }
+                        if (text[end] === '"') break;
+                        end++;
+                    }
+                    var escaped = text.slice(start, end);
+                    var html = '';
+                    try { html = JSON.parse('"' + escaped + '"'); } catch(e) { return []; }
+                    if (!html) return [];
+                    // DOMParser로 HTML 파싱 후 img src 수집
+                    var doc = new DOMParser().parseFromString(html, 'text/html');
+                    var imgs = doc.querySelectorAll('img');
+                    var results = [];
+                    var seen = {};
+                    imgs.forEach(function(img) {
+                        var src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+                        if (src && src.length > 4 && !seen[src]) {
+                            seen[src] = true;
+                            results.push(src);
+                        }
+                    });
+                    return results;
+                } catch(e) { return []; }
+            """)
+            if not urls:
+                logger.info("[NEXT_DATA] detailDesc 없음 또는 img 태그 없음")
+                return []
+
+            images = []
+            for url in urls:
+                if url.startswith('//'):
+                    url = 'https:' + url
+                if url.startswith('http') and url not in images:
+                    images.append(url)
+                    logger.info(f"[NEXT_DATA] 이미지 추출: {url}")
+
+            logger.info(f"✓ __NEXT_DATA__에서 {len(images)}개 이미지 수집 완료")
+            return images
+        except Exception as e:
+            logger.warning(f"[NEXT_DATA] 이미지 추출 실패: {e}")
+            return []
+
     def _extract_product_images(self) -> List[str]:
         """상품 상세 이미지 추출 (버튼 클릭 후 나타나는 섹션 내부 이미지만 수집)"""
         logger.info("=== 상품 상세 이미지 추출 시작 ===")
+
+        # 0단계: __NEXT_DATA__에서 직접 추출 (lazy loading 우회, 가장 신뢰도 높음)
+        images = self._extract_images_from_next_data()
+        if images:
+            return images
+
         images = []
-
         try:
-            # 1단계: 상세 이미지 버튼 클릭
-            button_xpath = '//*[@id="productDesc"]/section/div/div[1]/div/button'
-            try:
-                logger.info("[1단계] 버튼 클릭...")
-                button_element = self.driver.find_element(By.XPATH, button_xpath)
-                self.driver.execute_script("arguments[0].click();", button_element)
-                logger.info("✓ 버튼 클릭 완료")
-
-                # 상세 이미지 영역이 DOM에 추가될 때까지 대기
+            # 1단계: 상세 이미지 버튼 클릭 (여러 XPath 시도)
+            detail_button_xpaths = [
+                '//*[@id="productDesc"]/section/div/div[1]/div/button',
+                '//*[@id="productDesc"]/section/div/div[1]/div[1]/button',
+                '//*[@id="productDesc"]//button[contains(., "상세")]',
+                '//*[@id="productDesc"]//button[contains(., "이미지")]',
+                '//*[@id="productDesc"]//button',
+            ]
+            button_clicked = False
+            for btn_xpath in detail_button_xpaths:
                 try:
-                    wait = WebDriverWait(self.driver, 15)
-                    # div[2]/div[2] 영역이 나타날 때까지 대기
-                    detail_area = wait.until(
-                        EC.presence_of_element_located((By.XPATH, '//*[@id="productDesc"]/section/div/div[1]/div[2]/div[2]'))
+                    logger.info(f"[1단계] 버튼 클릭 시도: {btn_xpath}")
+                    button_element = WebDriverWait(self.driver, 3).until(
+                        EC.element_to_be_clickable((By.XPATH, btn_xpath))
                     )
-                    logger.info("✓ 상세 이미지 영역 (div[2]/div[2]) DOM에 존재")
-
-                    # 영역이 완전히 렌더링될 때까지 충분히 대기
-                    time.sleep(5)
-
-                    # 스크롤하여 모든 이미지가 로드되도록 함
-                    try:
-                        self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", detail_area)
-                        time.sleep(3)
-                    except:
-                        pass
-
+                    self.driver.execute_script("arguments[0].click();", button_element)
+                    logger.info(f"✓ 버튼 클릭 완료: {btn_xpath}")
+                    button_clicked = True
+                    break
                 except Exception as e:
-                    logger.warning(f"상세 이미지 영역 대기 실패: {e}")
-                    time.sleep(5)
+                    logger.debug(f"버튼 클릭 실패 ({btn_xpath}): {e}")
+
+            if not button_clicked:
+                logger.warning("상세 이미지 버튼을 찾지 못함 — 이미 열려있거나 버튼 없음")
+
+            # 이미지 영역 대기 후 전체 페이지 스크롤로 lazy loading 유도
+            try:
+                WebDriverWait(self.driver, 15).until(
+                    EC.presence_of_element_located((By.XPATH, '//*[@id="productDesc"]/section/div/div[1]'))
+                )
+                logger.info("✓ 상세 이미지 영역 DOM에 존재")
+                time.sleep(3)
+
+                total_height = self.driver.execute_script("return document.body.scrollHeight")
+                current_pos = self.driver.execute_script("return window.pageYOffset")
+                while current_pos < total_height:
+                    current_pos += 500
+                    self.driver.execute_script(f"window.scrollTo(0, {current_pos});")
+                    time.sleep(0.3)
+                time.sleep(2)
+
+                # contenteditor-root 비동기 로드 대기 (최대 15초)
+                try:
+                    WebDriverWait(self.driver, 15).until(
+                        lambda d: len(d.find_elements(By.XPATH, '//*[contains(@class,"contenteditor-root")]')) > 0
+                    )
+                    logger.info("✓ contenteditor-root 로드 완료")
+                    time.sleep(1)
+                except Exception:
+                    logger.debug("contenteditor-root 로드 타임아웃, 계속 진행")
 
             except Exception as e:
-                logger.warning(f"버튼 클릭 실패 (이미 열려있을 수 있음): {e}")
-                time.sleep(2)
+                logger.warning(f"상세 이미지 영역 대기 실패: {e}")
+                time.sleep(3)
 
             # 2단계: 버튼 클릭 후 나타난 섹션 내부의 이미지만 수집
             logger.info("[2단계] 상세 이미지 섹션 내부 이미지 수집...")
 
             # 여러 경로 패턴을 순차적으로 시도
             possible_xpaths = [
-                ('//*[@id="productDesc"]/section/div/div[1]/div[2]/div[2]', 'div[2]/div[2]'),  # 기존 경로
-                ('//*[@id="productDesc"]/section/div/div[1]/div/div[2]/div[1]', 'div/div[2]/div[1]'),  # 새 경로
+                # contenteditor 클래스 기반 — productDesc 안팎 모두 시도
+                ('//*[@id="productDesc"]//*[@data-component="contenteditor"]', 'contenteditor-root'),
+                ('//*[@id="productDesc"]//*[contains(@class,"contenteditor-root")]', 'contenteditor-root(class)'),
+                ('//*[contains(@class,"prdImgWrap")]//*[contains(@class,"contenteditor-root")]', 'prdImgWrap>contenteditor'),
+                ('//*[contains(@class,"prdDetail")]//*[contains(@class,"contenteditor-root")]', 'prdDetail>contenteditor'),
+                # positional div 경로
+                ('//*[@id="productDesc"]/section/div/div[1]/div[2]/div[2]', 'div[2]/div[2]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div/div[2]/div[1]', 'div/div[2]/div[1]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[2]', 'div[2]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[2]/div[1]', 'div[2]/div[1]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div/div[2]', 'div/div[2]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[1]/div[2]', 'div[1]/div[2]'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[2]/div', 'div[2]/div'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[3]/div', 'div[3]/div'),
+                ('//*[@id="productDesc"]/section/div/div[1]/div[3]', 'div[3]'),
             ]
 
-            parent_element = None
             found_path = None
-            img_elements = []
 
-            # 각 경로를 순차적으로 시도
+            # 각 경로를 순차적으로 시도 — 유효한 URL이 실제로 추출됐을 때만 break
             for xpath, path_desc in possible_xpaths:
                 try:
                     logger.info(f"경로 시도: {path_desc}")
-                    temp_element = self.driver.find_element(By.XPATH, xpath)
+                    temp_elements = self.driver.find_elements(By.XPATH, xpath)
+                    if not temp_elements:
+                        logger.debug(f"{path_desc} 경로에 요소 없음, 다음 경로 시도...")
+                        continue
 
-                    # 스크롤하여 lazy loading 이미지 로드
-                    try:
-                        self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", temp_element)
-                        time.sleep(2)
-                        # 스크롤을 아래로 천천히 내려서 모든 이미지 로드
-                        self.driver.execute_script("""
-                            var element = arguments[0];
-                            var scrollHeight = element.scrollHeight;
-                            element.scrollBy(0, scrollHeight / 2);
-                        """, temp_element)
-                        time.sleep(2)
-                    except:
-                        logger.debug("스크롤 실패, 계속 진행...")
-
-                    # 하위의 모든 img 태그 찾기 (p 태그 안의 img도 포함)
-                    temp_img_elements = temp_element.find_elements(By.XPATH, './/img')
-
-                    if temp_img_elements:
-                        parent_element = temp_element
-                        img_elements = temp_img_elements
-                        found_path = path_desc
-                        logger.info(f"✓ 상세 이미지 영역 ({path_desc}) 발견")
-                        logger.info(f"{path_desc} 영역에서 {len(img_elements)}개의 img 태그 발견")
-
-                        # 디버깅: contenteditor-image 클래스도 확인
+                    candidate_urls = []
+                    for temp_element in temp_elements:
                         try:
-                            contenteditor_divs = parent_element.find_elements(By.CLASS_NAME, 'contenteditor-image')
-                            logger.info(f"  - contenteditor-image 클래스: {len(contenteditor_divs)}개 발견")
+                            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'start'});", temp_element)
+                            time.sleep(2)
+                            self.driver.execute_script("""
+                                var element = arguments[0];
+                                element.scrollBy(0, element.scrollHeight / 2);
+                            """, temp_element)
+                            time.sleep(2)
                         except:
-                            pass
+                            logger.debug("스크롤 실패, 계속 진행...")
 
-                        break  # 이미지를 찾았으므로 더 이상 시도하지 않음
+                        for img in temp_element.find_elements(By.XPATH, './/img'):
+                            for attr in ['data-src', 'data-original', 'data-lazy-src', 'data-img-src', 'src']:
+                                val = img.get_attribute(attr)
+                                if val and 'transparent' not in val and 'defaultImages' not in val:
+                                    if val.startswith('//'):
+                                        val = 'https:' + val
+                                    if val.startswith('http') and val not in candidate_urls:
+                                        candidate_urls.append(val)
+                                    break
+
+                    if candidate_urls:
+                        images.extend(u for u in candidate_urls if u not in images)
+                        found_path = path_desc
+                        logger.info(f"✓ 상세 이미지 영역 ({path_desc}) 발견, {len(candidate_urls)}개 수집")
+                        break
                     else:
-                        logger.debug(f"{path_desc} 경로에 img 없음, 다음 경로 시도...")
+                        logger.debug(f"{path_desc} 경로에서 유효한 URL 없음, 다음 경로 시도...")
 
                 except Exception as e:
                     logger.debug(f"{path_desc} 경로 실패: {e}, 다음 경로 시도...")
                     continue
 
-            # 모든 경로에서 이미지를 찾지 못한 경우
-            if not img_elements:
+            if not images:
                 logger.warning("모든 경로에서 img 태그를 찾지 못함")
             else:
-                # 이미지 처리 시작
-                for idx, img in enumerate(img_elements, 1):
-                    try:
-                        # 모든 가능한 속성에서 이미지 URL 찾기
-                        possible_attrs = ['src', 'data-src', 'data-original', 'data-lazy-src',
-                                        'data-img-src', 'srcset', 'data-srcset']
+                logger.info(f"✓ 총 {len(images)}개의 상세 이미지 수집 완료 (경로: {found_path})")
+                return images
 
-                        img_url = None
-                        found_attr = None
-                        all_attrs = {}  # 디버깅용: 모든 속성 저장
+            # 3단계: JS로 fileupload/products/detail 패턴 직접 탐색
+            # (Selenium get_attribute는 lazy loading 전 transparent를 반환하므로 JS로 data-src 직접 읽음)
+            if not images:
+                logger.info("XPath 실패. JS로 fileupload/products/detail 이미지 탐색...")
+                try:
+                    urls = self.driver.execute_script("""
+                        var results = [];
+                        var seen = {};
+                        document.querySelectorAll('img').forEach(function(img) {
+                            var attrs = ['data-src', 'data-original', 'data-lazy-src', 'src'];
+                            for (var i = 0; i < attrs.length; i++) {
+                                var url = img.getAttribute(attrs[i]) || '';
+                                if (url.indexOf('fileupload/products') > -1 && url.indexOf('detail') > -1 && !seen[url]) {
+                                    seen[url] = true;
+                                    results.push(url);
+                                    break;
+                                }
+                            }
+                        });
+                        return results;
+                    """)
+                    for url in (urls or []):
+                        if url.startswith('//'):
+                            url = 'https:' + url
+                        if url not in images:
+                            images.append(url)
+                    if images:
+                        logger.info(f"✓ JS 패턴 탐색으로 {len(images)}개 수집")
+                except Exception as e:
+                    logger.debug(f"JS 패턴 탐색 오류: {e}")
 
-                        for attr in possible_attrs:
-                            value = img.get_attribute(attr)
-                            if value:
-                                all_attrs[attr] = value[:100]  # 처음 100자만 저장
-                                if not img_url:  # 첫 번째로 발견된 값만 사용
-                                    # srcset인 경우 첫 번째 URL만 추출
-                                    if 'srcset' in attr and ' ' in value:
-                                        value = value.split(' ')[0].split(',')[0]
-
-                                    img_url = value
-                                    found_attr = attr
-
-                        # 디버깅: 상세 정보 출력
-                        logger.info(f"  === 이미지 {idx} ===")
-                        logger.info(f"  found_attr: {found_attr}")
-                        logger.info(f"  all_attrs: {all_attrs}")
-
-                        # URL이 있으면 수집
-                        if img_url and img_url.startswith('http'):
-                            if img_url not in images:
-                                images.append(img_url)
-                                logger.info(f"  ✓✓✓ 수집 성공 [{idx}]: {img_url}")
-                            else:
-                                logger.debug(f"  - 중복 제거 [{idx}]: {img_url[:80]}...")
-                        else:
-                            logger.warning(f"  ✗✗✗ 유효한 URL 없음 [{idx}]: img_url={img_url}")
-                            # 디버깅: outerHTML 일부 출력
-                            outer_html = img.get_attribute('outerHTML')
-                            if outer_html:
-                                logger.warning(f"  outerHTML: {outer_html[:300]}...")
-
-                    except Exception as e:
-                        logger.warning(f"이미지 {idx} 처리 실패: {e}")
-
-                if images:
-                    logger.info(f"✓ 총 {len(images)}개의 상세 이미지 수집 완료 (경로: {found_path})")
-                    return images
-                else:
-                    logger.warning("이미지 URL 수집 실패")
-
-            # 3단계: 모든 경로 실패 시 폴백
+            # 4단계: 최종 폴백
             if not images:
                 logger.warning("모든 경로에서 이미지 수집 실패. 폴백 방식으로 시도...")
                 return self._extract_product_images_fallback()
@@ -706,6 +856,7 @@ class BrandPageCrawler:
     def parse_content(self) -> List[Dict]:
         """상품 링크 추출 및 상세정보 크롤링"""
         products = []
+        self.click_load_more_until_done()
         product_links = self.get_product_links()
 
         for idx, link in enumerate(product_links, 1):

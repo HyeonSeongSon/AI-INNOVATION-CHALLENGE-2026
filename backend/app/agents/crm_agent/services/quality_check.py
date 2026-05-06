@@ -313,8 +313,13 @@ class QualityChecker:
         for results in results_per_sentence:
             all_results.extend(results)
 
-        # score 내림차순 상위 3개 로깅 (통과/실패 공통)
-        top3 = sorted(all_results, key=lambda r: r["score"], reverse=True)[:3]
+        # 문장별 최고점 1개만 추출 후 score 내림차순 상위 3개 로깅
+        top_per_sentence: Dict[str, Dict] = {}
+        for r in all_results:
+            q = r["query_sentence"]
+            if q not in top_per_sentence or r["score"] > top_per_sentence[q]["score"]:
+                top_per_sentence[q] = r
+        top3 = sorted(top_per_sentence.values(), key=lambda r: r["score"], reverse=True)[:3]
         logger.info(
             "semantic_check_top3",
             top3=[
@@ -420,16 +425,16 @@ class QualityChecker:
             sections.append(f"상품명: {product['product_name']}")
         if product.get("brand"):
             sections.append(f"브랜드: {product['brand']}")
-        if product.get("product_tag"):
-            sections.append(f"카테고리: {product['product_tag']}")
+        if product.get("sub_tag"):
+            sections.append(f"카테고리: {product['sub_tag']}")
         if product.get("sale_price"):
             sections.append(f"가격: {product['sale_price']:,}원")
         if product.get("skin_type"):
             skin_types = product["skin_type"]
             if isinstance(skin_types, list):
                 sections.append(f"적합 피부타입: {', '.join(skin_types)}")
-        if product.get("skin_concerns"):
-            concerns = product["skin_concerns"]
+        if product.get("concerns"):
+            concerns = product["concerns"]
             if isinstance(concerns, list):
                 sections.append(f"타겟 고민: {', '.join(concerns)}")
         if product.get("preferred_ingredients"):

@@ -24,7 +24,9 @@ x-opensearch-resources: &opensearch-resources
 
 services:
   opensearch-node1:
-    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    build:
+      context: .
+      dockerfile: Dockerfile.opensearch
     container_name: opensearch-node1
     environment:
       <<: *opensearch-common-env
@@ -46,7 +48,9 @@ services:
     networks:
       - opensearch-net
   opensearch-node2:
-    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    build:
+      context: .
+      dockerfile: Dockerfile.opensearch
     container_name: opensearch-node2
     environment:
       <<: *opensearch-common-env
@@ -68,7 +72,9 @@ services:
     networks:
       - opensearch-net
   opensearch-node3:
-    image: opensearchproject/opensearch:3.1.0 # 공식 이미지 직접 사용
+    build:
+      context: .
+      dockerfile: Dockerfile.opensearch
     container_name: opensearch-node3
     environment:
       <<: *opensearch-common-env

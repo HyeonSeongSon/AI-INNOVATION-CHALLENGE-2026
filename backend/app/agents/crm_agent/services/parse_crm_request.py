@@ -32,7 +32,7 @@ def load_categories():
 
     with open(categories_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    return data['categories']
+    return data['category_type']
 
 class MultiMessageRequest(BaseModel):
     """다중 값을 지원하는 CRM 메시지 요청"""
@@ -45,6 +45,11 @@ class MultiMessageRequest(BaseModel):
     purpose: Optional[str] = Field(
         default=None,
         description="메시지 목적 (단일 값). 예: '프로모션', '재구매유도'"
+    )
+
+    category_type: Optional[str] = Field(
+        default=None,
+        description="상품 카테고리 대분류 (단일 값). product_categories의 상위 분류. 예: '스킨케어', '헤어', '색조'"
     )
 
     product_categories: List[str] = Field(

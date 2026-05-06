@@ -9,14 +9,20 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from app.api import marketing_api
+from app.api import generated_messages
+from app.api import products_pipeline
+from app.api import persona_pipeline
 from app.agents.supervisor.marketing_agent import MarketingAgent
+from app.agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
+from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
 
 # Load .env before anything else
-load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"), override=True)
 
 # Configure structured logging (must be first)
 configure_logging(
@@ -33,10 +39,19 @@ configure_langsmith()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     postgres_url = os.getenv("POSTGRES_URL")
-    async with AsyncPostgresSaver.from_conn_string(postgres_url) as checkpointer:
+    async with AsyncConnectionPool(
+        conninfo=postgres_url,
+        min_size=1,
+        max_size=10,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    ) as pool:
+        await pool.wait()  # 최소 1개 연결이 실제로 맺어질 때까지 대기
+        checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
         app.state.agent = MarketingAgent(checkpointer=checkpointer)
+        app.state.agent_v2 = MarketingAssistantAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
         yield
 
@@ -61,6 +76,9 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(marketing_api.router)
+app.include_router(generated_messages.router)
+app.include_router(products_pipeline.router)
+app.include_router(persona_pipeline.router)
 
 
 @app.get("/")
@@ -92,5 +110,5 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8005,
-        reload=True  # 개발 환경에서만 사용
+        workers=2
     )
