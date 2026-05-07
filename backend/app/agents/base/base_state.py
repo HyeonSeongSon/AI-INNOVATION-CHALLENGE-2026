@@ -1,5 +1,8 @@
 from typing import Any, Dict, List, Optional, Literal
 from typing_extensions import TypedDict
+from typing import Annotated
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 
 
 class BaseState(TypedDict, total=False):
@@ -11,16 +14,12 @@ class BaseState(TypedDict, total=False):
     - graph 재진입 안전
     - node 간 공유 데이터 명확
     - 상태 추적 및 디버깅 용이
-
-    NOTE: input / messages 는 에이전트마다 형태가 다르므로 각 State에서 정의
-    - 단발성 에이전트: input: str (원본 텍스트)
-    - 대화형 에이전트: messages: Annotated[list[AnyMessage], add_messages]
     """
 
     # -------------------------
     # 기본 정보
     # -------------------------
-    context: Dict[str, Any]         # 실행 컨텍스트 (session, user, meta)
+    messages: Annotated[list[AnyMessage], add_messages]  # 대화 메시지 이력
 
     # -------------------------
     # 실행 상태 관리
@@ -44,11 +43,6 @@ class BaseState(TypedDict, total=False):
     # -------------------------
     tool_results: Dict[str, Any]    # tool 실행 결과
     tool_calls: List[Dict[str, Any]]  # tool 호출 이력
-
-    # -------------------------
-    # 최종 결과
-    # -------------------------
-    output: Any                     # 최종 출력 결과
 
     # -------------------------
     # 에러 / 로그
