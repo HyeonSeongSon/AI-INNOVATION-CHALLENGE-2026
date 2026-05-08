@@ -3,6 +3,8 @@ import httpx
 import os
 import yaml
 from pathlib import Path
+from typing import Optional
+from pydantic import BaseModel, Field
 
 from ...core.llm_factory import get_llm
 from langchain_core.messages import HumanMessage
@@ -240,3 +242,120 @@ def get_all_message_types() -> str:
     if not purposes:
         return "등록된 메시지 타입이 없습니다."
     return format_get_all_message_types(purposes)
+
+
+# ============================================================
+# Structured Output 기반 페르소나 검색
+# ============================================================
+
+class PersonaSearchFilter(BaseModel):
+    gender: Optional[str] = Field(None, description="성별: '남성' 또는 '여성'")
+    age_min: Optional[int] = Field(None, description="최소 나이 (포함)")
+    age_max: Optional[int] = Field(None, description="최대 나이 (포함)")
+    skin_type: Optional[list[str]] = Field(None, description="피부 타입 (AND 조건). 예: ['지성', '트러블성']")
+    concerns: Optional[list[str]] = Field(None, description="피부/헤어 고민 (AND 조건). 예: ['모공', '주름']")
+    personal_color: Optional[str] = Field(None, description="퍼스널 컬러: '웜톤', '쿨톤', '웜스프링', '웜오텀', '쿨썸머', '쿨윈터'")
+    lifestyle_values: Optional[list[str]] = Field(None, description="가치관 (AND 조건). 예: ['비건', '친환경']")
+    stress_level: Optional[str] = Field(None, description="스트레스 수준: '낮음', '보통', '높음'")
+    price_sensitivity: Optional[str] = Field(None, description="가격 민감도: '가성비중시', '프리미엄선호', '무관'")
+    preferred_ingredients: Optional[list[str]] = Field(None, description="선호 성분 (AND 조건). 예: ['히알루론산', '레티놀']")
+    avoided_ingredients: Optional[list[str]] = Field(None, description="기피 성분 (AND 조건). 예: ['알코올', '파라벤']")
+    occupation: Optional[str] = Field(None, description="직업. 예: '마케터', '학생'")
+    beauty_interests: Optional[list[str]] = Field(None, description="관심 뷰티 카테고리. 예: ['스킨케어', '헤어']")
+    shopping_style: Optional[list[str]] = Field(None, description="쇼핑 스타일. 예: ['충동구매형', '신중형']")
+    preferred_brands: Optional[list[str]] = Field(None, description="선호 브랜드. 예: ['설화수', '이니스프리']")
+    limit: int = Field(10, description="반환할 최대 결과 수 (기본 10, 최대 20)")
+
+
+def _build_persona_filter_sql(f: PersonaSearchFilter) -> str:
+    conditions = []
+
+    if f.gender:
+        conditions.append(f"gender = '{f.gender}'")
+    if f.age_min is not None:
+        conditions.append(f"age >= {f.age_min}")
+    if f.age_max is not None:
+        conditions.append(f"age <= {f.age_max}")
+    if f.skin_type:
+        arr = ", ".join(f"'{v}'" for v in f.skin_type)
+        conditions.append(f"skin_type @> ARRAY[{arr}]")
+    if f.concerns:
+        arr = ", ".join(f"'{v}'" for v in f.concerns)
+        conditions.append(f"concerns @> ARRAY[{arr}]")
+    if f.personal_color:
+        conditions.append(f"personal_color = '{f.personal_color}'")
+    if f.lifestyle_values:
+        arr = ", ".join(f"'{v}'" for v in f.lifestyle_values)
+        conditions.append(f"lifestyle_values @> ARRAY[{arr}]")
+    if f.stress_level:
+        conditions.append(f"stress_level = '{f.stress_level}'")
+    if f.price_sensitivity:
+        conditions.append(f"price_sensitivity = '{f.price_sensitivity}'")
+    if f.preferred_ingredients:
+        arr = ", ".join(f"'{v}'" for v in f.preferred_ingredients)
+        conditions.append(f"preferred_ingredients @> ARRAY[{arr}]")
+    if f.avoided_ingredients:
+        arr = ", ".join(f"'{v}'" for v in f.avoided_ingredients)
+        conditions.append(f"avoided_ingredients @> ARRAY[{arr}]")
+    if f.occupation:
+        conditions.append(f"occupation = '{f.occupation}'")
+    if f.beauty_interests:
+        arr = ", ".join(f"'{v}'" for v in f.beauty_interests)
+        conditions.append(f"beauty_interests @> ARRAY[{arr}]")
+    if f.shopping_style:
+        arr = ", ".join(f"'{v}'" for v in f.shopping_style)
+        conditions.append(f"shopping_style @> ARRAY[{arr}]")
+    if f.preferred_brands:
+        arr = ", ".join(f"'{v}'" for v in f.preferred_brands)
+        conditions.append(f"preferred_brands @> ARRAY[{arr}]")
+
+    limit = min(f.limit, 20)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    return f"SELECT * FROM personas {where} LIMIT {limit}"
+
+
+@tool(args_schema=PersonaSearchFilter)
+async def search_personas_by_filter(
+    gender=None, age_min=None, age_max=None,
+    skin_type=None, concerns=None, personal_color=None,
+    lifestyle_values=None, stress_level=None, price_sensitivity=None,
+    preferred_ingredients=None, avoided_ingredients=None,
+    occupation=None, beauty_interests=None, shopping_style=None,
+    preferred_brands=None, limit=10,
+) -> str:
+    """
+    구조화된 조건으로 페르소나를 검색합니다.
+    피부 타입, 피부 고민, 퍼스널 컬러, 가치관, 나이대, 직업, 쇼핑 스타일,
+    선호/기피 성분, 가격 민감도 등 구체적인 속성 조건이 있을 때 사용하세요.
+    search_personas_by_text보다 이 함수를 우선 사용하세요.
+    """
+    f = PersonaSearchFilter(
+        gender=gender, age_min=age_min, age_max=age_max,
+        skin_type=skin_type, concerns=concerns, personal_color=personal_color,
+        lifestyle_values=lifestyle_values, stress_level=stress_level,
+        price_sensitivity=price_sensitivity,
+        preferred_ingredients=preferred_ingredients,
+        avoided_ingredients=avoided_ingredients,
+        occupation=occupation, beauty_interests=beauty_interests,
+        shopping_style=shopping_style, preferred_brands=preferred_brands,
+        limit=limit,
+    )
+    sql = _build_persona_filter_sql(f)
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                f"{DB_API_BASE_URL}/personas/query",
+                json={"sql_query": sql}
+            )
+            response.raise_for_status()
+            rows = response.json()
+    except httpx.HTTPStatusError as e:
+        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
+        return f"페르소나 검색 중 오류가 발생했습니다: {error_detail}"
+    except httpx.RequestError as e:
+        return f"DB API 서버 연결 실패: {str(e)}"
+
+    if not rows:
+        return "조건에 맞는 페르소나가 없습니다."
+    return format_search_personas_by_text(rows)
