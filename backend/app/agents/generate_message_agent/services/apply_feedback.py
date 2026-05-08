@@ -134,6 +134,7 @@ class ApplyFeedback:
         task: Dict[str, Any],
         llm: Optional[BaseChatModel] = None,
         product_info: Optional[Dict[str, Any]] = None,
+        persona_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         피드백을 반영하여 기존 메시지를 개선합니다.
@@ -169,6 +170,7 @@ class ApplyFeedback:
             feedback=feedback_text,
             brand_tone=brand_tone,
             product_info=product_info,
+            persona_info=persona_info,
         )
 
         _llm = llm or self.llm
@@ -203,21 +205,23 @@ class ApplyFeedback:
         tasks: List[Dict[str, Any]],
         failed_ids: set,
         llm: Optional[BaseChatModel] = None,
+        persona_info: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         실패한 태스크에만 피드백을 병렬 적용.
 
         Args:
-            tasks:      전체 generated_tasks
-            failed_ids: 품질 검사 실패 태스크의 product_id set
-            llm:        사용할 LLM 인스턴스
+            tasks:        전체 generated_tasks
+            failed_ids:   품질 검사 실패 태스크의 product_id set
+            llm:          사용할 LLM 인스턴스
+            persona_info: DB에서 조회한 페르소나 정보. None이면 페르소나 섹션 미포함.
 
         Returns:
             실패 태스크는 개선된 메시지로, 통과 태스크는 원본으로 구성된 리스트
         """
         async def improve_one(task: dict) -> dict:
             if task.get("product_id") in failed_ids:
-                return await self.apply_feedback(task, llm)
+                return await self.apply_feedback(task, llm, persona_info=persona_info)
             return task
 
         return list(await asyncio.gather(*[improve_one(t) for t in tasks]))

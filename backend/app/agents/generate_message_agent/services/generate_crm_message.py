@@ -1,7 +1,8 @@
 import asyncio
 from ....core.data_loader import get_brand_tone
 from ...shared.product.product_client import ProductClient
-from typing import Dict, List
+from ...shared.persona.persona_client import PersonaClient
+from typing import Dict, List, Optional
 from ..prompts.purpose_prompt import PurPosePrompts
 from ....core.logging import get_logger
 
@@ -13,6 +14,7 @@ class CrmMessageGenerator:
     def __init__(self):
         self._purpose = PurPosePrompts()
         self._product_client = ProductClient()
+        self._persona_client = PersonaClient()
         self._purpose_prompt_map = {
             "브랜드/제품 첫소개": self._purpose.build_purpose_introduction_prompt,
             "신제품 홍보": self._purpose.build_purpose_new_products_prompt,
@@ -22,6 +24,14 @@ class CrmMessageGenerator:
             "피부타입/고민 강조 소개": self._purpose.build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": self._purpose.build_purpose_lifestyle_and_age_point_prompt,
         }
+
+    async def get_persona_info(self, persona_id: str) -> Optional[Dict]:
+        """persona_id로 DB에서 페르소나 정보를 조회해 반환. 실패 시 None."""
+        try:
+            return await self._persona_client.get_persona_info(persona_id)
+        except Exception:
+            logger.warning("persona_fetch_failed", persona_id=persona_id)
+            return None
 
     async def _get_product_info(self, product_id: str) -> dict:
         """단일 상품 ID로 DB에서 상품 정보를 조회하고 flat dict로 반환.
@@ -83,7 +93,7 @@ class CrmMessageGenerator:
         logger.info("get_brand_tone.done", task_count=len(result))
         return result
 
-    async def get_crm_prompt(self, tasks: List[Dict]) -> List[Dict]:
+    async def get_crm_prompt(self, tasks: List[Dict], persona_info: Optional[Dict] = None) -> List[Dict]:
         """각 태스크의 purpose에 맞는 CRM 프롬프트를 생성하여 task에 추가.
 
         purpose 값을 키로 _purpose_prompt_map에서 프롬프트 빌더를 찾아
@@ -91,6 +101,7 @@ class CrmMessageGenerator:
 
         Args:
             tasks: purpose, product_info, brand_tone 키를 포함하는 태스크 dict 리스트.
+            persona_info: DB에서 조회한 페르소나 정보. None이면 페르소나 섹션 미포함.
 
         Returns:
             prompt가 추가된 태스크 리스트.
@@ -98,7 +109,7 @@ class CrmMessageGenerator:
         logger.info("get_crm_prompt.start", task_count=len(tasks))
 
         return [
-            {**item, "prompt": self._purpose_prompt_map[item["purpose"]](item["product_info"], item["brand_tone"])}
+            {**item, "prompt": self._purpose_prompt_map[item["purpose"]](item["product_info"], item["brand_tone"], persona_info=persona_info)}
             for item in tasks
         ]
 

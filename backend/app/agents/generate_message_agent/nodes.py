@@ -59,10 +59,9 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
 
     return {
         "decisions": {"next_node": result.next_node},
-        "intermediate": {
-            "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
-            "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
-        },
+        "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
+        "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
+        "persona_id": result.persona_id,
     }
 
 
@@ -71,7 +70,8 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     message_llm = get_llm(model, temperature=0.7)
 
-    tasks = state.get("intermediate", {}).get("tasks") or []
+    tasks = state.get("tasks") or []
+    persona_id = state.get("persona_id")
 
     agent_logger.info(
         "generate_message_started",
@@ -79,9 +79,11 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
+    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
+
     tasks = await _generator.get_product_info(tasks)
     tasks = await _generator.get_brand_tone(tasks)
-    tasks = await _generator.get_crm_prompt(tasks)
+    tasks = await _generator.get_crm_prompt(tasks, persona_info=persona_info)
     tasks = await _generator.generate_crm_message(tasks, message_llm)
 
     generated_tasks = [
@@ -156,9 +158,11 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     generated_tasks = state.get("generated_tasks") or []
     failed_task_ids = set(state.get("failed_task_ids") or [])
     retry_count = state.get("feedback_retry_count", 0)
-    feedback_input = (state.get("intermediate") or {}).get("feedback_input")
+    feedback_input = state.get("feedback_input")
+    persona_id = state.get("persona_id")
 
     applier = get_applier()
+    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
 
     if feedback_input:
         agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
@@ -172,7 +176,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
                 "failure_reason": feedback_input["feedback"],
             },
         }
-        improved = await applier.apply_feedback(task, llm=feedback_llm)
+        improved = await applier.apply_feedback(task, llm=feedback_llm, persona_info=persona_info)
         updated_tasks = [improved]
     else:
         agent_logger.info(
@@ -180,7 +184,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             user_message=f"자동 피드백 적용 시작 ({len(failed_task_ids)}개)",
             failed_count=len(failed_task_ids),
         )
-        updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm)
+        updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
 
     agent_logger.info("feedback_done", user_message="피드백 적용 완료")
 

@@ -6,7 +6,7 @@
 
 import json
 from langchain_core.messages import SystemMessage, HumanMessage
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 _FEEDBACK_PRODUCT_FIELDS = {
     "product_name", "brand", "product_tag",
@@ -27,6 +27,7 @@ def build_apply_feedback_prompt(
     feedback: str,
     brand_tone: str,
     product_info: Dict[str, Any],
+    persona_info: Optional[Dict[str, Any]] = None,
 ) -> List:
     """
     피드백 반영 메시지 수정 프롬프트 구성
@@ -42,6 +43,12 @@ def build_apply_feedback_prompt(
         [SystemMessage, HumanMessage] 리스트
     """
     product_summary = json.dumps(_filter_product_info(product_info), ensure_ascii=False, indent=2)
+    persona_section = f"""
+
+## 타겟 페르소나 정보 (수정 시 반드시 반영)
+{persona_info}
+
+페르소나의 피부 고민, 가치관, 라이프스타일에 맞게 수정하세요.""" if persona_info else ""
 
     system_prompt = """당신은 CRM 마케팅 메시지 편집 전문가입니다.
 기존 메시지를 피드백에 따라 개선하는 것이 목표입니다.
@@ -67,7 +74,7 @@ def build_apply_feedback_prompt(
 {product_summary}
 
 ## 브랜드 톤 (준수 필수)
-{brand_tone}"""
+{brand_tone}{persona_section}"""
 
     return [
         SystemMessage(content=system_prompt),

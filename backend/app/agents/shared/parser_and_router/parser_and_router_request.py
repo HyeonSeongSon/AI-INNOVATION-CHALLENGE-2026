@@ -42,6 +42,10 @@ class GenerateMessageRouterResult(BaseModel):
         default=None,
         description="next_node == 'message_feedback_node' 일 때만 채움. 수정 요청 데이터"
     )
+    persona_id: Optional[str] = Field(
+        default=None,
+        description="대화에서 언급된 페르소나 ID. 예: 'P001', 'PERSONA_ABC123'. 명시된 경우만 채움, 없으면 null."
+    )
 
 
 async def recommend_product_parser(messages: List[AnyMessage], llm: BaseChatModel) -> Dict[str, Any]:

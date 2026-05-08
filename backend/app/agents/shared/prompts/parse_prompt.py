@@ -74,6 +74,10 @@ def build_generate_message_router_prompt() -> str:
 
 입력: "다시 만들어줘"
 출력: {"next_node": "generate_message_node", "tasks": [{"product_id": "<이전 대화의 product_id>", "purpose": "<이전 대화의 purpose>"}], "feedback_input": null}
+
+**persona_id 추출:**
+- 대화에서 페르소나 ID(예: 'P001', 'PERSONA_ABC123')가 명시된 경우 `persona_id`에 채움
+- 언급이 없으면 null
 """
 
 

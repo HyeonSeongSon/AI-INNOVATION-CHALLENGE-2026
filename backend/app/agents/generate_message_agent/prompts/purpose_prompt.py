@@ -1,9 +1,19 @@
-from typing import Dict
+from typing import Dict, Optional
 class PurPosePrompts:
+    def _build_persona_section(self, persona_info: Optional[Dict]) -> str:
+        if not persona_info:
+            return ""
+        return f"""
+        ## 타겟 페르소나 정보 (반드시 반영)
+        {persona_info}
+
+        페르소나의 피부 고민, 가치관, 라이프스타일을 메시지 전체에 자연스럽게 반영하세요."""
+
     def build_purpose_introduction_prompt(
             self,
             product_data: Dict,
-            brand_tone: str
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         첫 소개 메세지 생성 목적 프롬프트
@@ -25,6 +35,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
@@ -116,7 +127,8 @@ class PurPosePrompts:
     def build_purpose_new_products_prompt(
             self,
             product_data: Dict,
-            brand_tone: str
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         신상품 메세지 생성 목적 프롬프트
@@ -139,6 +151,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
@@ -235,7 +248,8 @@ class PurPosePrompts:
     def build_purpose_bestseller_prompt(
             self,
             product_data: Dict,
-            brand_tone: str, 
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         베스트셀러 소개 메세지 생성 목적 프롬프트
@@ -258,6 +272,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
@@ -395,8 +410,8 @@ class PurPosePrompts:
     def build_purpose_promotion_and_evnet_prompt(
             self,
             product_data: Dict,
-            brand_tone: str, 
-
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         프로모션과 이벤트 소개 메세지 생성 목적 프롬프트
@@ -420,6 +435,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
@@ -569,7 +585,8 @@ class PurPosePrompts:
     def build_purpose_ingredient_efficacy_point_prompt(
             self,
             product_data: Dict,
-            brand_tone: str, 
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         핵심 성분과 효능 강조 메세지 생성 목적 프롬프트
@@ -592,6 +609,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
 
         # 메시지 작성 가이드라인
@@ -775,7 +793,8 @@ class PurPosePrompts:
     def build_purpose_skintype_and_concern_point_prompt(
             self,
             product_data: Dict,
-            brand_tone: str
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         피부타입과 고민 강조 메세지 생성 목적 프롬프트
@@ -798,6 +817,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
@@ -1006,7 +1026,8 @@ class PurPosePrompts:
     def build_purpose_lifestyle_and_age_point_prompt(
             self,
             product_data: Dict,
-            brand_tone: str
+            brand_tone: str,
+            persona_info: Optional[Dict] = None,
             ) -> str:
         """
         라이프스타일과 연령 강조 메세지 생성 목적 프롬프트
@@ -1029,6 +1050,7 @@ class PurPosePrompts:
         # 입력 정보
         - 상품정보: {product_data}
         - 브랜드톤: {brand_tone}
+        {self._build_persona_section(persona_info)}
 
         # 메시지 작성 가이드라인
 
