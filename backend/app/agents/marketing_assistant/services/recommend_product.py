@@ -189,6 +189,34 @@ class ProductRecommender:
     }
 
     @staticmethod
+    def _apply_rrf_per_tag(
+        dimension_results: Dict,
+        product_tags: List[str],
+        top_n: int,
+        k: int = 15,
+    ) -> List[tuple]:
+        """카테고리별 독립 RRF 실행 후 병합.
+        각 카테고리에서 ceil(top_n / len(tags))개씩 추출 후 중복 제거.
+        """
+        import math
+        per_cat = math.ceil(top_n / len(product_tags))
+        seen: set = set()
+        merged: List[tuple] = []
+
+        for tag in product_tags:
+            weights = ProductRecommender._CATEGORY_WEIGHTS.get(tag)
+            ranked = ProductRecommender._apply_rrf(dimension_results, weights=weights, k=k)
+            count = 0
+            for pid, score in ranked:
+                if pid not in seen and count < per_cat:
+                    seen.add(pid)
+                    merged.append((pid, score))
+                    count += 1
+
+        merged.sort(key=lambda x: x[1], reverse=True)
+        return merged[:top_n]
+
+    @staticmethod
     def _apply_rrf(
         dimension_results: Dict,
         weights: Optional[Dict[str, float]] = None,
@@ -221,7 +249,7 @@ class ProductRecommender:
         queries: Dict,
         retrieval_result_ids: List[str],
         top_n: int = 3,
-        product_tag: Optional[str] = None,
+        product_tags: Optional[List[str]] = None,
     ) -> List[Dict]:
         """
         3차원 하이브리드 검색 + RRF → 상위 top_n개 상품 정보 반환
@@ -230,7 +258,7 @@ class ProductRecommender:
             queries: get_product_search_queries 반환값
             retrieval_result_ids: product_retriever 결과 상품 ID 리스트
             top_n: 최종 반환할 상품 수 (기본값 3)
-            product_tag: 카테고리 태그. 카테고리별 가중치 적용에 사용
+            product_tags: 카테고리 태그 리스트. 복수 시 카테고리별 독립 RRF 후 병합
 
         Returns:
             List[Dict]: RRF 순위 기준 상위 top_n개 상품 전체 정보
@@ -243,18 +271,20 @@ class ProductRecommender:
             {"product_id": pid} for pid in retrieval_result_ids
         ]
 
-        # 카테고리별 가중치 선택 (미지정 또는 매핑 없으면 기본값)
-        weights = ProductRecommender._CATEGORY_WEIGHTS.get(product_tag) if product_tag else None
-
         logger.info(
             "recommend.weights_selected",
-            product_tag=product_tag,
-            weights=weights or ProductRecommender._DIMENSION_WEIGHTS,
+            product_tags=product_tags,
         )
 
-        # RRF로 최종 순위 결정
-        ranked = self._apply_rrf(dimension_results, weights=weights)
-        top_ranked = ranked[:top_n]
+        # 복수 카테고리: 카테고리별 독립 RRF 후 병합 / 단일 또는 미지정: 기존 방식
+        if product_tags and len(product_tags) > 1:
+            top_ranked = ProductRecommender._apply_rrf_per_tag(
+                dimension_results, product_tags, top_n
+            )
+        else:
+            single_tag = product_tags[0] if product_tags else None
+            weights = ProductRecommender._CATEGORY_WEIGHTS.get(single_tag) if single_tag else None
+            top_ranked = self._apply_rrf(dimension_results, weights=weights)[:top_n]
         top_ids = [pid for pid, _ in top_ranked]
         score_map = {pid: round(score, 4) for pid, score in top_ranked}
 
