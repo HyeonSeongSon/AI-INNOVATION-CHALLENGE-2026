@@ -20,6 +20,7 @@ def get_supervisor_system_prompt():
 3) **Generate Message Agent** (handoff_to_generate_message_agent)
    - 페르소나·상품 대상 CRM 메시지(문자, 앱 푸시 등) 생성
    - 기존 메시지 수정 또는 피드백 반영
+   - **호출하지 않는 경우:** "메시지 타입이 뭐야?", "어떤 종류의 메시지를 만들 수 있어?" 등 메시지 타입 목록을 묻는 조회 요청 → Search Agent
 
 ## 중요한 작업 처리 규칙
 

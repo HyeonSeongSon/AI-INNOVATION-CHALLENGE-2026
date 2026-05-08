@@ -119,9 +119,10 @@ async def search_personas_by_text(natural_query: str) -> str:
 @tool
 async def get_products_by_tag(tag: str) -> str:
     """
-    상품종류(태그)를 입력하면 해당 종류의 상품 중 인기 상위 5개를 조회합니다.
+    상품 소분류(sub_tag)를 입력하면 해당 종류의 상품 중 인기 상위 5개를 조회합니다.
     별점과 리뷰수의 평균 순위가 높은 순으로 반환합니다.
-    예시 태그: '에센스&세럼&오일', '크림', '선케어', '마스크팩', '클렌징'
+    예시 태그: '에센스&세럼', '크림', '선크림', '마스크&팩', '클렌징폼', '샴푸', '에센스&세럼&오일'
+    정확한 소분류 목록은 get_all_categories 툴로 먼저 확인하세요.
     사용자가 특정 상품 종류를 물어볼 때 사용하세요.
     """
     try:
@@ -226,7 +227,7 @@ def get_all_categories() -> str:
     사용자가 어떤 상품 종류가 있는지 물어보거나, get_products_by_tag 호출 전에
     유효한 카테고리명을 확인할 때 사용하세요.
     """
-    categories = _load_json("categories.json").get("categories", [])
+    categories = _load_json("category.json").get("sub_tags", [])
     if not categories:
         return "등록된 상품 종류가 없습니다."
     return format_get_all_categories(categories)
