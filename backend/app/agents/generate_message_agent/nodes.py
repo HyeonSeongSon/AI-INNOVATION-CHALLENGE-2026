@@ -116,6 +116,8 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     judge_llm = get_llm(model, temperature=0)
 
     generated_tasks = state.get("generated_tasks") or []
+    persona_id = state.get("persona_id")
+    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
 
     agent_logger.info(
         "quality_check_started",
@@ -132,6 +134,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
             product_id=task["product_id"],
             purpose=task["purpose"],
             llm=judge_llm,
+            persona_info=persona_info,
         )
         checked_tasks.append({**task, "quality_check": quality_check})
         if not quality_check["passed"]:

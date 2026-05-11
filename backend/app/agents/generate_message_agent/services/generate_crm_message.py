@@ -19,7 +19,7 @@ class CrmMessageGenerator:
             "브랜드/제품 첫소개": self._purpose.build_purpose_introduction_prompt,
             "신제품 홍보": self._purpose.build_purpose_new_products_prompt,
             "베스트셀러 제품 소개": self._purpose.build_purpose_bestseller_prompt,
-            "프로모션/이벤트 소개": self._purpose.build_purpose_promotion_and_evnet_prompt,
+            "프로모션/이벤트 소개": self._purpose.build_purpose_promotion_and_event_prompt,
             "성분/효능 강조 소개": self._purpose.build_purpose_ingredient_efficacy_point_prompt,
             "피부타입/고민 강조 소개": self._purpose.build_purpose_skintype_and_concern_point_prompt,
             "라이프스타일/연령대 강조 소개": self._purpose.build_purpose_lifestyle_and_age_point_prompt,

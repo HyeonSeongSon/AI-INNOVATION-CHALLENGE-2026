@@ -72,7 +72,8 @@ class ProductRecommender:
                 "구매 결정 요인": api_data.get("purchase_decision_factors", []),
                 "가격 민감도": api_data.get("price_sensitivity"),
                 "선호 브랜드": api_data.get("preferred_brands", []),
-                "기피 브랜드": api_data.get("avoided_brands", [])
+                "기피 브랜드": api_data.get("avoided_brands", []),
+                "페르소나 요약": api_data.get("persona_summary"),
             }
 
             logger.info("persona_fetched", persona_id=persona_id, persona_name=persona_info.get("이름"))

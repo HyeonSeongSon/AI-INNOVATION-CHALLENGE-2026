@@ -9,11 +9,17 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from typing import List, Dict, Any, Optional
 
 _FEEDBACK_PRODUCT_FIELDS = {
-    "product_name", "brand", "product_tag",
-    "concern", "key_benefits", "target_user",
-    "ingredients", "features", "description",
-    "skin_type", "volume", "usage",
-    "price", "discount_rate",
+    # DB 최상위 필드
+    "product_name", "brand", "sub_tag",
+    "skin_type", "sale_price", "discount_rate",
+    "rating", "review_count",
+    # product_details 공통 필드
+    "concern", "key_benefits", "proof_points",
+    "ingredient", "texture", "suitable_for",
+    "function", "function_desc",
+    "attribute", "attribute_desc",
+    "summary", "target_user", "value",
+    "usage_context", "highlight_keywords",
 }
 
 

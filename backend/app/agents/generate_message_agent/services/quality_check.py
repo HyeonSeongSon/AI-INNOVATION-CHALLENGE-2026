@@ -47,6 +47,8 @@ class LLMJudgeOutput(BaseModel):
 class QualityChecker:
     """마케팅 메시지 품질 검사 서비스"""
 
+    _NUM_RE = re.compile(r'[\d%]')
+
     def __init__(self):
         self._forbidden_expressions: List[str] = self._extract_forbidden_expressions()
         self._kiwi = Kiwi()
@@ -65,6 +67,7 @@ class QualityChecker:
         product_id: str,
         purpose: str,
         llm: Optional[BaseChatModel] = None,
+        persona_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         마케팅 메시지 품질 검사를 3단계로 순차 실행합니다.
@@ -177,7 +180,8 @@ class QualityChecker:
             return result
         logger.info("stage3_llm_judge_started")
         passed, scores = await self._run_llm_judge(
-            title, message_text, product_name, product, purpose, brand_name, llm
+            title, message_text, product_name, product, purpose, brand_name, llm,
+            persona_info=persona_info,
         )
         result["llm_judge_passed"] = passed
         result["llm_judge_scores"] = scores
@@ -321,12 +325,22 @@ class QualityChecker:
                 detected.append(original)
 
         # Step 3: 형태소 분석 — 조사/어미 변형 대응
+        # 숫자/% 포함 키워드는 형태소 분석 시 수치 정보가 소실되므로 제외
+        # (예: "100% 개선" → "개선" 1토큰만 남아 "112.99% 개선"도 오탐)
+        # 부사 등이 제거되어 원본 토큰 수보다 형태소 토큰 수가 적을 경우에도 제외
+        # (예: "즉각 효과" → 즉각(MAG 부사)이 제거되어 "효과" 1토큰만 남아 오탐)
         morph_text = self._morpheme_tokens(text)
         for idx, expr in enumerate(self._forbidden_expressions):
             if idx in seen_idx:
                 continue
+            if self._NUM_RE.search(expr):
+                continue
             morph_expr = self._morpheme_tokens(expr)
-            if morph_expr and morph_expr in morph_text:
+            if not morph_expr:
+                continue
+            if len(morph_expr.split()) < len(expr.strip().split()):
+                continue
+            if morph_expr in morph_text:
                 seen_idx.add(idx)
                 detected.append(expr)
 
@@ -488,6 +502,7 @@ class QualityChecker:
         purpose: str,
         brand_name: str,
         llm: Optional[BaseChatModel] = None,
+        persona_info: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
         LLM-as-a-Judge로 메시지 품질을 평가합니다 (Stage 3).
@@ -524,6 +539,7 @@ class QualityChecker:
                 brand_tone=brand_tone,
                 title=title,
                 message=message,
+                persona_info=persona_info,
             )
             prompt_messages = [
                 SystemMessage(content=system_prompt),
