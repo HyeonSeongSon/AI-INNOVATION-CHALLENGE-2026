@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from .state import GenerateMessageState
 from ..shared.parser_and_router.parser_and_router_request import generate_message_router
 from ...config.settings import settings
@@ -10,6 +12,10 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from typing import Dict, Any
 import json
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 _generator = CrmMessageGenerator()
 _checker = QualityChecker()
@@ -41,12 +47,29 @@ def _parse_message(raw) -> Dict[str, Any]:
 
 async def init_node(state: GenerateMessageState, config: RunnableConfig) -> dict:
     return {
+        # GenerateMessageState 전용
         "generated_tasks": [],
         "failed_task_ids": [],
         "feedback_retry_count": 0,
+        "tasks": None,
+        "feedback_input": None,
+        "persona_id": None,
+        # BaseState 공통
         "status": "running",
         "error": None,
+        "error_details": None,
         "logs": [],
+        "step": 0,
+        "node_history": ["init"],
+        "current_node": "init",
+        "last_node": None,
+        "is_interrupted": False,
+        "decisions": {},
+        "intermediate": {},
+        "start_time": _now_iso(),
+        "end_time": None,
+        "duration_ms": None,
+        # active_persona_id는 초기화하지 않음 — 턴 간 유지
     }
 
 
@@ -57,12 +80,15 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
 
     result = await generate_message_router(messages, router_llm)
 
-    return {
+    update = {
         "decisions": {"next_node": result.next_node},
         "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
         "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
         "persona_id": result.persona_id,
     }
+    if result.persona_id:
+        update["active_persona_id"] = result.persona_id
+    return update
 
 
 async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
@@ -71,7 +97,7 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
     message_llm = get_llm(model, temperature=0.7)
 
     tasks = state.get("tasks") or []
-    persona_id = state.get("persona_id")
+    persona_id = state.get("persona_id") or state.get("active_persona_id")
 
     agent_logger.info(
         "generate_message_started",
@@ -116,7 +142,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     judge_llm = get_llm(model, temperature=0)
 
     generated_tasks = state.get("generated_tasks") or []
-    persona_id = state.get("persona_id")
+    persona_id = state.get("persona_id") or state.get("active_persona_id")
     persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
 
     agent_logger.info(
@@ -162,7 +188,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     failed_task_ids = set(state.get("failed_task_ids") or [])
     retry_count = state.get("feedback_retry_count", 0)
     feedback_input = state.get("feedback_input")
-    persona_id = state.get("persona_id")
+    persona_id = state.get("persona_id") or state.get("active_persona_id")
 
     applier = get_applier()
     persona_info = await _generator.get_persona_info(persona_id) if persona_id else None

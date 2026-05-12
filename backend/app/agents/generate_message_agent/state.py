@@ -7,4 +7,5 @@ class GenerateMessageState(BaseState):
     feedback_retry_count: int                   # 피드백 적용 재시도 횟수
     tasks: Optional[List[Dict[str, Any]]]       # 라우터가 추출한 생성 태스크 목록 (generate_message_node 입력)
     feedback_input: Optional[Dict[str, Any]]    # 라우터가 추출한 사용자 피드백 입력 (message_feedback_node 입력)
-    persona_id: Optional[str]                   # 라우터가 추출한 페르소나 ID
+    persona_id: Optional[str]                   # 턴별 라우터 추출 페르소나 ID (매 턴 초기화)
+    active_persona_id: Optional[str]            # 턴 간 유지되는 유효 페르소나 ID (router가 None 반환 시 fallback)
