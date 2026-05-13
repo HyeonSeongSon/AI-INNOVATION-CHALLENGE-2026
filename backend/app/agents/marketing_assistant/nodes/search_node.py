@@ -5,7 +5,7 @@ from ....config.settings import settings
 from langgraph.graph import END
 from ...tools.search_tools import (
     get_all_personas,
-    search_personas_by_text,
+    search_personas_by_filter,
     get_persona_by_id,
     get_products_by_tag,
     get_products_by_brand,
@@ -20,7 +20,7 @@ from langgraph.types import Command
 
 _logger = get_logger("search_node")
 
-_TOOLS = [get_all_personas, search_personas_by_text, get_persona_by_id, get_products_by_tag, get_products_by_brand, get_all_brands, get_all_categories, get_all_message_types]
+_TOOLS = [get_all_personas, search_personas_by_filter, get_persona_by_id, get_products_by_tag, get_products_by_brand, get_all_brands, get_all_categories, get_all_message_types]
 _TOOL_MAP = {t.name: t for t in _TOOLS}
 
 

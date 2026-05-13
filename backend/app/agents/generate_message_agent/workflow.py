@@ -29,7 +29,7 @@ def _route_after_quality_check(state: GenerateMessageState) -> str:
     return "message_feedback_node"
 
 
-def build_workflow(ckeckpointer=None):
+def build_workflow(checkpointer=None):
     workflow = StateGraph(GenerateMessageState)
 
     workflow.add_node("init_node", init_node)
@@ -55,7 +55,7 @@ def build_workflow(ckeckpointer=None):
     workflow.add_edge("message_feedback_node", "quality_check_node")
     workflow.add_edge("output_node", END)
 
-    return workflow.compile(checkpointer=ckeckpointer)
+    return workflow.compile(checkpointer=checkpointer)
 
 graph = build_workflow()
 

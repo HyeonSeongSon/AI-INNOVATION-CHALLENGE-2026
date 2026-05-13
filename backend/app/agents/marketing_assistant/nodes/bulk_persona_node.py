@@ -7,11 +7,11 @@ from langgraph.types import Command
 from langgraph.graph import END
 
 from ..state import MarketingAssistantState
-from ..services.generate_persona_and_query import (
+from ...shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ..services.persona_client import PersonaClient
+from ...shared.persona.persona_client import PersonaClient
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
 from ....core.logging import get_logger

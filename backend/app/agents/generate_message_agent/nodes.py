@@ -250,6 +250,6 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
         status = "failed"
 
     return {
-        "messages": [AIMessage(content=content)],
+        "messages": [AIMessage(content=content, name="generate_message_agent")],
         "status": status,
     }

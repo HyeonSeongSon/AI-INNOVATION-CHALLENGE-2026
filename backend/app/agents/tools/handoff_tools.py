@@ -3,7 +3,7 @@ from typing import Annotated
 
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_core.tools.structured import InjectedToolCallId
+from langchain_core.tools import InjectedToolCallId
 from langgraph.types import Command
 
 
@@ -13,7 +13,7 @@ def handoff_to_recommend_product_agent(
 ) -> Command:
     """상품 추천 에이전트로 제어를 이전합니다. 사용자가 상품 추천을 요청할 때 호출하세요."""
     return Command(
-        goto="recommend_product",
+        goto="recommend_product_agent",
         update={
             "messages": [
                 ToolMessage(
@@ -55,6 +55,25 @@ def handoff_to_search_agent(
             "messages": [
                 ToolMessage(
                     content="검색 에이전트로 핸드오프합니다.",
+                    tool_call_id=tool_call_id,
+                )
+            ]
+        },
+    )
+
+
+@tool
+def handoff_to_data_registration_agent(
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """데이터 등록 에이전트로 제어를 이전합니다.
+    파일로 일괄 등록하거나, 자연어로 페르소나를 설명하여 등록을 요청할 때 호출하세요."""
+    return Command(
+        goto="data_registration_agent",
+        update={
+            "messages": [
+                ToolMessage(
+                    content="데이터 등록 에이전트로 핸드오프합니다.",
                     tool_call_id=tool_call_id,
                 )
             ]
