@@ -2,22 +2,21 @@ import asyncio
 import json
 from typing import Annotated
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_core.tools.structured import InjectedToolCallId
+from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
-from langgraph.graph import END
 
-from ...marketing_assistant.services.generate_persona_and_query import (
+from ...shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ...marketing_assistant.services.persona_client import PersonaClient
+from ...shared.persona.persona_client import PersonaClient
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
 from ....core.logging import get_logger
-from ..state import FileUploadState
+from ..state import DataRegistrationState
 
 logger = get_logger("register_personas_tool")
 _persona_client = PersonaClient()
@@ -44,7 +43,7 @@ async def _process_one(index: int, record: dict, llm) -> dict:
 
 @tool
 async def register_personas_tool(
-    state: Annotated[FileUploadState, InjectedState],
+    state: Annotated[DataRegistrationState, InjectedState],
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:
     """페르소나 파일을 일괄 등록합니다. 페르소나 레코드(이름, 나이, 피부타입 등)가 포함된 파일일 때 호출하세요."""
@@ -80,13 +79,9 @@ async def register_personas_tool(
 
     return Command(
         update={
-            "messages": [
-                ToolMessage(content=summary, tool_call_id=tool_call_id),
-                AIMessage(content=summary, name="file_upload_agent"),
-            ],
+            "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)],
             "file_records": None,
             "status": "completed",
             "logs": [f"페르소나 등록: {len(succeeded)}명 성공, {len(failed)}명 실패"],
         },
-        goto=END,
     )

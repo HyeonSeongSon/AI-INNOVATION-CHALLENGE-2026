@@ -26,7 +26,7 @@ class BaseState(TypedDict, total=False):
     # -------------------------
     step: int                       # 현재 step (기본값: 0)
     max_steps: int                  # 최대 허용 step (무한루프 방지)
-    last_node: str                  # 마지막 실행 node
+    last_node: Optional[str]        # 마지막 실행 node
     current_node: str               # 현재 실행 중인 node
     node_history: List[str]         # node 실행 이력 (디버깅용)
     is_interrupted: bool            # interrupt 여부
