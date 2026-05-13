@@ -5,6 +5,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 from typing import Literal
 from ...core.llm_factory import get_llm
+from ...core.logging import get_logger
 from ...config.settings import settings
 from .state import CRMMessageAgentState
 from .prompts.supervisor_prompt import build_supervisor_prompt, build_final_answer_prompt
@@ -19,6 +20,9 @@ from ..tools.search_tools import (
     get_all_categories,
     get_all_message_types,
 )
+
+_logger = get_logger("crm_message_agent")
+
 
 class RouteDecision(BaseModel):
     next: Literal["search_agent", "recommend_product_agent", "generate_message_agent", "data_registration_agent", "FINISH"] = Field(
@@ -64,6 +68,7 @@ _SEARCH_TOOLS = [
 
 
 async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
+    _logger.info("supervisor_started", node_name="supervisor_agent")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     llm = get_llm(model, temperature=0)
     messages = state.get("messages", [])
@@ -72,6 +77,8 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         build_supervisor_prompt(messages)
     )
 
+    _logger.info("supervisor_routed", node_name="supervisor_agent", next=decision.next, reason=decision.reason)
+
     if decision.next == "FINISH":
         final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
         return {"messages": [final_answer]}
@@ -79,6 +86,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     return Command(goto=decision.next)
 
 async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
+    _logger.info("search_agent_started", node_name="search_agent")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     llm = get_llm(model, temperature=0.7)
     agent = create_agent(
@@ -89,6 +97,7 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
     filtered_messages = _filter_handoff_messages(state.get("messages", []))
     result = await agent.ainvoke({"messages": filtered_messages}, config)
     ai_msg, tool_msg = create_handoff_messages("search_agent")
+    _logger.info("search_agent_done", node_name="search_agent")
     return Command(
         goto="supervisor",
         update={"messages": result.get("messages", []) + [ai_msg, tool_msg]},
@@ -97,6 +106,7 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
 def make_recommend_product_node(graph):
     async def recommend_product_agent(state: CRMMessageAgentState, config: RunnableConfig):
+        _logger.info("recommend_product_agent_started", node_name="recommend_product_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:recommend"}} if thread_id else config
         subgraph_input = {
@@ -104,6 +114,7 @@ def make_recommend_product_node(graph):
             "active_persona_id": state.get("intermediate", {}).get("active_persona_id"),
         }
         result = await graph.ainvoke(subgraph_input, sub_config)
+        _logger.info("recommend_product_agent_done", node_name="recommend_product_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("recommend_product_agent")
         return Command(
             goto="supervisor",
@@ -123,12 +134,14 @@ def make_recommend_product_node(graph):
 
 def make_generate_message_node(graph):
     async def generate_message_agent(state: CRMMessageAgentState, config: RunnableConfig):
+        _logger.info("generate_message_agent_started", node_name="generate_message_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:generate_message"}} if thread_id else config
         subgraph_input = {
             "messages": _filter_handoff_messages(state.get("messages", [])),
         }
         result = await graph.ainvoke(subgraph_input, sub_config)
+        _logger.info("generate_message_agent_done", node_name="generate_message_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("generate_message_agent")
         return Command(
             goto="supervisor",
@@ -147,6 +160,7 @@ def make_generate_message_node(graph):
 
 def make_data_registration_node(graph):
     async def data_registration_agent(state: CRMMessageAgentState, config: RunnableConfig):
+        _logger.info("data_registration_agent_started", node_name="data_registration_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:data_registration"}} if thread_id else config
         subgraph_input = {
@@ -154,6 +168,7 @@ def make_data_registration_node(graph):
             "file_records": state.get("file_records"),
         }
         result = await graph.ainvoke(subgraph_input, sub_config)
+        _logger.info("data_registration_agent_done", node_name="data_registration_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("data_registration_agent")
         return Command(
             goto="supervisor",

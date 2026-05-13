@@ -46,6 +46,8 @@ def _parse_message(raw) -> Dict[str, Any]:
 
 
 async def init_node(state: GenerateMessageState, config: RunnableConfig) -> dict:
+    logger = AgentLogger({**state, "logs": []}, node_name="init_node", agent_name="generate_message_agent")
+    logger.info("agent_started", user_message="[init] 에이전트 시작")
     return {
         # GenerateMessageState 전용
         "generated_tasks": [],
@@ -58,7 +60,7 @@ async def init_node(state: GenerateMessageState, config: RunnableConfig) -> dict
         "status": "running",
         "error": None,
         "error_details": None,
-        "logs": [],
+        "logs": logger.get_user_logs(),
         "step": 0,
         "node_history": ["init"],
         "current_node": "init",
@@ -74,17 +76,23 @@ async def init_node(state: GenerateMessageState, config: RunnableConfig) -> dict
 
 
 async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+    logger = AgentLogger(state, node_name="router_node", agent_name="generate_message_agent")
+    logger.info("router_started", user_message="[router] 라우팅 분석 시작")
     messages = state.get("messages")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     router_llm = get_llm(model, settings.parser_model_temperature)
 
     result = await generate_message_router(messages, router_llm)
 
+    task_count = len(result.tasks) if result.tasks else 0
+    logger.info("router_done", user_message=f"[router] 라우팅 결정 완료 (task_count={task_count})", task_count=task_count)
+
     update = {
         "decisions": {"next_node": result.next_node},
         "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
         "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
         "persona_id": result.persona_id,
+        "logs": logger.get_user_logs(),
     }
     if result.persona_id:
         update["active_persona_id"] = result.persona_id
@@ -226,6 +234,8 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
 
 
 async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
+    logger = AgentLogger(state, node_name="output_node", agent_name="generate_message_agent")
+    logger.info("output_started", user_message="[output] 결과 정리 시작")
     generated_tasks = state.get("generated_tasks") or []
     failed_task_ids = set(state.get("failed_task_ids") or [])
 
@@ -249,7 +259,9 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
         content = f"CRM 메시지 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
         status = "failed"
 
+    logger.info("output_done", user_message=f"[output] 완료 (status={status})", status=status)
     return {
         "messages": [AIMessage(content=content, name="generate_message_agent")],
         "status": status,
+        "logs": logger.get_user_logs(),
     }
