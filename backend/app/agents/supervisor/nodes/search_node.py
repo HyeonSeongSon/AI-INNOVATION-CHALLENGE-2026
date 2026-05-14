@@ -3,7 +3,7 @@ from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
 from ...tools.search_tools import (
     get_all_personas,
-    search_personas_by_text,
+    search_personas_by_filter,
     get_persona_by_id,
     get_products_by_tag,
     get_products_by_brand,
@@ -19,7 +19,7 @@ import os
 
 _logger = get_logger("search_node")
 
-_TOOLS = [get_all_personas, search_personas_by_text, get_persona_by_id, get_products_by_tag, get_products_by_brand, get_all_brands, get_all_categories, get_all_message_types]
+_TOOLS = [get_all_personas, search_personas_by_filter, get_persona_by_id, get_products_by_tag, get_products_by_brand, get_all_brands, get_all_categories, get_all_message_types]
 _TOOL_MAP = {t.name: t for t in _TOOLS}
 
 
@@ -45,7 +45,9 @@ async def search_node(state: SupervisorState, config: RunnableConfig):
             for tc in response.tool_calls:
                 tool = _TOOL_MAP.get(tc["name"])
                 if tool:
+                    _logger.info("search_node_tool_call", tool_name=tc["name"], tool_args=tc["args"])
                     result = await tool.ainvoke(tc["args"])
+                    _logger.info("search_node_tool_result", tool_name=tc["name"], result_preview=str(result)[:200])
                     tool_messages.append(
                         ToolMessage(content=str(result), tool_call_id=tc["id"])
                     )

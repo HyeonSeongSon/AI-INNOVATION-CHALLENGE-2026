@@ -5,7 +5,7 @@ schemas:
     컬럼 목록:
       persona_id                TEXT PRIMARY KEY  -- 페르소나 고유 ID (예: 'PERSONA_001')
       name                      TEXT NOT NULL     -- 이름
-      gender                    TEXT              -- '남성' 또는 '여성'
+      gender                    TEXT              -- '남자' 또는 '여자'
       age                       INTEGER           -- 나이 (정수)
       occupation                TEXT              -- 직업 (예: '마케터', '학생', '직장인')
       skin_type                 TEXT[]            -- 피부 타입 배열 (예: '건조함', '지성', '트러블성', '민감성', '복합성' 등 데이터에 저장된 표현 그대로 사용)

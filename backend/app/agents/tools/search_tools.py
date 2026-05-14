@@ -250,7 +250,7 @@ def get_all_message_types() -> str:
 # ============================================================
 
 class PersonaSearchFilter(BaseModel):
-    gender: Optional[str] = Field(None, description="성별: '남성' 또는 '여성'")
+    gender: Optional[str] = Field(None, description="성별: '남자' 또는 '여자'")
     age_min: Optional[int] = Field(None, description="최소 나이 (포함)")
     age_max: Optional[int] = Field(None, description="최대 나이 (포함)")
     skin_type: Optional[list[str]] = Field(None, description="피부 타입 (AND 조건). 예: ['지성', '트러블성']")

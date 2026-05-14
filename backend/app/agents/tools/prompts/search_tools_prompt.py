@@ -17,7 +17,7 @@ def build_search_node_prompt(messages):
 - 상품 종류(태그)로 조회 → get_products_by_tag (예: "립스틱", "크림", "에센스", "선케어")
 - 브랜드명으로 조회 → get_products_by_brand (예: "에스쁘아", "헤라", "설화수")
 - 전체 페르소나 목록 → get_all_personas
-- 조건으로 페르소나 검색 → search_personas_by_text
+- 조건으로 페르소나 검색 → search_personas_by_filter
 - 특정 페르소나 상세 조회 → get_persona_by_id
 - 제공 중인 브랜드 목록 확인 → get_all_brands (어떤 브랜드가 있는지 물어볼 때, 또는 get_products_by_brand 전 유효한 브랜드명 확인)
 - 제공 중인 상품 종류 목록 확인 → get_all_categories (어떤 카테고리가 있는지 물어볼 때, 또는 get_products_by_tag 전 유효한 카테고리명 확인)
@@ -44,6 +44,7 @@ def build_search_personas_by_text_prompt(schema: str, natural_query: str) -> str
 5. Array 컬럼 필터링 시 위의 PostgreSQL Array 문법을 정확히 사용하세요.
 6. SQL 쿼리만 출력하세요. 설명이나 마크다운 코드블록 없이 순수 SQL만 반환하세요.
 7. 사용자가 입력한 표현을 다른 단어로 변환하거나 정규화하지 마세요. 예: "건조함" → "건성"으로 바꾸지 말고 "건조함" 그대로 사용하세요.
+   단, 나이대 표현은 정수 범위로 변환하세요. 예: "20대" → age >= 20 AND age <= 29, "30대" → age >= 30 AND age <= 39
 
 사용자 질의: {natural_query}
 
