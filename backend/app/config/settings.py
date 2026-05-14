@@ -46,6 +46,11 @@ class Settings:
     # App
     app_root: str = os.getenv("APP_ROOT", "")
 
+    # A2A agent URLs (Stage 1: 같은 서버. Stage 3에서 환경변수로 분리)
+    recommend_agent_url: str = os.getenv("RECOMMEND_AGENT_URL", "http://localhost:8005")
+    generate_message_agent_url: str = os.getenv("GENERATE_MESSAGE_AGENT_URL", "http://localhost:8005")
+    data_registration_agent_url: str = os.getenv("DATA_REGISTRATION_AGENT_URL", "http://localhost:8005")
+
     # Product recommendation tuning
     rrf_k: int = int(os.getenv("RRF_K", "60"))
     min_rrf_score_threshold: float = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))

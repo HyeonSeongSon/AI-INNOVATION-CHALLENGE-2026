@@ -1,0 +1,88 @@
+from fastapi import APIRouter
+from langchain_core.messages import BaseMessage, messages_from_dict
+
+from a2a.models import AgentCard, AgentSkill, DataPart, Task, TaskSendRequest, TaskStatus
+from app.config.settings import settings
+from app.core.logging import get_logger
+from .workflow import build_workflow
+
+router = APIRouter(prefix="/a2a/generate-message", tags=["A2A: Generate Message Agent"])
+
+_logger = get_logger("generate_message_agent.a2a")
+
+
+def _deserialize_messages(raw: list) -> list:
+    if not raw:
+        return []
+    if isinstance(raw[0], dict):
+        return messages_from_dict(raw)
+    return raw
+
+
+def _serialize_messages(messages: list) -> list:
+    return [
+        {"type": m.type, "data": m.model_dump()} if isinstance(m, BaseMessage) else m
+        for m in messages
+    ]
+
+
+@router.get("/.well-known/agent.json", response_model=AgentCard)
+async def agent_card():
+    return AgentCard(
+        name="generate_message_agent",
+        description="페르소나와 상품 정보를 기반으로 CRM 메시지를 생성하고 품질을 검사하는 에이전트",
+        url=f"{settings.generate_message_agent_url}/a2a/generate-message",
+        skills=[
+            AgentSkill(
+                id="generate",
+                name="CRM 메시지 생성",
+                description="상품·페르소나 조합으로 문자, 앱푸시 등 CRM 메시지를 생성하고 품질 검사를 수행합니다",
+            )
+        ],
+    )
+
+
+@router.post("/tasks/send", response_model=Task)
+async def send_task(request: TaskSendRequest):
+    data = next(
+        (p.data for p in request.message.parts if isinstance(p, DataPart)),
+        {},
+    )
+
+    messages = _deserialize_messages(data.get("messages", []))
+    subgraph_input = {"messages": messages}
+    config = {"configurable": {"thread_id": request.sessionId or request.id}}
+
+    _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
+
+    try:
+        graph = build_workflow()
+        result = await graph.ainvoke(subgraph_input, config)
+
+        status = TaskStatus.FAILED if result.get("status") == "failed" else TaskStatus.COMPLETED
+
+        _logger.info("a2a_task_completed", task_id=request.id, status=status)
+
+        return Task(
+            id=request.id,
+            sessionId=request.sessionId,
+            status=status,
+            artifacts=[{
+                "type": "data",
+                "data": {
+                    "generated_tasks": result.get("generated_tasks", []),
+                    "messages": _serialize_messages(result.get("messages", [])),
+                    "logs": result.get("logs", []),
+                    "status": result.get("status"),
+                },
+            }],
+        )
+
+    except Exception as e:
+        _logger.error("a2a_task_failed", task_id=request.id, error=str(e), exc_info=True)
+        return Task(
+            id=request.id,
+            sessionId=request.sessionId,
+            status=TaskStatus.FAILED,
+            artifacts=[{"type": "data", "data": {"error": str(e), "status": "failed"}}],
+        )
