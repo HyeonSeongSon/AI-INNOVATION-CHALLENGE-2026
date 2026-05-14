@@ -15,7 +15,7 @@ from app.api import generated_messages
 from app.api import products_pipeline
 from app.api import persona_pipeline
 from app.agents.supervisor.marketing_agent import MarketingAgent
-from app.agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
+from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
         app.state.agent = MarketingAgent(checkpointer=checkpointer)
-        app.state.agent_v2 = MarketingAssistantAgent(checkpointer=checkpointer)
+        app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
         yield
 
