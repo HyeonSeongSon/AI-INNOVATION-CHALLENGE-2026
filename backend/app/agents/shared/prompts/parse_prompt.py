@@ -18,7 +18,10 @@ def build_generate_message_router_prompt() -> str:
 **next_node == "generate_message_node" 인 경우:**
 - `tasks` 필드를 채우고, `feedback_input`은 null
 - tasks 규칙:
-  - 상품이 여러 개 언급된 경우 각 상품마다 별도 task로 분리
+  - 사용자가 수량·순위를 지정한 경우 해당 상품만 선택 (아래 예시 참고)
+    - "스코어가 가장 높은", "TOP1", "가장 좋은 하나", "최고 상품" → 추천 목록에서 [TOP1] 상품 1개만 task
+    - "상위 2개", "TOP1·TOP2" → [TOP1], [TOP2] 상품 2개만 task
+  - 수량·순위 지정이 없고 상품이 여러 개 언급된 경우 각 상품마다 별도 task로 분리
   - 하나의 purpose가 여러 상품에 공통 적용되면 각 task에 동일한 purpose 설정
   - 상품마다 다른 purpose가 명시된 경우 각각의 purpose 적용
 

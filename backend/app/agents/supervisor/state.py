@@ -1,7 +1,3 @@
-from typing import Annotated
-from typing_extensions import TypedDict
-from langchain_core.messages import AnyMessage
-from langgraph.graph.message import add_messages
 from ..base.base_state import BaseState
 
 
@@ -17,5 +13,4 @@ class SupervisorState(BaseState, total=False):
     - input: CRM subgraph에 전달할 원본 텍스트 (supervisor_node에서 설정)
     - step, logs, intermediate, status: BaseState 상속 (CRMState와 key 공유)
     """
-    messages: Annotated[list[AnyMessage], add_messages]
     input: str  # CRM subgraph 진입 시 supervisor_node가 설정

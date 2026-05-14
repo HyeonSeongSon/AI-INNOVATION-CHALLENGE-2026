@@ -16,11 +16,11 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
-from ..agents.marketing_assistant.services.generate_persona_and_query import (
+from ..agents.shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ..agents.marketing_assistant.services.persona_client import PersonaClient
+from ..agents.shared.persona.persona_client import PersonaClient
 from ..core.llm_factory import get_llm
 from ..config.settings import settings
 from ..core.logging import get_logger

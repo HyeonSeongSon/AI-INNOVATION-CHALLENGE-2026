@@ -44,3 +44,7 @@ def build_workflow(checkpointer=None):
     workflow.add_edge("init_node", "orchestrator")
 
     return workflow.compile(checkpointer=checkpointer)
+
+
+# LangGraph Studio용 모듈 레벨 graph 노출
+graph = build_workflow()

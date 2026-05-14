@@ -7,6 +7,7 @@ from langchain_core.runnables import RunnableConfig
 
 from ...config.settings import settings
 from ...core.llm_factory import get_llm
+from ...core.logging import AgentLogger
 from ..shared.parser_and_router.parser_and_router_request import recommend_product_parser
 from ..shared.persona.generate_persona_and_query import generate_search_query, generate_structured_persona_info
 from .services.recommend_product_in_persona import ProductRecommender
@@ -22,13 +23,15 @@ def _now_iso() -> str:
 
 
 async def init_node(state: RecommendProductState) -> dict:
+    logger = AgentLogger({**state, "logs": []}, node_name="init_node", agent_name="recommend_product_agent")
+    logger.info("agent_started", user_message="[init] 에이전트 시작")
     return {
         "search_queries": {},
         "recommended_products": [],
         "status": "running",
         "error": None,
         "error_details": None,
-        "logs": ["[init] 에이전트 시작"],
+        "logs": logger.get_user_logs(),
         "step": 0,
         "node_history": ["init"],
         "current_node": "init",
@@ -44,6 +47,8 @@ async def init_node(state: RecommendProductState) -> dict:
 
 async def parser_node(state: RecommendProductState, config: RunnableConfig) -> Dict[str, Any]:
     node_name = "parser"
+    logger = AgentLogger(state, node_name=node_name, agent_name="recommend_product_agent")
+    logger.info("parser_started", user_message=f"[{node_name}] 요청 파싱 시작")
     step = state.get("step", 0) + 1
     base = {
         "step": step,
@@ -57,24 +62,28 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
         parser_llm = get_llm(model, settings.parser_model_temperature)
 
         parsed_data = await recommend_product_parser(messages[-1:], parser_llm)
+        logger.info("parser_done", user_message=f"[{node_name}] 요청 파싱 완료")
         return {
             **base,
             "parsed_data": parsed_data,
             "intermediate": {**state.get("intermediate", {}), "parsed_data": parsed_data},
-            "logs": state.get("logs", []) + [f"[{node_name}] 요청 파싱 완료"],
+            "logs": logger.get_user_logs(),
         }
     except Exception as e:
+        logger.error("parser_error", user_message=f"[{node_name}] 오류: {e}", exc_info=True)
         return {
             **base,
             "status": "failed",
             "error": str(e),
             "error_details": {"node": node_name, "traceback": traceback.format_exc()},
-            "logs": state.get("logs", []) + [f"[{node_name}] 오류: {e}"],
+            "logs": logger.get_user_logs(),
         }
 
 
 async def get_search_query_node(state: RecommendProductState, config: RunnableConfig) -> Dict[str, Any]:
     node_name = "get_search_query"
+    logger = AgentLogger(state, node_name=node_name, agent_name="recommend_product_agent")
+    logger.info("get_search_query_started", user_message=f"[{node_name}] 검색 쿼리 생성 시작")
     step = state.get("step", 0) + 1
     base = {
         "step": step,
@@ -106,13 +115,18 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             search_queries = await _recommender.get_product_search_queries(resolved_persona_id)
 
             if search_queries is None:
+                logger.warning(
+                    "persona_not_found",
+                    user_message=f"[{node_name}] 페르소나 검색 쿼리 없음 (persona_id={resolved_persona_id})",
+                    persona_id=resolved_persona_id,
+                )
                 return {
                     **base,
-                    "messages": [AIMessage(content="해당 페르소나에 대한 상품 검색 쿼리를 찾을 수 없습니다. 올바른 페르소나 id인지 확인해주세요.")],
+                    "messages": [AIMessage(content="해당 페르소나에 대한 상품 검색 쿼리를 찾을 수 없습니다. 올바른 페르소나 id인지 확인해주세요.", name="recommend_product_agent")],
                     "search_queries": {},
                     "status": "completed",
                     "decisions": {**state.get("decisions", {}), "search_query_source": source, "persona_found": False},
-                    "logs": state.get("logs", []) + [f"[{node_name}] 페르소나 검색 쿼리 없음 (persona_id={resolved_persona_id})"],
+                    "logs": logger.get_user_logs(),
                 }
         else:
             structured_persona, raw_queries = await asyncio.gather(
@@ -130,26 +144,35 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
                 "persona": raw_queries["persona"],
             }
 
+        logger.info(
+            "get_search_query_done",
+            user_message=f"[{node_name}] 검색 쿼리 준비 완료 (source={source}, persona_id={resolved_persona_id})",
+            source=source,
+            persona_id=resolved_persona_id,
+        )
         return {
             **base,
             "search_queries": search_queries,
             "active_persona_id": resolved_persona_id,
             "decisions": {**state.get("decisions", {}), "search_query_source": source},
             "intermediate": {**state.get("intermediate", {}), "search_queries": search_queries},
-            "logs": state.get("logs", []) + [f"[{node_name}] 검색 쿼리 준비 완료 (source={source}, persona_id={resolved_persona_id})"],
+            "logs": logger.get_user_logs(),
         }
     except Exception as e:
+        logger.error("get_search_query_error", user_message=f"[{node_name}] 오류: {e}", exc_info=True)
         return {
             **base,
             "status": "failed",
             "error": str(e),
             "error_details": {"node": node_name, "traceback": traceback.format_exc()},
-            "logs": state.get("logs", []) + [f"[{node_name}] 오류: {e}"],
+            "logs": logger.get_user_logs(),
         }
 
 
 async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any]:
     node_name = "recommend_products"
+    logger = AgentLogger(state, node_name=node_name, agent_name="recommend_product_agent")
+    logger.info("recommend_products_started", user_message=f"[{node_name}] 상품 추천 시작")
     step = state.get("step", 0) + 1
     base = {
         "step": step,
@@ -178,8 +201,8 @@ async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any
         ]
 
         product_summary = "\n".join(
-            f"- [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('sub_tag')}): {p.get('product_comment')}"
-            for p in recommended_products
+            f"- [TOP{i+1}] [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('sub_tag')}): {p.get('product_comment')}"
+            for i, p in enumerate(recommended_products)
         )
 
         end_time = _now_iso()
@@ -188,21 +211,28 @@ async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any
         if start_time:
             duration_ms = (datetime.fromisoformat(end_time) - datetime.fromisoformat(start_time)).total_seconds() * 1000
 
+        logger.info(
+            "recommend_products_done",
+            user_message=f"[{node_name}] 상품 추천 완료 ({len(recommended_products)}개, {duration_ms:.0f}ms)",
+            product_count=len(recommended_products),
+            duration_ms=duration_ms,
+        )
         return {
             **base,
-            "messages": [AIMessage(content=f"추천 상품 목록:\n{product_summary}")],
+            "messages": [AIMessage(content=f"추천 상품 목록 (스코어 순위 기준):\n{product_summary}", name="recommend_product_agent")],
             "recommended_products": recommended_products,
             "status": "completed",
             "end_time": end_time,
             "duration_ms": duration_ms,
             "intermediate": {**state.get("intermediate", {}), "recommended_products": recommended_products},
-            "logs": state.get("logs", []) + [f"[{node_name}] 상품 추천 완료 ({len(recommended_products)}개, {duration_ms:.0f}ms)"],
+            "logs": logger.get_user_logs(),
         }
     except Exception as e:
+        logger.error("recommend_products_error", user_message=f"[{node_name}] 오류: {e}", exc_info=True)
         return {
             **base,
             "status": "failed",
             "error": str(e),
             "error_details": {"node": node_name, "traceback": traceback.format_exc()},
-            "logs": state.get("logs", []) + [f"[{node_name}] 오류: {e}"],
+            "logs": logger.get_user_logs(),
         }
