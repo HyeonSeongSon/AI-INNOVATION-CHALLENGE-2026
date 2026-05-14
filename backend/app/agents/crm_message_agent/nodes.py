@@ -1,9 +1,13 @@
+import uuid
+
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages.utils import messages_from_dict
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 from typing import Literal
+from ....a2a.client import A2AClient
 from ...core.llm_factory import get_llm
 from ...core.logging import get_logger
 from ...config.settings import settings
@@ -104,22 +108,24 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
     )
 
 
-def make_recommend_product_node(graph):
+def make_recommend_product_node(client: A2AClient):
     async def recommend_product_agent(state: CRMMessageAgentState, config: RunnableConfig):
         _logger.info("recommend_product_agent_started", node_name="recommend_product_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
-        sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:recommend"}} if thread_id else config
-        subgraph_input = {
+        session_id = f"{thread_id}:recommend" if thread_id else str(uuid.uuid4())
+
+        task = await client.send_task(session_id, {
             "messages": state.get("messages", []),
             "active_persona_id": state.get("intermediate", {}).get("active_persona_id"),
-        }
-        result = await graph.ainvoke(subgraph_input, sub_config)
+        })
+        result = task.artifacts[0]["data"]
+
         _logger.info("recommend_product_agent_done", node_name="recommend_product_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("recommend_product_agent")
         return Command(
             goto="supervisor",
             update={
-                "messages": result.get("messages", []) + [ai_msg, tool_msg],
+                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
                 "intermediate": {
                     **state.get("intermediate", {}),
                     "recommended_products": result.get("recommended_products", []),
@@ -132,21 +138,23 @@ def make_recommend_product_node(graph):
     return recommend_product_agent
 
 
-def make_generate_message_node(graph):
+def make_generate_message_node(client: A2AClient):
     async def generate_message_agent(state: CRMMessageAgentState, config: RunnableConfig):
         _logger.info("generate_message_agent_started", node_name="generate_message_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
-        sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:generate_message"}} if thread_id else config
-        subgraph_input = {
+        session_id = f"{thread_id}:generate_message" if thread_id else str(uuid.uuid4())
+
+        task = await client.send_task(session_id, {
             "messages": _filter_handoff_messages(state.get("messages", [])),
-        }
-        result = await graph.ainvoke(subgraph_input, sub_config)
+        })
+        result = task.artifacts[0]["data"]
+
         _logger.info("generate_message_agent_done", node_name="generate_message_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("generate_message_agent")
         return Command(
             goto="supervisor",
             update={
-                "messages": result.get("messages", []) + [ai_msg, tool_msg],
+                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
                 "intermediate": {
                     **state.get("intermediate", {}),
                     "generated_tasks": result.get("generated_tasks", []),
@@ -158,22 +166,24 @@ def make_generate_message_node(graph):
     return generate_message_agent
 
 
-def make_data_registration_node(graph):
+def make_data_registration_node(client: A2AClient):
     async def data_registration_agent(state: CRMMessageAgentState, config: RunnableConfig):
         _logger.info("data_registration_agent_started", node_name="data_registration_agent")
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
-        sub_config = {**config, "configurable": {**config.get("configurable", {}), "thread_id": f"{thread_id}:data_registration"}} if thread_id else config
-        subgraph_input = {
+        session_id = f"{thread_id}:data_registration" if thread_id else str(uuid.uuid4())
+
+        task = await client.send_task(session_id, {
             "messages": _filter_handoff_messages(state.get("messages", [])),
             "file_records": state.get("file_records"),
-        }
-        result = await graph.ainvoke(subgraph_input, sub_config)
+        })
+        result = task.artifacts[0]["data"]
+
         _logger.info("data_registration_agent_done", node_name="data_registration_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("data_registration_agent")
         return Command(
             goto="supervisor",
             update={
-                "messages": result.get("messages", []) + [ai_msg, tool_msg],
+                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
                 "file_records": None,
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
