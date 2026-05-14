@@ -16,9 +16,6 @@ from app.api import products_pipeline
 from app.api import persona_pipeline
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
-from app.agents.recommend_product_agent.a2a_agent import router as recommend_a2a_router
-from app.agents.generate_message_agent.a2a_agent import router as generate_message_a2a_router
-from app.agents.data_registration_agent.a2a_agent import router as data_registration_a2a_router
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
@@ -82,9 +79,6 @@ app.include_router(marketing_api.router)
 app.include_router(generated_messages.router)
 app.include_router(products_pipeline.router)
 app.include_router(persona_pipeline.router)
-app.include_router(recommend_a2a_router)
-app.include_router(generate_message_a2a_router)
-app.include_router(data_registration_a2a_router)
 
 
 @app.get("/")

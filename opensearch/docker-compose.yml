@@ -157,10 +157,70 @@ services:
       PORT: 8005
       APP_ROOT: /app/app
       DATA_ROOT: /data
+      RECOMMEND_AGENT_URL: http://recommend-agent:8001
+      GENERATE_MESSAGE_AGENT_URL: http://generate-agent:8002
+      DATA_REGISTRATION_AGENT_URL: http://data-registration-agent:8003
     env_file:
       - ../backend/app/.env  # backend 환경 변수 로드
     ports:
       - 8005:8005
+    networks:
+      - opensearch-net
+
+  recommend-agent:
+    image: python:3.11-slim
+    container_name: recommend-agent
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r /requirements.txt &&
+        uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001
+      "
+    volumes:
+      - ../backend:/app
+      - ./requirements.txt:/requirements.txt
+    env_file:
+      - ../backend/app/.env
+    ports:
+      - 8001:8001
+    networks:
+      - opensearch-net
+
+  generate-agent:
+    image: python:3.11-slim
+    container_name: generate-agent
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r /requirements.txt &&
+        uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002
+      "
+    volumes:
+      - ../backend:/app
+      - ./requirements.txt:/requirements.txt
+    env_file:
+      - ../backend/app/.env
+    ports:
+      - 8002:8002
+    networks:
+      - opensearch-net
+
+  data-registration-agent:
+    image: python:3.11-slim
+    container_name: data-registration-agent
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install -r /requirements.txt &&
+        uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003
+      "
+    volumes:
+      - ../backend:/app
+      - ./requirements.txt:/requirements.txt
+    env_file:
+      - ../backend/app/.env
+    ports:
+      - 8003:8003
     networks:
       - opensearch-net
 

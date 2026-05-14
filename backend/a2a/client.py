@@ -2,7 +2,6 @@ import uuid
 
 import httpx
 from langchain_core.messages import BaseMessage
-from langchain_core.messages.utils import message_to_dict
 
 from .models import DataPart, Message, Task, TaskSendRequest
 
@@ -14,7 +13,7 @@ class A2AClient:
 
     async def send_task(self, session_id: str, data: dict) -> Task:
         serialized = {
-            k: [message_to_dict(m) if isinstance(m, BaseMessage) else m for m in v]
+            k: [{"type": m.type, "data": m.model_dump()} if isinstance(m, BaseMessage) else m for m in v]
                if isinstance(v, list) and v and isinstance(v[0], BaseMessage)
                else v
             for k, v in data.items()

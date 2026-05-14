@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, START, END
-from ....a2a.client import A2AClient
+from a2a.client import A2AClient
 from ...config.settings import settings
 from .nodes import search_agent, supervisor_agent, make_recommend_product_node, make_generate_message_node, make_data_registration_node
 from .state import CRMMessageAgentState

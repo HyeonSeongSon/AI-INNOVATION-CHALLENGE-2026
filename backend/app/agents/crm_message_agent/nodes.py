@@ -1,13 +1,12 @@
 import uuid
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.messages.utils import messages_from_dict
+from langchain_core.messages import AIMessage, ToolMessage, messages_from_dict
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 from typing import Literal
-from ....a2a.client import A2AClient
+from a2a.client import A2AClient
 from ...core.llm_factory import get_llm
 from ...core.logging import get_logger
 from ...config.settings import settings
