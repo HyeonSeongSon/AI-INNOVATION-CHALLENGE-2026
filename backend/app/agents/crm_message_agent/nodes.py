@@ -76,9 +76,15 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     llm = get_llm(model, temperature=0)
     messages = state.get("messages", [])
 
-    decision = await llm.with_structured_output(RouteDecision).ainvoke(
-        build_supervisor_prompt(messages)
-    )
+    try:
+        decision = await llm.with_structured_output(RouteDecision).ainvoke(
+            build_supervisor_prompt(messages)
+        )
+    except Exception as e:
+        # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우 (서브에이전트 실패 후 컨텍스트 오염 등)
+        _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
+        final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
+        return {"messages": [final_answer]}
 
     _logger.info("supervisor_routed", node_name="supervisor_agent", next=decision.next, reason=decision.reason)
 
@@ -115,7 +121,7 @@ def make_recommend_product_node(client: A2AClient):
 
         task = await client.send_task(session_id, {
             "messages": state.get("messages", []),
-            "active_persona_id": state.get("intermediate", {}).get("active_persona_id"),
+            "active_persona_id": state.get("active_persona_id"),
         })
         result = task.artifacts[0]["data"]
 
@@ -125,11 +131,8 @@ def make_recommend_product_node(client: A2AClient):
             goto="supervisor",
             update={
                 "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
-                "intermediate": {
-                    **state.get("intermediate", {}),
-                    "recommended_products": result.get("recommended_products", []),
-                    "active_persona_id": result.get("active_persona_id"),
-                },
+                "recommended_products": result.get("recommended_products", []),
+                "active_persona_id": result.get("active_persona_id"),
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
             },
@@ -154,10 +157,7 @@ def make_generate_message_node(client: A2AClient):
             goto="supervisor",
             update={
                 "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
-                "intermediate": {
-                    **state.get("intermediate", {}),
-                    "generated_tasks": result.get("generated_tasks", []),
-                },
+                "generated_tasks": result.get("generated_tasks", []),
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
             },

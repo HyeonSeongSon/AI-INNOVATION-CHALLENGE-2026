@@ -32,8 +32,7 @@ class CRMMessageAgent:
         generated_tasks가 있으면 메시지 목록으로 변환,
         없으면 supervisor의 최종 AIMessage를 반환
         """
-        intermediate = result.get("intermediate", {})
-        generated_tasks = intermediate.get("generated_tasks", [])
+        generated_tasks = result.get("generated_tasks", [])
         if generated_tasks:
             messages = []
             for t in generated_tasks:
@@ -97,6 +96,8 @@ class CRMMessageAgent:
 
         initial_state: CRMMessageAgentState = {
             "messages": [HumanMessage(content=user_input)],
+            "recommended_products": [],  # 턴 시작 시 리셋 (_overwrite reducer가 체크포인트 값을 덮어씀)
+            "generated_tasks": [],       # 턴 시작 시 리셋
             **({"file_records": file_records} if file_records else {}),
         }
 
@@ -111,9 +112,9 @@ class CRMMessageAgent:
                 "status": api_status,
                 "thread_id": thread_id,
                 "session_id": session_id,
-                "recommended_products": intermediate.get("recommended_products", []),
+                "recommended_products": result.get("recommended_products", []),
                 "messages": self._extract_response_messages(result),
-                "generated_tasks": intermediate.get("generated_tasks", []),
+                "generated_tasks": result.get("generated_tasks", []),
                 "regeneration_history": [],
                 "logs": result.get("logs", []),
                 "error": result.get("error"),
