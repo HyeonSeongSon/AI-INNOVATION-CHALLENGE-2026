@@ -9,7 +9,7 @@ logger = get_logger("parse_request")
 
 class RecommendProductRequest(BaseModel):
     """다중 값을 지원하는 상품 추천 메시지 요청"""
-    persona_id: Optional[str] = Field(default=None, description="페르소나 ID (단일 값). 예: 'P123' 또는 '20대 여성'")
+    persona_id: Optional[str] = Field(default=None, description="페르소나 ID. 현재 메시지에 명시된 ID 또는 이름으로 대화 이력에서 매칭된 ID. 예: 'PERSONA_00253'")
     product_categories: List[str] = Field(default_factory=list, description="상품 카테고리 리스트. 예: ['스킨케어', '메이크업', '헤어케어']")
     brands: List[str] = Field(default_factory=list, description="브랜드 리스트. 예: ['라네즈', '설화수', '이니스프리']")
     has_persona_info: bool = Field(default=False, description="True: 메시지에 persona_id 또는 자연어 페르소나 설명(피부타입/나이/고민 등)이 포함된 경우. False: 제품/카테고리/브랜드만 언급된 경우.")

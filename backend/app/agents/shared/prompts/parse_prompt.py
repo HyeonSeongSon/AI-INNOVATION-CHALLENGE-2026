@@ -85,15 +85,7 @@ def build_generate_message_router_prompt() -> str:
 
 
 def build_crm_parse_prompt(categories) -> str:
-    """
-    사용자 요청에서 페르소나id, 브랜드, 상품 카테고리를 파싱하는 프롬프트
-
-    Args:
-        categories: 상품 카테고리 리스트
-
-    Returns:
-        prompt
-    """
+    """대화 이력 전체를 분석해 persona_id(이름 기반 이력 매칭 포함), brands, product_categories를 파싱하는 프롬프트."""
    #  categories_list = "\n".join(f"- {c}" for c in categories)
 
     return f"""대화 히스토리를 분석하여 CRM 상품 추천 요청을 파싱하고 JSON으로 반환하세요.
@@ -101,11 +93,16 @@ def build_crm_parse_prompt(categories) -> str:
 **출력 필드:** persona_id(단일), brands(리스트), product_categories(리스트), purpose(단일), exclusive_target(단일/None), has_persona_info(bool)
 **JSON 입력:** 필드를 그대로 매핑. 자연어 입력: 키워드 분석하여 변환.
 **persona_id:** PERSONA_[숫자+대문자영어] 형식으로 정규화 (예: "6E6354965AB9" → "PERSONA_6E6354965AB9")
-**persona_id 추출 규칙:** 입력 메시지에서만 추출한다. 메시지에 persona_id가 없으면 None을 반환한다. 이전 대화의 persona_id를 끌어오지 않는다.
-**has_persona_info 규칙:** 입력 메시지에 페르소나 관련 정보가 포함되어 있으면 True, 없으면 False.
+**persona_id 추출 규칙:**
+- 가장 마지막 사용자 메시지에 PERSONA_XXXXX 형식 ID가 명시돼 있으면 그것을 사용한다.
+- 마지막 메시지에 ID가 없지만 이름(예: "손현성")으로 특정 페르소나를 지칭하는 경우, 대화 이력 전체에서 그 이름과 연결된 PERSONA_XXXXX ID를 찾아 반환한다.
+- 대화 이력에서도 매칭되는 페르소나가 없으면 None을 반환한다.
+**has_persona_info 규칙:** 가장 마지막 사용자 메시지에 페르소나 관련 정보가 포함되어 있으면 True, 없으면 False.
 - True: persona_id가 있거나, 피부타입/나이/직업/피부고민/라이프스타일 등 자연어 페르소나 설명이 포함된 경우
+- True: 이름(예: "손현성")으로 특정 페르소나를 지칭하는 경우 (단, 대화 이력에서 해당 인물의 persona_id를 찾은 경우)
 - False: 제품명/카테고리/브랜드만 언급되고 페르소나 정보가 전혀 없는 경우 (예: "클렌징 오일로 추천해줘", "이니스프리 제품으로 바꿔줘")
-**brands:** 사용자가 입력에서 명시적으로 언급한 브랜드명만 추출. 언급이 없으면 반드시 []로 반환. 카테고리나 맥락에서 유추하거나 추가하지 말 것.
+**brands, product_categories:** 가장 마지막 사용자 메시지에서만 추출한다. 이전 대화 이력의 브랜드·카테고리는 무시한다.
+**brands:** 사용자가 명시적으로 언급한 브랜드명만 추출. 언급이 없으면 반드시 []로 반환. 카테고리나 맥락에서 유추하거나 추가하지 말 것.
 
 **product_categories - 반드시 아래 목록에서만 선택:**
 {categories}

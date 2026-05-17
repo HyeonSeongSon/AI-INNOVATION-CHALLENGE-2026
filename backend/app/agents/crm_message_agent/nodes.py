@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, ToolMessage, messages_from_dict
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import List, Literal
 from a2a.client import A2AClient
 from ...core.llm_factory import get_llm
 from ...core.logging import get_logger
@@ -26,10 +26,14 @@ from ..tools.search_tools import (
 
 _logger = get_logger("crm_message_agent")
 
+_ValidAgent = Literal[
+    "search_agent", "recommend_product_agent",
+    "generate_message_agent", "data_registration_agent"
+]
 
 class RouteDecision(BaseModel):
-    next: Literal["search_agent", "recommend_product_agent", "generate_message_agent", "data_registration_agent", "FINISH"] = Field(
-        description="다음 작업을 수행할 에이전트를 선택하거나, 완료됐으면 FINISH"
+    task_plan: List[_ValidAgent] = Field(
+        description="수행해야 할 에이전트 순서 목록. 완료됐거나 할 작업이 없으면 빈 리스트."
     )
     reason: str = Field(description="선택한 이유")
 
@@ -41,6 +45,18 @@ _HANDOFF_TOOL_NAMES = {
     "handoff_to_data_registration_agent",
     "transfer_back_to_supervisor",
 }
+
+_AGENT_NAMES = {
+    "search_agent", "recommend_product_agent",
+    "generate_message_agent", "data_registration_agent",
+}
+
+def _get_completed_agents(messages: list) -> set:
+    return {
+        msg.name
+        for msg in messages
+        if isinstance(msg, AIMessage) and msg.name in _AGENT_NAMES
+    }
 
 def _filter_handoff_messages(messages: list) -> list:
     handoff_tool_call_ids = set()
@@ -75,24 +91,44 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     llm = get_llm(model, temperature=0)
     messages = state.get("messages", [])
+    task_plan = state.get("task_plan", [])
 
+    # 플랜이 이미 확정된 경우: LLM 없이 결정
+    if task_plan:
+        completed = _get_completed_agents(messages)
+        remaining = [t for t in task_plan if t not in completed]
+
+        if not remaining:
+            _logger.info("supervisor_all_done", node_name="supervisor_agent")
+            final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
+            return {"messages": [final_answer], "task_plan": []}
+
+        next_agent = remaining[0]
+        _logger.info("supervisor_deterministic_route", node_name="supervisor_agent", next=next_agent)
+        return Command(goto=next_agent)
+
+    # 첫 진입: LLM으로 전체 플랜 결정
     try:
         decision = await llm.with_structured_output(RouteDecision).ainvoke(
             build_supervisor_prompt(messages)
         )
     except Exception as e:
-        # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우 (서브에이전트 실패 후 컨텍스트 오염 등)
+        # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
         final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
         return {"messages": [final_answer]}
 
-    _logger.info("supervisor_routed", node_name="supervisor_agent", next=decision.next, reason=decision.reason)
+    _logger.info("supervisor_plan_decided", node_name="supervisor_agent",
+                 task_plan=decision.task_plan, reason=decision.reason)
 
-    if decision.next == "FINISH":
+    if not decision.task_plan:
         final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
         return {"messages": [final_answer]}
 
-    return Command(goto=decision.next)
+    return Command(
+        goto=decision.task_plan[0],
+        update={"task_plan": decision.task_plan},
+    )
 
 async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
     _logger.info("search_agent_started", node_name="search_agent")
@@ -120,7 +156,7 @@ def make_recommend_product_node(client: A2AClient):
         session_id = f"{thread_id}:recommend" if thread_id else str(uuid.uuid4())
 
         task = await client.send_task(session_id, {
-            "messages": state.get("messages", []),
+            "messages": _filter_handoff_messages(state.get("messages", [])),
             "active_persona_id": state.get("active_persona_id"),
         })
         result = task.artifacts[0]["data"]

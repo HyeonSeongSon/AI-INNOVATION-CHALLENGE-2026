@@ -61,7 +61,7 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
         model = config.get("configurable", {}).get("model", settings.parser_model_name)
         parser_llm = get_llm(model, settings.parser_model_temperature)
 
-        parsed_data = await recommend_product_parser(messages[-1:], parser_llm)
+        parsed_data = await recommend_product_parser(messages, parser_llm)
         logger.info("parser_done", user_message=f"[{node_name}] 요청 파싱 완료")
         return {
             **base,

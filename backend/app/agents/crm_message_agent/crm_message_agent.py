@@ -98,6 +98,7 @@ class CRMMessageAgent:
             "messages": [HumanMessage(content=user_input)],
             "recommended_products": [],  # 턴 시작 시 리셋 (_overwrite reducer가 체크포인트 값을 덮어씀)
             "generated_tasks": [],       # 턴 시작 시 리셋
+            "task_plan": [],             # 턴 시작 시 리셋 (새 요청마다 LLM이 다시 플랜 결정)
             **({"file_records": file_records} if file_records else {}),
         }
 
