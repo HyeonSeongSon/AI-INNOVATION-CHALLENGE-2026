@@ -48,6 +48,7 @@ Pillow==11.2.1
 # Vector Database & Search
 faiss-cpu==1.11.0
 opensearch-py==3.1.0
+sentence-transformers==3.4.1
 
 # YAML Processing
 PyYAML==6.0.2
