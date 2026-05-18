@@ -2,9 +2,6 @@ from langgraph.graph import StateGraph, START, END
 from .nodes import init_node, router_node, quality_check_node, generate_message_node, message_feedback_node, output_node
 from .state import GenerateMessageState
 
-_MAX_RETRIES = 2
-
-
 def _route_after_router(state: GenerateMessageState) -> str:
     return state["decisions"]["next_node"]
 
@@ -21,9 +18,6 @@ def _route_after_quality_check(state: GenerateMessageState) -> str:
         if t["product_id"] in failed_task_ids
     )
     if unrecoverable:
-        return "output_node"
-
-    if state.get("feedback_retry_count", 0) >= _MAX_RETRIES:
         return "output_node"
 
     return "message_feedback_node"

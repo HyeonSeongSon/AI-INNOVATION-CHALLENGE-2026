@@ -10,8 +10,11 @@ from .services.quality_check import QualityChecker
 from .services.apply_feedback import get_applier
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any
+from typing import Dict, Any, Union
+from langgraph.types import Command
 import json
+
+_MAX_RETRIES = 2
 
 
 def _now_iso() -> str:
@@ -187,7 +190,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     }
 
 
-async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
     agent_logger = AgentLogger(state, node_name="message_feedback_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     feedback_llm = get_llm(model, temperature=0.5)
@@ -197,6 +200,20 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     retry_count = state.get("feedback_retry_count", 0)
     feedback_input = state.get("feedback_input")
     persona_id = state.get("persona_id") or state.get("active_persona_id")
+
+    if retry_count >= _MAX_RETRIES:
+        failed_ids_list = list(failed_task_ids)
+        all_failed = len(failed_ids_list) == len(generated_tasks) and len(generated_tasks) > 0
+        failure_status = "failed" if all_failed else "partial_failure"
+        agent_logger.info(
+            "feedback_max_retries_exceeded",
+            user_message=f"품질 검사 최대 재시도 횟수 초과 (status={failure_status})",
+            retry_count=retry_count,
+        )
+        return Command(
+            goto="output_node",
+            update={"status": failure_status, "failed_task_ids": failed_ids_list},
+        )
 
     applier = get_applier()
     persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
@@ -260,9 +277,20 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
             for t in generated_tasks
             if t["product_id"] in failed_task_ids
         )
-        reason = "상품 정보를 가져올 수 없어 처리가 중단됐습니다." if unrecoverable else f"품질 검사 {retry_count}회 재시도 후에도 기준을 충족하지 못했습니다."
-        content = f"CRM 메시지 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
-        status = "failed"
+        reason = (
+            "상품 정보를 가져올 수 없어 처리가 중단됐습니다."
+            if unrecoverable
+            else f"품질 검사 {retry_count}회 재시도 후에도 기준을 충족하지 못했습니다."
+        )
+        all_failed = len(failed_task_ids) == len(generated_tasks) and len(generated_tasks) > 0
+        status = "failed" if all_failed else "partial_failure"
+        if status == "partial_failure":
+            succeeded_content = _format_generated_tasks(
+                [t for t in generated_tasks if t["product_id"] not in failed_task_ids]
+            )
+            content = f"{succeeded_content}\n\nCRM 메시지 일부 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
+        else:
+            content = f"CRM 메시지 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
 
     logger.info("output_done", user_message=f"[output] 완료 (status={status})", status=status)
     return {

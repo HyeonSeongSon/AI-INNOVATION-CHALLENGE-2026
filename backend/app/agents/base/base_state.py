@@ -30,7 +30,7 @@ class BaseState(TypedDict, total=False):
     current_node: str               # 현재 실행 중인 node
     node_history: List[str]         # node 실행 이력 (디버깅용)
     is_interrupted: bool            # interrupt 여부
-    status: Literal["running", "completed", "failed", "interrupted"]  # 실행 상태
+    status: Literal["running", "completed", "failed", "partial_failure", "interrupted"]  # 실행 상태
 
     # -------------------------
     # 에이전트 판단 / 중간 결과

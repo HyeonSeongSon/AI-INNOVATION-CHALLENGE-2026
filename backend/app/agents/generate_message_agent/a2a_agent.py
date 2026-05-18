@@ -63,7 +63,8 @@ async def send_task(request: TaskSendRequest):
         graph = build_workflow()
         result = await graph.ainvoke(subgraph_input, config)
 
-        status = TaskStatus.FAILED if result.get("status") == "failed" else TaskStatus.COMPLETED
+        agent_status = result.get("status")
+        status = TaskStatus.COMPLETED if agent_status == "completed" else TaskStatus.FAILED
 
         _logger.info("a2a_task_completed", task_id=request.id, status=status)
 
