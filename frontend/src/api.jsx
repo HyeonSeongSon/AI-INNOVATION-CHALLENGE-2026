@@ -5,6 +5,7 @@ const api = axios.create({
   baseURL: 'http://localhost:8005/api',
   headers: {
     'Content-Type': 'application/json',
+    'X-API-Key': import.meta.env.VITE_SERVICE_API_KEY ?? '',
   },
 });
 

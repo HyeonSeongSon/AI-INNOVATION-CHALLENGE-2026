@@ -46,6 +46,11 @@ class Settings:
     # App
     app_root: str = os.getenv("APP_ROOT", "")
 
+    # Auth
+    auth_mode: str = os.getenv("AUTH_MODE", "api_key")  # "api_key" | "jwt"
+    service_api_key: str = os.getenv("SERVICE_API_KEY", "")
+    jwt_secret: str = os.getenv("JWT_SECRET", "")
+
     # A2A agent URLs (각 에이전트 독립 포트: 8001/8002/8003)
     recommend_agent_url: str = os.getenv("RECOMMEND_AGENT_URL", "http://localhost:8001")
     generate_message_agent_url: str = os.getenv("GENERATE_MESSAGE_AGENT_URL", "http://localhost:8002")
@@ -58,3 +63,12 @@ class Settings:
 
 
 settings = Settings()
+
+if not settings.postgres_url:
+    raise RuntimeError("POSTGRES_URL 환경변수가 설정되지 않았습니다.")
+
+if settings.auth_mode == "api_key" and not settings.service_api_key:
+    raise RuntimeError("SERVICE_API_KEY 환경변수가 설정되지 않았습니다.")
+
+if settings.auth_mode == "jwt" and not settings.jwt_secret:
+    raise RuntimeError("JWT_SECRET 환경변수가 설정되지 않았습니다.")

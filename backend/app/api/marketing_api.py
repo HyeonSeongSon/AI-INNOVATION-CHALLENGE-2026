@@ -7,16 +7,18 @@ import uuid
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, Literal, List, Dict, Any
 from sqlalchemy.orm.attributes import flag_modified
 
 from ..agents.supervisor.marketing_agent import MarketingAgent
 from ..agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
+from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
 from ..core.models import Conversation, GeneratedMessage
+from .deps import get_current_user
 
 logger = get_logger("marketing_api")
 
@@ -30,22 +32,6 @@ def get_agent(request: Request) -> MarketingAgent:
 def get_agent_v2(request: Request) -> MarketingAssistantAgent:
     return request.app.state.agent_v2
 
-
-# ============================================================
-# 인증 의존성
-# ============================================================
-
-async def get_current_user_id(x_user_id: str = Header(..., alias="X-User-Id")) -> str:
-    """
-    X-User-Id 헤더에서 user_id 추출.
-
-    현재는 헤더 값을 그대로 사용하는 플레이스홀더입니다.
-    추후 JWT 검증으로 교체:
-        token = Header(..., alias="Authorization")
-        payload = jwt.decode(token.removeprefix("Bearer "), SECRET_KEY, ...)
-        return payload["sub"]
-    """
-    return x_user_id
 
 
 # ============================================================
@@ -174,7 +160,7 @@ class MarketingResponse(BaseModel):
 async def chat(
     request: ChatRequest,
     req: Request,
-    user_id: str = Depends(get_current_user_id),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     대화 처리 (신규 + 이어가기 통합)
@@ -185,6 +171,7 @@ async def chat(
     - interrupt 발생 시 반환된 thread_id를 /resume에 사용
     """
     try:
+        user_id = current_user.user_id
         agent = get_agent(req)
 
         # 1. DB에서 이전 대화 이력 로드 (신규면 빈 리스트)
@@ -287,14 +274,14 @@ async def chat(
 
     except Exception as e:
         logger.error("chat_failed", error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.post("/chat/v2")
 async def chat_v2(
     request: ChatRequest,
     req: Request,
-    user_id: str = Depends(get_current_user_id),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     대화 처리 v2 (interrupt 없는 새 추천 방식)
@@ -303,6 +290,7 @@ async def chat_v2(
     - Conversation 레코드를 에이전트 호출 전에 확보하여 thread_id 일관성 보장
     """
     try:
+        user_id = current_user.user_id
         agent = get_agent_v2(req)
 
         # 1. conversation_id 사전 확보 (에이전트 호출 전에 thread_id를 결정해야 함)
@@ -455,14 +443,14 @@ async def chat_v2(
 
     except Exception as e:
         logger.error("chat_v2_failed", error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.post("/resume", response_model=MarketingResponse)
 async def resume_interrupt(
     request: ResumeRequest,
     req: Request,
-    user_id: str = Depends(get_current_user_id),
+    current_user: UserContext = Depends(get_current_user),
 ):
     """
     Interrupt 재개 (모든 interrupt 타입 통합)
@@ -475,6 +463,7 @@ async def resume_interrupt(
         payload: {"selected_product_id": "PROD001"}
     """
     try:
+        user_id = current_user.user_id
         agent = get_agent(req)
         result = await agent.resume_interrupt(
             thread_id=request.thread_id,
@@ -623,7 +612,7 @@ async def resume_interrupt(
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.get("/health")

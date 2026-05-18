@@ -16,6 +16,7 @@ from app.api import products_pipeline
 from app.api import persona_pipeline
 from app.agents.supervisor.marketing_agent import MarketingAgent
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
+from app.config.settings import settings
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
@@ -40,9 +41,8 @@ configure_langsmith()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    postgres_url = os.getenv("POSTGRES_URL")
     async with AsyncConnectionPool(
-        conninfo=postgres_url,
+        conninfo=settings.postgres_url,
         min_size=1,
         max_size=10,
         kwargs={"autocommit": True, "prepare_threshold": 0},
