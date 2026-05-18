@@ -4,7 +4,7 @@ PostgreSQL 데이터베이스 API 엔드포인트
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -78,6 +78,7 @@ class SearchQueryCreate(BaseModel):
 
 class ProductCreate(BaseModel):
     """상품 생성 요청"""
+    model_config = ConfigDict(extra="forbid")
     product_id: str = Field(..., description="상품 ID", examples=["A20251200001"])
     vectordb_id: Optional[dict] = Field(None, description="VectorDB ID (index별 doc_id 맵)")
     product_name: str = Field(..., description="상품명", examples=["수분 세럼 50ml"])
@@ -642,7 +643,6 @@ async def generate_product_search_queries(request: ProductSearchQueryCreate, db:
     for query_type, query_text in query_map.items():
         row = db.execute(upsert_sql, {"persona_id": request.persona_id, "query_type": query_type, "query_text": query_text}).fetchone()
         saved[row[1]] = {"query_id": row[0], "text": row[2]}
-    db.commit()
 
     return ProductSearchQueryResponse(
         need=QueryItem(**saved["need"]),
@@ -687,7 +687,7 @@ async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Product with ID '{request.product_id}' already exists")
 
-    product = Product(**request.dict())
+    product = Product(**request.model_dump())
     db.add(product)
     db.commit()
     db.refresh(product)
