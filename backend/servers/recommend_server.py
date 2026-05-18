@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"), override=True)
@@ -7,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.recommend_product_agent.a2a_agent import router
-from app.core.logging import configure_logging
+from app.agents.recommend_product_agent.workflow import build_workflow
+from app.core.logging import configure_logging, get_logger
 
 configure_logging(
     log_level=os.getenv("LOG_LEVEL", "INFO"),
@@ -15,8 +17,18 @@ configure_logging(
     environment=os.getenv("ENVIRONMENT", "production"),
 )
 
+_logger = get_logger("recommend_server")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.graph = build_workflow()
+    _logger.info("graph_compiled")
+    yield
+
+
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-app = FastAPI(title="Recommend Product Agent", version="1.0.0")
+app = FastAPI(title="Recommend Product Agent", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,

@@ -1,10 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from a2a.models import AgentCard, AgentSkill, DataPart, Task, TaskSendRequest, TaskStatus
 from a2a.serialization import deserialize_messages, serialize_messages
 from app.config.settings import settings
 from app.core.logging import get_logger
-from .workflow import build_workflow
 
 router = APIRouter(prefix="/a2a/generate-message", tags=["A2A: Generate Message Agent"])
 
@@ -28,7 +27,7 @@ async def agent_card():
 
 
 @router.post("/tasks/send", response_model=Task)
-async def send_task(request: TaskSendRequest):
+async def send_task(request: TaskSendRequest, req: Request):
     data = next(
         (p.data for p in request.message.parts if isinstance(p, DataPart)),
         {},
@@ -45,7 +44,7 @@ async def send_task(request: TaskSendRequest):
                  active_persona_id=data.get("active_persona_id"))
 
     try:
-        graph = build_workflow()
+        graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
         agent_status = result.get("status")

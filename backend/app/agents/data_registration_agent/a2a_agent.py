@@ -1,10 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from a2a.models import AgentCard, AgentSkill, DataPart, Task, TaskSendRequest, TaskStatus
 from a2a.serialization import deserialize_messages, serialize_messages
 from app.config.settings import settings
 from app.core.logging import get_logger
-from .workflow import build_workflow
 
 router = APIRouter(prefix="/a2a/data-registration", tags=["A2A: Data Registration Agent"])
 
@@ -28,7 +27,7 @@ async def agent_card():
 
 
 @router.post("/tasks/send", response_model=Task)
-async def send_task(request: TaskSendRequest):
+async def send_task(request: TaskSendRequest, req: Request):
     data = next(
         (p.data for p in request.message.parts if isinstance(p, DataPart)),
         {},
@@ -44,7 +43,7 @@ async def send_task(request: TaskSendRequest):
     _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
 
     try:
-        graph = build_workflow()
+        graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
         status = TaskStatus.FAILED if result.get("status") == "failed" else TaskStatus.COMPLETED
