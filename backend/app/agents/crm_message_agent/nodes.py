@@ -184,6 +184,7 @@ def make_generate_message_node(client: A2AClient):
 
         task = await client.send_task(session_id, {
             "messages": _filter_handoff_messages(state.get("messages", [])),
+            "active_persona_id": state.get("active_persona_id"),
         })
         result = task.artifacts[0]["data"]
 

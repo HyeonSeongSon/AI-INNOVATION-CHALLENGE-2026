@@ -91,10 +91,11 @@ state["intermediate"]  # 에이전트 간 중간 결과
 state["decisions"]     # supervisor 라우팅 이력
 state["node_history"]  # 노드 실행 순서
 
+state["active_persona_id"]  # conversation-scope 페르소나 ID — CRMMessageAgentState 직접 필드
+
 state["intermediate"] = {
     "recommended_products": [...],
     "generated_tasks": [...],
-    "active_persona_id": "...",
 }
 ```
 

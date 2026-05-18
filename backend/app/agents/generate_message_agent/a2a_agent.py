@@ -50,10 +50,14 @@ async def send_task(request: TaskSendRequest):
     )
 
     messages = _deserialize_messages(data.get("messages", []))
-    subgraph_input = {"messages": messages}
+    subgraph_input = {
+        "messages": messages,
+        **({"active_persona_id": data["active_persona_id"]} if data.get("active_persona_id") else {}),
+    }
     config = {"configurable": {"thread_id": request.sessionId or request.id}}
 
-    _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
+    _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId,
+                 active_persona_id=data.get("active_persona_id"))
 
     try:
         graph = build_workflow()

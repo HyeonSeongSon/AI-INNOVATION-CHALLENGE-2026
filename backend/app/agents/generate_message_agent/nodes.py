@@ -203,17 +203,22 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
 
     if feedback_input:
         agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
+        raw = [{"product_id": feedback_input["product_id"], "purpose": feedback_input.get("purpose")}]
+        enriched = await _generator.get_product_info(raw)
+        product_info = enriched[0].get("product_info", {}) if enriched else {}
         task = {
             "product_id": feedback_input["product_id"],
             "purpose": feedback_input.get("purpose"),
-            "brand": "",
+            "brand": product_info.get("brand", ""),
+            "product_name": product_info.get("product_name", ""),
+            "sub_tag": product_info.get("sub_tag", ""),
             "message": {"title": feedback_input["title"], "message": feedback_input["message"]},
             "quality_check": {
                 "failed_stage": "user_feedback",
                 "failure_reason": feedback_input["feedback"],
             },
         }
-        improved = await applier.apply_feedback(task, llm=feedback_llm, persona_info=persona_info)
+        improved = await applier.apply_feedback(task, llm=feedback_llm, product_info=product_info, persona_info=persona_info)
         updated_tasks = [improved]
     else:
         agent_logger.info(
