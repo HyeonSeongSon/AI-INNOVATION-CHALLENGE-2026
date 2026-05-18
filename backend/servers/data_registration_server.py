@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"), override=True)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.data_registration_agent.a2a_agent import router
@@ -40,8 +40,13 @@ app.include_router(router)
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "agent": "data_registration_agent"}
+def health(req: Request):
+    graph_ok = getattr(req.app.state, "graph", None) is not None
+    return {
+        "status": "ok" if graph_ok else "degraded",
+        "agent": "data_registration_agent",
+        "graph": "ok" if graph_ok else "not_initialized",
+    }
 
 
 if __name__ == "__main__":

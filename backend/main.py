@@ -6,7 +6,7 @@ CRM Agent API 서버
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
         await pool.wait()  # 최소 1개 연결이 실제로 맺어질 때까지 대기
         checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
+        app.state.pool = pool
         app.state.agent = MarketingAgent(checkpointer=checkpointer)
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
@@ -93,14 +94,27 @@ def read_root():
 
 
 @app.get("/health")
-def health_check():
+async def health_check(req: Request):
     """상세 헬스 체크"""
+    agent_ok = getattr(req.app.state, "agent_v2", None) is not None
+
+    db_ok = False
+    pool = getattr(req.app.state, "pool", None)
+    if pool is not None:
+        try:
+            async with pool.connection() as conn:
+                await conn.execute("SELECT 1")
+            db_ok = True
+        except Exception:
+            db_ok = False
+
+    overall = "healthy" if (agent_ok and db_ok) else "degraded"
     return {
-        "status": "healthy",
+        "status": overall,
         "services": {
-            "api": "ok",
-            "agent": "ok"
-        }
+            "agent": "ok" if agent_ok else "not_initialized",
+            "database": "ok" if db_ok else "unavailable",
+        },
     }
 
 

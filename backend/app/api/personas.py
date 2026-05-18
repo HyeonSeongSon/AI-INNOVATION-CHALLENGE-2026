@@ -3,14 +3,11 @@ PostgreSQL 데이터베이스 API 엔드포인트
 새로운 테이블 스키마에 맞춰 재구성 (POST 전용)
 """
 
-import re
-
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import text as sa_text
 from app.core.database import get_db
 
 # 라우터 생성
@@ -259,13 +256,7 @@ class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
 
 
-class PersonaQueryRequest(BaseModel):
-    """Text2SQL 페르소나 쿼리 요청"""
-    sql_query: str = Field(
-        ...,
-        description="실행할 SELECT SQL 쿼리",
-        examples=["SELECT persona_id, name, skin_type FROM personas WHERE '지성' = ANY(skin_type) LIMIT 10"]
-    )
+
 
 
 @router.post("/personas", response_model=PersonaResponse, summary="페르소나 생성")
@@ -420,69 +411,6 @@ async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
 
     return {"message": f"Persona '{persona_id}' deleted successfully"}
 
-
-
-@router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")
-async def query_personas_by_sql(request: PersonaQueryRequest, db: Session = Depends(get_db)) -> List[Any]:
-    """
-    LLM이 생성한 SQL로 페르소나 검색
-
-    **보안 제약:**
-    - SELECT 쿼리만 허용 (INSERT/UPDATE/DELETE/DROP 등 차단)
-    - 결과 최대 50행 (LIMIT 없으면 자동 추가)
-
-    **Array 컬럼 조회 예시:**
-    - 단일 값 포함: `'지성' = ANY(skin_type)`
-    - OR 조건: `skin_type && ARRAY['지성', '복합성']`
-    - AND 조건: `skin_type @> ARRAY['비건', '친환경']`
-    """
-    raw_sql = request.sql_query.strip()
-
-    # 보안 1차: SELECT로 시작하는지 검증
-    if not raw_sql.upper().lstrip().startswith("SELECT"):
-        raise HTTPException(
-            status_code=400,
-            detail="SELECT 쿼리만 허용됩니다. INSERT/UPDATE/DELETE/DROP 등은 사용할 수 없습니다."
-        )
-
-    # 보안 2차: 위험 키워드 검증 (단어 경계 기준)
-    sql_upper = raw_sql.upper()
-    dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE"]
-    for keyword in dangerous_keywords:
-        if re.search(rf'\b{keyword}\b', sql_upper):
-            raise HTTPException(
-                status_code=400,
-                detail=f"허용되지 않는 SQL 키워드가 포함되어 있습니다: {keyword}"
-            )
-
-    # 보안 3차: LIMIT 없으면 50 자동 추가
-    if "LIMIT" not in sql_upper:
-        final_sql = f"{raw_sql.rstrip(';')} LIMIT 50"
-    else:
-        final_sql = raw_sql.rstrip(';')
-
-    # SQL 실행
-    try:
-        result = db.execute(sa_text(final_sql))
-        columns = list(result.keys())
-        rows = []
-        for row in result.fetchall():
-            row_dict = {}
-            for col, val in zip(columns, row):
-                if hasattr(val, 'isoformat'):
-                    row_dict[col] = val.isoformat()
-                else:
-                    row_dict[col] = val
-            rows.append(row_dict)
-        return rows
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"SQL 실행 중 오류가 발생했습니다: {str(e)}"
-        )
 
 
 @router.post("/analysis-results", response_model=AnalysisResultResponse, summary="분석 결과 생성")

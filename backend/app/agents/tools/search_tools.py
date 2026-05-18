@@ -1,15 +1,10 @@
 from langchain_core.tools import tool
 import httpx
 import os
-import yaml
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
-from ...core.llm_factory import get_llm
-from langchain_core.messages import HumanMessage
-
-from .prompts.search_tools_prompt import build_search_personas_by_text_prompt
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -35,14 +30,6 @@ def _load_json(filename: str) -> dict:
     with open(_DATA_DIR / filename, encoding="utf-8") as f:
         return json.load(f)
 
-# ============================================================
-# 외부 파일에서 스키마 로드
-# ============================================================
-
-_SCHEMA_PATH = Path(__file__).parent / "schemas" / "persona_table_schema.yaml"
-with open(_SCHEMA_PATH, encoding="utf-8") as _f:
-    _PERSONA_SCHEMA = yaml.safe_load(_f)["schemas"]["persona_table_schema"]
-
 
 # ============================================================
 # Tools
@@ -64,56 +51,6 @@ async def get_all_personas() -> str:
 
     return format_get_all_personas(personas)
 
-
-@tool
-async def search_personas_by_text(natural_query: str) -> str:
-    """
-    자연어 조건으로 페르소나를 검색합니다.
-    피부 타입, 피부 고민, 퍼스널 컬러, 가치관, 나이대, 직업, 쇼핑 스타일 등
-    구체적인 속성 조건이 있을 때 사용하세요.
-    예시: '지성 피부이면서 비건 가치관인 20대', '모공 고민이 있는 쿨톤 여성',
-          '히알루론산을 선호하고 알코올을 기피하는 페르소나', '스트레스가 높은 직장인'
-    """
-    # LLM으로 SQL 생성 (temperature=0으로 결정론적 SQL 생성)
-    model_name = os.getenv("CHATGPT_MODEL_NAME", "gpt-4o-mini")
-    llm = get_llm(model_name, temperature=0)
-
-    messages = build_search_personas_by_text_prompt(
-        schema=_PERSONA_SCHEMA,
-        natural_query=natural_query
-    )
-    sql_response = await llm.ainvoke(messages)
-    generated_sql = sql_response.content.strip()
-
-    # 마크다운 코드블록 제거 (LLM이 ```sql ... ``` 형식으로 반환하는 경우 방어)
-    if generated_sql.startswith("```"):
-        lines = generated_sql.split("\n")
-        generated_sql = "\n".join(
-            line for line in lines if not line.startswith("```")
-        ).strip()
-
-    # DB API 서버에 SQL 실행 요청
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{DB_API_BASE_URL}/personas/query",
-                json={"sql_query": generated_sql}
-            )
-            response.raise_for_status()
-            rows = response.json()
-
-    except httpx.HTTPStatusError as e:
-        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        return f"페르소나 검색 중 오류가 발생했습니다: {error_detail}\n생성된 SQL: {generated_sql}"
-
-    except httpx.RequestError as e:
-        return f"DB API 서버 연결 실패: {str(e)}"
-
-    # 결과 포맷팅
-    if not rows:
-        return f"조건에 맞는 페르소나가 없습니다.\n검색 조건: {natural_query}\n실행된 SQL: {generated_sql}"
-
-    return format_search_personas_by_text(rows)
 
 
 @tool
@@ -264,55 +201,32 @@ class PersonaSearchFilter(BaseModel):
     occupation: Optional[str] = Field(None, description="직업. 예: '마케터', '학생'")
     beauty_interests: Optional[list[str]] = Field(None, description="관심 뷰티 카테고리. 예: ['스킨케어', '헤어']")
     shopping_style: Optional[list[str]] = Field(None, description="쇼핑 스타일. 예: ['충동구매형', '신중형']")
-    preferred_brands: Optional[list[str]] = Field(None, description="선호 브랜드. 예: ['설화수', '이니스프리']")
+    preferred_brands: Optional[list[str]] = Field(None, description="선호 브랜드 (기본 AND). 예: ['설화수', '이니스프리']")
+    avoided_brands: Optional[list[str]] = Field(None, description="기피 브랜드 (기본 AND). 예: ['더페이스샵']")
+    preferred_scents: Optional[list[str]] = Field(None, description="선호 향 (기본 AND). 예: ['플로럴', '우디']")
+    preferred_colors: Optional[list[str]] = Field(None, description="선호 색상 (기본 AND). 예: ['코랄', '핑크']")
+    preferred_texture: Optional[list[str]] = Field(None, description="선호 제형 (기본 AND). 예: ['젤', '크림']")
+    hair_type: Optional[list[str]] = Field(None, description="모발 타입 (기본 AND). 예: ['건성', '손상모']")
+    skincare_routine: Optional[list[str]] = Field(None, description="스킨케어 루틴 (기본 AND). 예: ['토너', '에센스']")
+    main_environment: Optional[list[str]] = Field(None, description="주 활동 환경 (기본 AND). 예: ['실내', '에어컨']")
+    purchase_decision_factors: Optional[list[str]] = Field(None, description="구매 결정 요인 (기본 AND). 예: ['성분', '브랜드신뢰']")
+    pets: Optional[list[str]] = Field(None, description="반려동물 (기본 AND). 예: ['강아지', '고양이']")
+    shade_number_min: Optional[int] = Field(None, description="파운데이션 쉐이드 최소값 (포함)")
+    shade_number_max: Optional[int] = Field(None, description="파운데이션 쉐이드 최대값 (포함)")
+    avg_sleep_hours_min: Optional[int] = Field(None, description="평균 수면 시간 최소값")
+    avg_sleep_hours_max: Optional[int] = Field(None, description="평균 수면 시간 최대값")
+    daily_screen_hours_min: Optional[int] = Field(None, description="일일 스크린 시간 최소값")
+    daily_screen_hours_max: Optional[int] = Field(None, description="일일 스크린 시간 최대값")
+    array_modes: dict[str, Literal["all", "any"]] = Field(
+        default_factory=dict,
+        description=(
+            "배열 필드별 매칭 방식. 기본값 'all'(AND/@>). "
+            "'any'로 설정하면 OR(&&). "
+            "예: {\"skin_type\": \"any\"} → 지성 OR 복합성. "
+            "명시하지 않은 필드는 모두 'all'(AND)."
+        )
+    )
     limit: int = Field(10, description="반환할 최대 결과 수 (기본 10, 최대 20)")
-
-
-def _build_persona_filter_sql(f: PersonaSearchFilter) -> str:
-    conditions = []
-
-    if f.gender:
-        conditions.append(f"gender = '{f.gender}'")
-    if f.age_min is not None:
-        conditions.append(f"age >= {f.age_min}")
-    if f.age_max is not None:
-        conditions.append(f"age <= {f.age_max}")
-    if f.skin_type:
-        arr = ", ".join(f"'{v}'" for v in f.skin_type)
-        conditions.append(f"skin_type @> ARRAY[{arr}]")
-    if f.concerns:
-        arr = ", ".join(f"'{v}'" for v in f.concerns)
-        conditions.append(f"concerns @> ARRAY[{arr}]")
-    if f.personal_color:
-        conditions.append(f"personal_color = '{f.personal_color}'")
-    if f.lifestyle_values:
-        arr = ", ".join(f"'{v}'" for v in f.lifestyle_values)
-        conditions.append(f"lifestyle_values @> ARRAY[{arr}]")
-    if f.stress_level:
-        conditions.append(f"stress_level = '{f.stress_level}'")
-    if f.price_sensitivity:
-        conditions.append(f"price_sensitivity = '{f.price_sensitivity}'")
-    if f.preferred_ingredients:
-        arr = ", ".join(f"'{v}'" for v in f.preferred_ingredients)
-        conditions.append(f"preferred_ingredients @> ARRAY[{arr}]")
-    if f.avoided_ingredients:
-        arr = ", ".join(f"'{v}'" for v in f.avoided_ingredients)
-        conditions.append(f"avoided_ingredients @> ARRAY[{arr}]")
-    if f.occupation:
-        conditions.append(f"occupation = '{f.occupation}'")
-    if f.beauty_interests:
-        arr = ", ".join(f"'{v}'" for v in f.beauty_interests)
-        conditions.append(f"beauty_interests @> ARRAY[{arr}]")
-    if f.shopping_style:
-        arr = ", ".join(f"'{v}'" for v in f.shopping_style)
-        conditions.append(f"shopping_style @> ARRAY[{arr}]")
-    if f.preferred_brands:
-        arr = ", ".join(f"'{v}'" for v in f.preferred_brands)
-        conditions.append(f"preferred_brands @> ARRAY[{arr}]")
-
-    limit = min(f.limit, 20)
-    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    return f"SELECT * FROM personas {where} LIMIT {limit}"
 
 
 @tool(args_schema=PersonaSearchFilter)
@@ -328,7 +242,7 @@ async def search_personas_by_filter(
     구조화된 조건으로 페르소나를 검색합니다.
     피부 타입, 피부 고민, 퍼스널 컬러, 가치관, 나이대, 직업, 쇼핑 스타일,
     선호/기피 성분, 가격 민감도 등 구체적인 속성 조건이 있을 때 사용하세요.
-    search_personas_by_text보다 이 함수를 우선 사용하세요.
+    구체적인 속성 조건이 있을 때 이 함수를 사용하세요.
     """
     f = PersonaSearchFilter(
         gender=gender, age_min=age_min, age_max=age_max,
@@ -341,13 +255,11 @@ async def search_personas_by_filter(
         shopping_style=shopping_style, preferred_brands=preferred_brands,
         limit=limit,
     )
-    sql = _build_persona_filter_sql(f)
-
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
-                f"{DB_API_BASE_URL}/personas/query",
-                json={"sql_query": sql}
+                f"{DB_API_BASE_URL}/personas/filter",
+                json=f.model_dump()
             )
             response.raise_for_status()
             rows = response.json()
