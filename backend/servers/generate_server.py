@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.generate_message_agent.a2a_agent import router
 from app.agents.generate_message_agent.workflow import build_workflow
 from app.core.logging import configure_logging, get_logger
+from app.core.http_client_registry import close_all
 
 configure_logging(
     log_level=os.getenv("LOG_LEVEL", "INFO"),
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     app.state.graph = build_workflow()
     _logger.info("graph_compiled")
     yield
+    await close_all()
 
 
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")

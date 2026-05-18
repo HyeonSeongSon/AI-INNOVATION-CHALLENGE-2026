@@ -6,6 +6,7 @@ from ..prompts.slot_keywords_generate_prompt import get_prompt_by_category_type
 from .slot_query_builder import validate_and_build
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.http_client_registry import register
 import os
 import json
 import httpx
@@ -24,6 +25,7 @@ class ProductRecommender:
         self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
         self.db_api_url = os.getenv("DATABASE_API_URL")
         self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
         logger.info("recommender_initialized")
 
     @property
@@ -32,6 +34,10 @@ class ProductRecommender:
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
         return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     @traced(name="get_persona_info", run_type="tool")
     async def get_persona_info(self, persona_id: str) -> Dict[str, Any]:

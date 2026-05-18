@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....config.settings import settings
+from ....core.http_client_registry import register
 import httpx
 
 logger = get_logger("recommend_products")
@@ -11,6 +12,7 @@ class PersonaClient:
     def __init__(self):
         self.db_api_url = settings.database_api_url
         self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -18,6 +20,10 @@ class PersonaClient:
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
         return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     @traced(name="get_persona_info", run_type="tool")
     async def get_persona_info(self, persona_id: str) -> Dict[str, Any]:

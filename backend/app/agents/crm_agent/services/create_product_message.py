@@ -11,6 +11,7 @@ from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.http_client_registry import register
 from langchain_core.messages import HumanMessage, AIMessage
 import os
 import yaml
@@ -45,6 +46,7 @@ class ProductMessageGenerator:
         self.brand_tones = self._load_yaml(DATA_PATH)
 
         self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
 
         logger.info(
             "message_generator_initialized",
@@ -57,6 +59,10 @@ class ProductMessageGenerator:
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
         return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     def _load_yaml(self, file_path: str) -> Dict[str, Any]:
         """YAML 파일 로드"""

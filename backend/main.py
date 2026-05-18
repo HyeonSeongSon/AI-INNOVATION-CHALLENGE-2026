@@ -20,6 +20,7 @@ from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
+from app.core.http_client_registry import close_all
 
 # Load .env before anything else
 load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"), override=True)
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
         yield
+        await close_all()
 
 
 # FastAPI 앱 생성

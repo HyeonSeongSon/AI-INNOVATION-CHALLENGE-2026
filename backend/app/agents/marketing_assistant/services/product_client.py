@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Any
 from ....core.langsmith_config import traced
 from ....core.logging import get_logger
 from ....config.settings import settings
+from ....core.http_client_registry import register
 import httpx
 import asyncio
 
@@ -12,6 +13,7 @@ class ProductClient:
         self.db_api_url = settings.database_api_url
         self.vector_db_api_url = settings.opensearch_api_url
         self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -19,6 +21,10 @@ class ProductClient:
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
         return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     @traced(name="get_filtered_products", run_type="tool")
     async def get_filtered_products(
