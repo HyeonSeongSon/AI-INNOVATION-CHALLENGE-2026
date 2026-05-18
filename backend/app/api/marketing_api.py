@@ -363,22 +363,22 @@ async def chat_v2(
         # 품질 검사 통과 메시지만 generated_messages 저장
         if status == "completed" and conv_id:
             generated_tasks = result.get("generated_tasks", [])
-            for task in generated_tasks:
-                _quality = task.get("quality_check") or {}
-                _scores = _quality.get("llm_judge_scores") or {}
-                msg = task.get("message") or {}
-                content = msg.get("message") or msg.get("content", "")
-                if not content:
-                    continue
-                if not _quality.get("passed"):
-                    logger.info(
-                        "generated_message_skip_quality_failed",
-                        product_id=task.get("product_id"),
-                        failed_stage=_quality.get("failed_stage"),
-                    )
-                    continue
-                db = SessionLocal()
-                try:
+            db = SessionLocal()
+            try:
+                for task in generated_tasks:
+                    _quality = task.get("quality_check") or {}
+                    _scores = _quality.get("llm_judge_scores") or {}
+                    msg = task.get("message") or {}
+                    content = msg.get("message") or msg.get("content", "")
+                    if not content:
+                        continue
+                    if not _quality.get("passed"):
+                        logger.info(
+                            "generated_message_skip_quality_failed",
+                            product_id=task.get("product_id"),
+                            failed_stage=_quality.get("failed_stage"),
+                        )
+                        continue
                     gm = GeneratedMessage(
                         conversation_id=conv_id,
                         user_id=user_id,
@@ -419,16 +419,16 @@ async def chat_v2(
                         quality_passed=gm.quality_passed,
                         llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
                     )
-                except Exception as db_err:
-                    logger.error(
-                        "generated_message_save_failed",
-                        error=str(db_err),
-                        conv_id=conv_id,
-                        product_id=task.get("product_id"),
-                        exc_info=True,
-                    )
-                finally:
-                    db.close()
+            except Exception as db_err:
+                db.rollback()
+                logger.error(
+                    "generated_message_save_failed",
+                    error=str(db_err),
+                    conv_id=conv_id,
+                    exc_info=True,
+                )
+            finally:
+                db.close()
 
         logger.info(
             "chat_v2_completed",
