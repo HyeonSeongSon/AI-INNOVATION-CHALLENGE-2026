@@ -1,12 +1,14 @@
 import uuid
+import httpx
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, ToolMessage, messages_from_dict
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 from typing import List, Literal
 from a2a.client import A2AClient
+from a2a.serialization import deserialize_messages
 from ...core.llm_factory import get_llm
 from ...core.logging import get_logger
 from ...config.settings import settings
@@ -155,10 +157,37 @@ def make_recommend_product_node(client: A2AClient):
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         session_id = f"{thread_id}:recommend" if thread_id else str(uuid.uuid4())
 
-        task = await client.send_task(session_id, {
-            "messages": _filter_handoff_messages(state.get("messages", [])),
-            "active_persona_id": state.get("active_persona_id"),
-        })
+        try:
+            task = await client.send_task(session_id, {
+                "messages": _filter_handoff_messages(state.get("messages", [])),
+                "active_persona_id": state.get("active_persona_id"),
+            })
+        except Exception as e:
+            _logger.error("recommend_product_agent_failed", node_name="recommend_product_agent", error=str(e))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": str(e),
+                    "logs": state.get("logs", []) + [f"[에러] recommend_product_agent: {e}"],
+                    "messages": [AIMessage(content=f"상품 추천 에이전트 호출에 실패했습니다: {e}", name="recommend_product_agent")],
+                },
+            )
+
+        if not task.artifacts:
+            _logger.error("recommend_product_agent_empty_artifacts", node_name="recommend_product_agent")
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "빈 artifacts 응답",
+                    "logs": state.get("logs", []) + ["[에러] recommend_product_agent: 응답에 artifacts가 없습니다"],
+                    "messages": [AIMessage(content="상품 추천 에이전트가 빈 응답을 반환했습니다.", name="recommend_product_agent")],
+                },
+            )
+
         result = task.artifacts[0]["data"]
 
         _logger.info("recommend_product_agent_done", node_name="recommend_product_agent", status=result.get("status"))
@@ -166,7 +195,7 @@ def make_recommend_product_node(client: A2AClient):
         return Command(
             goto="supervisor",
             update={
-                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
                 "recommended_products": result.get("recommended_products", []),
                 "active_persona_id": result.get("active_persona_id"),
                 "status": result.get("status"),
@@ -182,10 +211,37 @@ def make_generate_message_node(client: A2AClient):
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         session_id = f"{thread_id}:generate_message" if thread_id else str(uuid.uuid4())
 
-        task = await client.send_task(session_id, {
-            "messages": _filter_handoff_messages(state.get("messages", [])),
-            "active_persona_id": state.get("active_persona_id"),
-        })
+        try:
+            task = await client.send_task(session_id, {
+                "messages": _filter_handoff_messages(state.get("messages", [])),
+                "active_persona_id": state.get("active_persona_id"),
+            })
+        except Exception as e:
+            _logger.error("generate_message_agent_failed", node_name="generate_message_agent", error=str(e))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": str(e),
+                    "logs": state.get("logs", []) + [f"[에러] generate_message_agent: {e}"],
+                    "messages": [AIMessage(content=f"메시지 생성 에이전트 호출에 실패했습니다: {e}", name="generate_message_agent")],
+                },
+            )
+
+        if not task.artifacts:
+            _logger.error("generate_message_agent_empty_artifacts", node_name="generate_message_agent")
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "빈 artifacts 응답",
+                    "logs": state.get("logs", []) + ["[에러] generate_message_agent: 응답에 artifacts가 없습니다"],
+                    "messages": [AIMessage(content="메시지 생성 에이전트가 빈 응답을 반환했습니다.", name="generate_message_agent")],
+                },
+            )
+
         result = task.artifacts[0]["data"]
 
         _logger.info("generate_message_agent_done", node_name="generate_message_agent", status=result.get("status"))
@@ -193,7 +249,7 @@ def make_generate_message_node(client: A2AClient):
         return Command(
             goto="supervisor",
             update={
-                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
                 "generated_tasks": result.get("generated_tasks", []),
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
@@ -208,10 +264,37 @@ def make_data_registration_node(client: A2AClient):
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         session_id = f"{thread_id}:data_registration" if thread_id else str(uuid.uuid4())
 
-        task = await client.send_task(session_id, {
-            "messages": _filter_handoff_messages(state.get("messages", [])),
-            "file_records": state.get("file_records"),
-        })
+        try:
+            task = await client.send_task(session_id, {
+                "messages": _filter_handoff_messages(state.get("messages", [])),
+                "file_records": state.get("file_records"),
+            })
+        except Exception as e:
+            _logger.error("data_registration_agent_failed", node_name="data_registration_agent", error=str(e))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": str(e),
+                    "logs": state.get("logs", []) + [f"[에러] data_registration_agent: {e}"],
+                    "messages": [AIMessage(content=f"데이터 등록 에이전트 호출에 실패했습니다: {e}", name="data_registration_agent")],
+                },
+            )
+
+        if not task.artifacts:
+            _logger.error("data_registration_agent_empty_artifacts", node_name="data_registration_agent")
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "빈 artifacts 응답",
+                    "logs": state.get("logs", []) + ["[에러] data_registration_agent: 응답에 artifacts가 없습니다"],
+                    "messages": [AIMessage(content="데이터 등록 에이전트가 빈 응답을 반환했습니다.", name="data_registration_agent")],
+                },
+            )
+
         result = task.artifacts[0]["data"]
 
         _logger.info("data_registration_agent_done", node_name="data_registration_agent", status=result.get("status"))
@@ -219,7 +302,7 @@ def make_data_registration_node(client: A2AClient):
         return Command(
             goto="supervisor",
             update={
-                "messages": messages_from_dict(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
                 "file_records": None,
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),

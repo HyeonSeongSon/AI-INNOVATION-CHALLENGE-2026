@@ -4,6 +4,7 @@ import httpx
 from langchain_core.messages import BaseMessage
 
 from .models import DataPart, Message, Task, TaskSendRequest
+from .serialization import serialize_messages
 
 
 class A2AClient:
@@ -13,7 +14,7 @@ class A2AClient:
 
     async def send_task(self, session_id: str, data: dict) -> Task:
         serialized = {
-            k: [{"type": m.type, "data": m.model_dump()} if isinstance(m, BaseMessage) else m for m in v]
+            k: serialize_messages(v)
                if isinstance(v, list) and v and isinstance(v[0], BaseMessage)
                else v
             for k, v in data.items()

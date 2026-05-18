@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from langchain_core.messages import BaseMessage, messages_from_dict
 
 from a2a.models import AgentCard, AgentSkill, DataPart, Task, TaskSendRequest, TaskStatus
+from a2a.serialization import deserialize_messages, serialize_messages
 from app.config.settings import settings
 from app.core.logging import get_logger
 from .workflow import build_workflow
@@ -9,21 +9,6 @@ from .workflow import build_workflow
 router = APIRouter(prefix="/a2a/data-registration", tags=["A2A: Data Registration Agent"])
 
 _logger = get_logger("data_registration_agent.a2a")
-
-
-def _deserialize_messages(raw: list) -> list:
-    if not raw:
-        return []
-    if isinstance(raw[0], dict):
-        return messages_from_dict(raw)
-    return raw
-
-
-def _serialize_messages(messages: list) -> list:
-    return [
-        {"type": m.type, "data": m.model_dump()} if isinstance(m, BaseMessage) else m
-        for m in messages
-    ]
 
 
 @router.get("/.well-known/agent.json", response_model=AgentCard)
@@ -49,7 +34,7 @@ async def send_task(request: TaskSendRequest):
         {},
     )
 
-    messages = _deserialize_messages(data.get("messages", []))
+    messages = deserialize_messages(data.get("messages", []))
     subgraph_input = {
         "messages": messages,
         "file_records": data.get("file_records"),
@@ -73,7 +58,7 @@ async def send_task(request: TaskSendRequest):
             artifacts=[{
                 "type": "data",
                 "data": {
-                    "messages": _serialize_messages(result.get("messages", [])),
+                    "messages": serialize_messages(result.get("messages", [])),
                     "logs": result.get("logs", []),
                     "status": result.get("status"),
                 },
