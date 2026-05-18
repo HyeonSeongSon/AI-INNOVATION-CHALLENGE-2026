@@ -4,7 +4,7 @@ from .state import GenerateMessageState
 from ..shared.parser_and_router.parser_and_router_request import generate_message_router
 from ...config.settings import settings
 from ...core.llm_factory import get_llm
-from ...core.logging import AgentLogger
+from ...core.logging import AgentLogger, get_logger
 from .services.generate_crm_message import CrmMessageGenerator
 from .services.quality_check import QualityChecker
 from .services.apply_feedback import get_applier
@@ -15,6 +15,7 @@ from langgraph.types import Command
 import json
 
 _MAX_RETRIES = 2
+_logger = get_logger("generate_message_agent")
 
 
 def _now_iso() -> str:
@@ -43,8 +44,8 @@ def _parse_message(raw) -> Dict[str, Any]:
         parsed = json.loads(content)
         if isinstance(parsed, dict) and "title" in parsed:
             return parsed
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.debug("message_json_parse_failed", error=str(e))
     return {"title": "", "message": content}
 
 
