@@ -4,7 +4,7 @@ v4 멀티벡터 색인 스크립트
 구조:
 - 5개 필드별 별도 인덱스 (product_v4_combined, product_v4_function_desc, ...)
 - 각 문장을 독립 문서로 색인 (문장별 임베딩)
-- 7개 JSONL 파일 일괄 처리
+- 10개 JSONL 파일 일괄 처리
 
 인덱스당 문서 구조:
   product_id, group, sentence_idx, text, vector, is_active, embedding_model
@@ -32,13 +32,16 @@ FIELD_NAMES = ["combined", "function_desc", "attribute_desc", "target_user", "sp
 # 인덱스 이름 prefix
 INDEX_PREFIX = "product_v4"
 
-# 색인할 7개 파일
+# 색인할 10개 파일
 DATA_FILES = [
     ("data", "v4_product_data_beauty_tool.jsonl"),
     ("data", "v4_product_data_color_tone.jsonl"),
+    ("data", "v4_product_data_color_tone_add.jsonl"),
     ("data", "v4_product_data_fragrance_body.jsonl"),
+    ("data", "v4_product_data_fragrance_body_add.jsonl"),
     ("data", "v4_product_data_hair.jsonl"),
     ("data", "v4_product_data_inner_beauty.jsonl"),
+    ("data", "v4_product_data_inner_beauty_add.jsonl"),
     ("data", "v4_product_data_living_supplies.jsonl"),
     ("data", "v4_product_data_skincare.jsonl"),
 ]
@@ -104,7 +107,7 @@ def create_field_index_mapping() -> dict:
 
 def load_all_sentences(data_files: list[tuple]) -> dict[str, list[dict]]:
     """
-    7개 파일을 읽어 필드별로 문장 문서 리스트를 반환합니다.
+    10개 파일을 읽어 필드별로 문장 문서 리스트를 반환합니다.
 
     Returns:
         {
@@ -210,7 +213,7 @@ def run_indexing(recreate_index: bool = True):
         logging.error("OpenSearch 클라이언트 초기화 실패")
         return
 
-    logging.info("7개 파일에서 문장 로드 중...")
+    logging.info("10개 파일에서 문장 로드 중...")
     field_docs = load_all_sentences(DATA_FILES)
 
     results = {}
