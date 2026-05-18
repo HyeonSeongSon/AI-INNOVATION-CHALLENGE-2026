@@ -66,9 +66,10 @@ app = FastAPI(
 
 # Middleware (order matters: outermost first)
 app.add_middleware(RequestLoggingMiddleware)
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 specific origins 사용
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

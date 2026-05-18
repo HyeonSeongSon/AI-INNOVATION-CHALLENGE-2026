@@ -15,10 +15,12 @@ configure_logging(
     environment=os.getenv("ENVIRONMENT", "production"),
 )
 
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app = FastAPI(title="Recommend Product Agent", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
