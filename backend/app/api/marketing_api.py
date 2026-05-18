@@ -4,16 +4,13 @@ Supervisor + CRM subgraph 기반
 """
 
 import uuid
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional, Literal, List, Dict, Any
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm.attributes import flag_modified
 
-from ..agents.supervisor.marketing_agent import MarketingAgent
-from ..agents.marketing_assistant.marketing_assistant_agent import MarketingAgent as MarketingAssistantAgent
 from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
@@ -25,11 +22,7 @@ logger = get_logger("marketing_api")
 router = APIRouter(prefix="/api/marketing", tags=["Marketing"])
 
 
-def get_agent(request: Request) -> MarketingAgent:
-    return request.app.state.agent
-
-
-def get_agent_v2(request: Request) -> MarketingAssistantAgent:
+def get_agent_v2(request: Request):
     return request.app.state.agent_v2
 
 
@@ -107,174 +100,9 @@ class ChatRequest(BaseModel):
         }
 
 
-class ResumeRequest(BaseModel):
-    """
-    Interrupt 재개 요청 (모든 interrupt 타입 통합)
-
-    interrupt_type으로 어떤 interrupt인지 명시하고,
-    payload에 interrupt 타입별 데이터를 담습니다.
-
-    현재 지원 타입:
-        - "product_selection": payload = {"selected_product_id": "PROD001"}
-    """
-    thread_id: str
-    session_id: str
-    interrupt_type: str              # "product_selection" | 미래 타입들
-    payload: Dict[str, Any]          # interrupt 타입별 데이터
-    conversation_id: Optional[str] = None  # DB 저장용
-    model: Optional[str] = None
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "thread_id": "uuid-aaa-bbb-ccc",
-                "session_id": "sess_abc123",
-                "interrupt_type": "product_selection",
-                "payload": {"selected_product_id": "PROD001"},
-            }
-        }
-
-
-class MarketingResponse(BaseModel):
-    """마케팅 에이전트 응답"""
-    status: Literal["waiting_for_user", "completed", "failed"]
-    interrupt_type: Optional[str] = None  # waiting_for_user 시 어떤 interrupt인지
-    thread_id: str
-    session_id: str
-    conversation_id: Optional[str] = None
-    recommended_products: Optional[List[Dict[str, Any]]] = None
-    persona_info: Optional[Dict[str, Any]] = None
-    messages: Optional[List[Dict[str, Any]]] = None
-    selected_product: Optional[Dict[str, Any]] = None
-    regeneration_history: Optional[List[Dict[str, Any]]] = None
-    logs: Optional[List[str]] = None
-    error: Optional[str] = None
-
-
 # ============================================================
 # 엔드포인트
 # ============================================================
-
-
-@router.post("/chat", response_model=MarketingResponse)
-async def chat(
-    request: ChatRequest,
-    req: Request,
-    current_user: UserContext = Depends(get_current_user),
-):
-    """
-    대화 처리 (신규 + 이어가기 통합)
-
-    - conversation_id 없음: 새 대화 시작 (새 Conversation 레코드 생성)
-    - conversation_id 있음: 기존 대화 이어가기 (이력 로드 후 컨텍스트 전달)
-    - 매 호출마다 fresh thread_id로 task 격리 → stale 상태 오염 없음
-    - interrupt 발생 시 반환된 thread_id를 /resume에 사용
-    """
-    try:
-        user_id = current_user.user_id
-        agent = get_agent(req)
-
-        # 1. DB에서 이전 대화 이력 로드 (신규면 빈 리스트)
-        history = _load_conversation_messages(request.conversation_id)
-
-        # 2. 에이전트 호출 — thread_id는 에이전트 내부에서 fresh UUID 생성
-        result = await agent.chat(
-            user_input=request.user_input,
-            session_id=request.session_id,
-            user_id=user_id,
-            history=history,
-            model=request.model,
-        )
-
-        # 3. Conversation 레코드 생성 또는 thread_id 업데이트
-        conv_id = request.conversation_id
-        if not conv_id:
-            conv_id = str(uuid.uuid4())
-            db = SessionLocal()
-            try:
-                conv = Conversation(
-                    id=conv_id,
-                    user_id=user_id,
-                    thread_id=result["thread_id"],
-                    session_id=result["session_id"],
-                    title="새 대화",
-                    messages=[],
-                )
-                db.add(conv)
-                db.commit()
-            finally:
-                db.close()
-        else:
-            # 최신 task thread_id로 업데이트 (LangSmith 추적 / interrupt 복구용)
-            db = SessionLocal()
-            try:
-                conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-                if conv:
-                    conv.thread_id = result["thread_id"]
-                    db.commit()
-            finally:
-                db.close()
-
-        result["conversation_id"] = conv_id
-
-        # 4. 대화 이력 DB 저장
-        thread_id = result["thread_id"]
-        now = datetime.now(timezone.utc).isoformat()
-        status = result.get("status")
-
-        new_entries = [
-            {
-                "role": "user",
-                "content": request.user_input,
-                "type": "text",
-                "timestamp": now,
-                "thread_id": thread_id,
-            }
-        ]
-
-        if status == "waiting_for_user":
-            # interrupt 메시지 저장 — thread_id 포함해 /resume 복구 가능하게
-            interrupt_content = (
-                result["messages"][0]["content"] if result.get("messages") else ""
-            )
-            new_entries.append({
-                "role": "assistant",
-                "content": interrupt_content,
-                "type": "product_selection_prompt",
-                "timestamp": now,
-                "thread_id": thread_id,
-                "recommended_products": result.get("recommended_products", []),
-                "persona_info": result.get("persona_info"),
-            })
-        elif status == "completed":
-            ai_messages = result.get("messages", [])
-            content = ai_messages[0].get("content", "") if ai_messages else ""
-            new_entries.append({
-                "role": "assistant",
-                "content": content,
-                "type": "text",
-                "timestamp": now,
-                "thread_id": thread_id,
-            })
-        # status == "failed": user 항목만 저장, assistant 항목 없음 (이력 오염 방지)
-
-        _save_conversation_messages(conv_id, new_entries)
-
-        logger.info(
-            "chat_completed",
-            status=status,
-            interrupt_type=result.get("interrupt_type"),
-            thread_id=thread_id,
-            session_id=request.session_id,
-            user_id=user_id,
-            conversation_id=conv_id,
-        )
-
-        return MarketingResponse(**result)
-
-    except Exception as e:
-        logger.error("chat_failed", error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.post("/chat/v2")
@@ -443,175 +271,6 @@ async def chat_v2(
 
     except Exception as e:
         logger.error("chat_v2_failed", error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
-
-
-@router.post("/resume", response_model=MarketingResponse)
-async def resume_interrupt(
-    request: ResumeRequest,
-    req: Request,
-    current_user: UserContext = Depends(get_current_user),
-):
-    """
-    Interrupt 재개 (모든 interrupt 타입 통합)
-
-    /chat에서 status: "waiting_for_user"를 받은 후,
-    interrupt_type에 맞는 payload를 담아 호출합니다.
-
-    현재 지원:
-        interrupt_type: "product_selection"
-        payload: {"selected_product_id": "PROD001"}
-    """
-    try:
-        user_id = current_user.user_id
-        agent = get_agent(req)
-        result = await agent.resume_interrupt(
-            thread_id=request.thread_id,
-            interrupt_type=request.interrupt_type,
-            payload=request.payload,
-            session_id=request.session_id,
-            user_id=user_id,
-            model=request.model,
-        )
-
-        # conversation_id 확보 (없으면 thread_id로 역조회)
-        conv_id = request.conversation_id
-        if not conv_id:
-            db = SessionLocal()
-            try:
-                conv = db.query(Conversation).filter(
-                    Conversation.thread_id == request.thread_id
-                ).first()
-                conv_id = conv.id if conv else None
-            finally:
-                db.close()
-
-        result["conversation_id"] = conv_id
-
-        # 메시지 생성 완료 시 generated_messages 테이블에 저장
-        api_messages = result.get("messages")
-        logger.info(
-            "resume_save_check",
-            status=result.get("status"),
-            messages_count=len(api_messages) if api_messages else 0,
-            has_conv_id=bool(conv_id),
-        )
-        if result.get("status") == "completed" and api_messages and conv_id:
-            msg = api_messages[0]
-            content = (
-                msg.get("message")
-                or msg.get("content")
-                or json.dumps(msg, ensure_ascii=False)
-            )
-            db = SessionLocal()
-            try:
-                _persona_info = result.get("persona_info") or {}
-                _selected_product = result.get("selected_product") or {}
-                _quality = result.get("quality_result") or {}
-                _scores = _quality.get("llm_judge_scores") or {}
-                gm = GeneratedMessage(
-                    conversation_id=conv_id,
-                    user_id=user_id,
-                    product_id=request.payload.get("selected_product_id", ""),
-                    product_name=_selected_product.get("product_name"),
-                    brand=_selected_product.get("brand"),
-                    sub_tag=_selected_product.get("sub_tag"),
-                    purpose=result.get("purpose"),
-                    user_input=result.get("user_input"),
-                    title=msg.get("title") or msg.get("headline"),
-                    content=content,
-                    quality_passed=_quality.get("passed"),
-                    quality_failed_stage=_quality.get("failed_stage"),
-                    quality_failure_reason=_quality.get("failure_reason"),
-                    llm_score_accuracy=_scores.get("accuracy"),
-                    llm_score_tone=_scores.get("tone"),
-                    llm_score_personalization=_scores.get("personalization"),
-                    llm_score_naturalness=_scores.get("naturalness"),
-                    llm_score_cta_clarity=_scores.get("cta_clarity"),
-                    llm_score_overall=_scores.get("overall"),
-                    llm_feedback=_scores.get("feedback"),
-                    quality_details={
-                        "rule_check_passed": _quality.get("rule_check_passed"),
-                        "rule_check_issues": _quality.get("rule_check_issues", []),
-                        "semantic_check_passed": _quality.get("semantic_check_passed"),
-                        "groundedness_passed": _quality.get("groundedness_passed"),
-                        "groundedness_result": _quality.get("groundedness_result"),
-                    },
-                    regeneration_count=result.get("regeneration_count", 0),
-                    thread_id=request.thread_id,
-                )
-                db.add(gm)
-                db.commit()
-                logger.info(
-                    "generated_message_saved",
-                    conversation_id=conv_id,
-                    product_id=gm.product_id,
-                    user_id=user_id,
-                    content_length=len(content),
-                    quality_passed=gm.quality_passed,
-                    llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
-                )
-            except Exception as db_err:
-                logger.error(
-                    "generated_message_save_failed",
-                    error=str(db_err),
-                    conv_id=conv_id,
-                    product_id=request.payload.get("selected_product_id"),
-                    exc_info=True,
-                )
-            finally:
-                db.close()
-        elif not conv_id:
-            logger.warning("generated_message_skip_no_conv_id", thread_id=request.thread_id)
-
-        # 대화 이력 저장 (resume turn)
-        if conv_id:
-            now = datetime.now(timezone.utc).isoformat()
-            selected_product = result.get("selected_product") or {}
-            product_name = selected_product.get(
-                "product_name", request.payload.get("selected_product_id", "")
-            )
-            new_entries = [
-                {
-                    "role": "user",
-                    "content": f"{product_name}을(를) 선택하겠습니다.",
-                    "type": "text",
-                    "timestamp": now,
-                    "thread_id": request.thread_id,
-                }
-            ]
-            if result.get("status") == "completed" and api_messages:
-                new_entries.append({
-                    "role": "assistant",
-                    "content": f"CRM 메시지 생성이 완료되었습니다: {api_messages[0].get('title', '')}",
-                    "type": "crm_message",
-                    "timestamp": now,
-                    "thread_id": request.thread_id,
-                    "crm_messages": api_messages,
-                    "selected_product": selected_product,
-                    "regeneration_history": result.get("regeneration_history", []),
-                })
-            _save_conversation_messages(conv_id, new_entries)
-
-        logger.info(
-            "resume_completed",
-            status=result.get("status"),
-            interrupt_type=request.interrupt_type,
-            thread_id=request.thread_id,
-            session_id=request.session_id,
-            user_id=user_id,
-        )
-
-        return MarketingResponse(**result)
-
-    except Exception as e:
-        logger.error(
-            "resume_failed",
-            interrupt_type=request.interrupt_type,
-            thread_id=request.thread_id,
-            error=str(e),
-            exc_info=True,
-        )
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 

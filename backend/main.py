@@ -10,11 +10,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
-from app.api import marketing_api
 from app.api import generated_messages
 from app.api import products_pipeline
 from app.api import persona_pipeline
-from app.agents.supervisor.marketing_agent import MarketingAgent
+from app.api import marketing_api
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.config.settings import settings
 from app.core.database import init_db
@@ -51,7 +50,6 @@ async def lifespan(app: FastAPI):
         checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
         app.state.pool = pool
-        app.state.agent = MarketingAgent(checkpointer=checkpointer)
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("postgres_checkpointer_ready")
         yield
@@ -77,10 +75,10 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(marketing_api.router)
 app.include_router(generated_messages.router)
 app.include_router(products_pipeline.router)
 app.include_router(persona_pipeline.router)
+app.include_router(marketing_api.router)
 
 
 @app.get("/")
