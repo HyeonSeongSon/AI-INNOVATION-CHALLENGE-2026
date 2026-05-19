@@ -1,11 +1,4 @@
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-
-_TYPE_MAP: dict[str, type[BaseMessage]] = {
-    "human": HumanMessage,
-    "ai": AIMessage,
-    "system": SystemMessage,
-    "tool": ToolMessage,
-}
+from langchain_core.messages import BaseMessage, messages_from_dict
 
 
 def serialize_messages(messages: list[BaseMessage]) -> list[dict]:
@@ -13,10 +6,4 @@ def serialize_messages(messages: list[BaseMessage]) -> list[dict]:
 
 
 def deserialize_messages(raw: list[dict]) -> list[BaseMessage]:
-    result = []
-    for item in raw:
-        cls = _TYPE_MAP.get(item.get("type", ""))
-        if cls is None:
-            continue
-        result.append(cls(**item.get("data", {})))
-    return result
+    return messages_from_dict(raw)
