@@ -145,8 +145,15 @@ async def create_personas_from_file(file: UploadFile = File(...)):
         semaphore = asyncio.Semaphore(5)
 
         async def process_and_enqueue(i: int, text: str):
-            async with semaphore:
-                result = await _process_one_text(i, text, llm)
+            try:
+                async with semaphore:
+                    result = await _process_one_text(i, text, llm)
+            except Exception as e:
+                result = {
+                    "success": False,
+                    "name": None,
+                    "error": str(e),
+                }
             await queue.put(result)
 
         tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]

@@ -119,8 +119,15 @@ async def register_products_from_file(file: UploadFile = File(...)):
         semaphore = asyncio.Semaphore(3)
 
         async def process_and_enqueue(record: dict):
-            async with semaphore:
-                result = await service.register_product(record)
+            try:
+                async with semaphore:
+                    result = await service.register_product(record)
+            except Exception as e:
+                result = {
+                    "success": False,
+                    "product_name": record.get("product_name"),
+                    "error": str(e),
+                }
             await queue.put(result)
 
         tasks = [asyncio.create_task(process_and_enqueue(r)) for r in records]
