@@ -97,6 +97,9 @@ class DatabaseSetupPipeline:
             print("Creating tables...")
             init_db()
 
+            print("Applying migrations...")
+            self._apply_migrations()
+
             # 생성된 테이블 확인
             with engine.connect() as conn:
                 result = conn.execute(text("""
@@ -117,6 +120,43 @@ class DatabaseSetupPipeline:
         except Exception as e:
             print(f"❌ Failed to create tables: {e}")
             return False
+
+    def _apply_migrations(self) -> None:
+        """기존 DB 스키마에 누락된 제약/컬럼을 멱등으로 적용한다."""
+        # generated_messages.product_id → products.product_id FK (SET NULL)
+        stmts = [
+            """
+            UPDATE generated_messages
+            SET product_id = NULL
+            WHERE product_id IS NOT NULL
+              AND product_id NOT IN (SELECT product_id FROM products)
+            """,
+            """
+            ALTER TABLE generated_messages
+                ALTER COLUMN product_id DROP NOT NULL
+            """,
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE constraint_name = 'fk_generated_messages_product_id'
+                      AND table_name = 'generated_messages'
+                ) THEN
+                    ALTER TABLE generated_messages
+                        ADD CONSTRAINT fk_generated_messages_product_id
+                        FOREIGN KEY (product_id)
+                        REFERENCES products(product_id)
+                        ON DELETE SET NULL;
+                END IF;
+            END $$
+            """,
+        ]
+        with engine.connect() as conn:
+            for stmt in stmts:
+                conn.execute(text(stmt))
+            conn.commit()
+        print("Migrations applied")
 
     def step_3_insert_products(self) -> bool:
         """Step 3: 상품 데이터 삽입"""
