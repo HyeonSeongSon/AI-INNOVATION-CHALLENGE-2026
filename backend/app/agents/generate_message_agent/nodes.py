@@ -10,7 +10,7 @@ from .services.quality_check import QualityChecker
 from .services.apply_feedback import get_applier
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 from langgraph.types import Command
 import json
 import traceback
@@ -22,8 +22,22 @@ _logger = get_logger("generate_message_agent")
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-_generator = CrmMessageGenerator()
-_checker = QualityChecker()
+_generator: Optional[CrmMessageGenerator] = None
+_checker: Optional[QualityChecker] = None
+
+
+def get_generator() -> CrmMessageGenerator:
+    global _generator
+    if _generator is None:
+        _generator = CrmMessageGenerator()
+    return _generator
+
+
+def get_checker() -> QualityChecker:
+    global _checker
+    if _checker is None:
+        _checker = QualityChecker()
+    return _checker
 
 
 def _format_generated_tasks(tasks) -> str:
@@ -128,12 +142,12 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
-    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
+    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
 
-    tasks = await _generator.get_product_info(tasks)
-    tasks = await _generator.get_brand_tone(tasks)
-    tasks = await _generator.get_crm_prompt(tasks, persona_info=persona_info)
-    tasks = await _generator.generate_crm_message(tasks, message_llm)
+    tasks = await get_generator().get_product_info(tasks)
+    tasks = await get_generator().get_brand_tone(tasks)
+    tasks = await get_generator().get_crm_prompt(tasks, persona_info=persona_info)
+    tasks = await get_generator().generate_crm_message(tasks, message_llm)
 
     generated_tasks = [
         {
@@ -166,7 +180,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
-    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
+    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
 
     agent_logger.info(
         "quality_check_started",
@@ -178,7 +192,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     failed_task_ids = []
 
     for task in generated_tasks:
-        quality_check = await _checker.check_quality(
+        quality_check = await get_checker().check_quality(
             message=task["message"],
             product_id=task["product_id"],
             purpose=task["purpose"],
@@ -228,12 +242,12 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
         )
 
     applier = get_applier()
-    persona_info = await _generator.get_persona_info(persona_id) if persona_id else None
+    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
 
     if feedback_input:
         agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
         raw = [{"product_id": feedback_input["product_id"], "purpose": feedback_input.get("purpose")}]
-        enriched = await _generator.get_product_info(raw)
+        enriched = await get_generator().get_product_info(raw)
         product_info = enriched[0].get("product_info", {}) if enriched else {}
         task = {
             "product_id": feedback_input["product_id"],
