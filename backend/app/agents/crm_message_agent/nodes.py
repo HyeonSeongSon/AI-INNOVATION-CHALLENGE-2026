@@ -97,7 +97,11 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     llm = get_llm(model, temperature=0)
     existing_summary = state.get("summary", "")
 
-    response = await llm.ainvoke(_build_summary_prompt(messages, existing_summary))
+    try:
+        response = await llm.ainvoke(_build_summary_prompt(messages, existing_summary))
+    except Exception as e:
+        _logger.warning("summarize_skipped", error=str(e))
+        return {}
 
     messages_to_delete = messages[:-_KEEP_MESSAGES]
     delete_ops = [RemoveMessage(id=m.id) for m in messages_to_delete]
