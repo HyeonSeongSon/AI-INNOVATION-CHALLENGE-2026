@@ -190,8 +190,9 @@ async def create_and_analyze_persona(
         )
 
     except Exception as e:
+        logger.error("pipeline_failed", error=str(e), exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.post("/personas/pre-analyze")
@@ -222,8 +223,9 @@ async def pre_analyze_persona(request: PreAnalyzeRequest, db: Session = Depends(
         return {"status": "created", "analysis_id": record.analysis_id}
 
     except Exception as e:
+        logger.error("pipeline_pre_analyze_failed", error=str(e), exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 def _extract_primary_category(summary: str) -> str:

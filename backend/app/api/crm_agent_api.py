@@ -145,7 +145,7 @@ async def generate_crm_message(request: CRMRequest):
 
     except Exception as e:
         logger.error("generate_failed", error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.post("/select-product", response_model=CRMResponse)
@@ -218,7 +218,7 @@ async def select_product(request: ProductSelection):
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
 @router.get("/health")
