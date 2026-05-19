@@ -55,6 +55,7 @@ class Settings:
     recommend_agent_url: str = os.getenv("RECOMMEND_AGENT_URL", "http://localhost:8001")
     generate_message_agent_url: str = os.getenv("GENERATE_MESSAGE_AGENT_URL", "http://localhost:8002")
     data_registration_agent_url: str = os.getenv("DATA_REGISTRATION_AGENT_URL", "http://localhost:8003")
+    a2a_timeout: float = float(os.getenv("A2A_TIMEOUT", "120"))
 
     # Product recommendation tuning
     rrf_k: int = int(os.getenv("RRF_K", "60"))

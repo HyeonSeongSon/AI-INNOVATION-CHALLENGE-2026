@@ -31,7 +31,14 @@ router = APIRouter(prefix="/api/pipeline", tags=["Persona Pipeline"])
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
-_persona_client = PersonaClient()
+_persona_client: PersonaClient | None = None
+
+
+def get_persona_client() -> PersonaClient:
+    global _persona_client
+    if _persona_client is None:
+        _persona_client = PersonaClient()
+    return _persona_client
 
 
 # ──────────────────────────────────────────────────────
@@ -43,9 +50,9 @@ async def _process_one_text(index: int, text: str, llm) -> Dict[str, Any]:
     try:
         messages = [HumanMessage(content=text)]
         structured_persona = await generate_structured_persona_info(messages, llm)
-        persona_id = await _persona_client.save_persona(structured_persona)
+        persona_id = await get_persona_client().save_persona(structured_persona)
         raw_queries = await generate_search_query(messages, llm)
-        await _persona_client.save_product_search_query(persona_id, raw_queries)
+        await get_persona_client().save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,
             "success": True,

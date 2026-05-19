@@ -5,6 +5,7 @@ from langchain_core.messages import BaseMessage
 
 from .models import DataPart, Message, Task, TaskSendRequest
 from .serialization import serialize_messages
+from app.config.settings import settings
 
 
 class A2AClient:
@@ -25,7 +26,7 @@ class A2AClient:
             sessionId=session_id,
             message=Message(role="user", parts=[DataPart(data=serialized)]),
         )
-        async with httpx.AsyncClient(timeout=120) as http:
+        async with httpx.AsyncClient(timeout=settings.a2a_timeout) as http:
             resp = await http.post(
                 f"{self.base_url}/tasks/send",
                 json=req.model_dump(),
