@@ -151,6 +151,19 @@ class DatabaseSetupPipeline:
                 END IF;
             END $$
             """,
+            """
+            CREATE TABLE IF NOT EXISTS conversation_messages (
+                id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                conversation_id VARCHAR(36) NOT NULL
+                                    REFERENCES conversations(id) ON DELETE CASCADE,
+                message_data    JSONB NOT NULL,
+                created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_conv_messages_conv_id
+                ON conversation_messages(conversation_id, id)
+            """,
         ]
         with engine.connect() as conn:
             for stmt in stmts:

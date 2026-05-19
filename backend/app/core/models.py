@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP, SmallInteger, Boolean, Numeric,
-    ForeignKey, ARRAY, UniqueConstraint, JSON
+    ForeignKey, ARRAY, UniqueConstraint, JSON, BigInteger, Index
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -196,6 +196,28 @@ class Conversation(Base):
 
     def __repr__(self):
         return f"<Conversation(id='{self.id}', user_id='{self.user_id}', title='{self.title}')>"
+
+
+# ============================================================
+# 5b. Conversation Message Table
+# ============================================================
+
+class ConversationMessage(Base):
+    """대화 메시지 테이블 — 메시지당 1행"""
+    __tablename__ = 'conversation_messages'
+
+    id              = Column(BigInteger, primary_key=True, autoincrement=True)
+    conversation_id = Column(
+        String(36),
+        ForeignKey('conversations.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    message_data    = Column(JSONB, nullable=False)
+    created_at      = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_conv_messages_conv_id', 'conversation_id', 'id'),
+    )
 
 
 # ============================================================

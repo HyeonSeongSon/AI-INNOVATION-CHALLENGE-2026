@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from core.database import SessionLocal
-from core.models import Conversation
+from core.models import Conversation, ConversationMessage
 
 logger = logging.getLogger("conversations_api")
 
@@ -71,7 +71,6 @@ def create_conversation(body: CreateConversationRequest):
             thread_id=new_id,
             session_id=body.session_id,
             title=body.title or "새 대화",
-            messages=[],
         )
         db.add(conv)
         db.commit()
@@ -98,28 +97,48 @@ def list_conversations(user_id: str = Query(...)):
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-def get_conversation(conv_id: str):
-    """대화 상세 조회 (messages 포함)"""
+def get_conversation(conv_id: str, limit: int = Query(default=200, le=500)):
+    """대화 상세 조회 (messages 포함, 최근 limit건)"""
     db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        return conv
+        rows = (
+            db.query(ConversationMessage)
+            .filter(ConversationMessage.conversation_id == conv_id)
+            .order_by(ConversationMessage.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return {
+            "id": conv.id,
+            "user_id": conv.user_id,
+            "thread_id": conv.thread_id,
+            "session_id": conv.session_id,
+            "title": conv.title,
+            "created_at": conv.created_at,
+            "last_active_at": conv.last_active_at,
+            "messages": [row.message_data for row in reversed(rows)],
+        }
     finally:
         db.close()
 
 
 @router.put("/{conv_id}/messages")
 def update_messages(conv_id: str, body: UpdateMessagesRequest):
-    """메시지 배열 및 제목 갱신"""
+    """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
     db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        conv.messages = body.messages
+        db.query(ConversationMessage).filter(
+            ConversationMessage.conversation_id == conv_id
+        ).delete()
+        for msg in body.messages:
+            db.add(ConversationMessage(conversation_id=conv_id, message_data=msg))
         if body.title:
             conv.title = body.title
         conv.last_active_at = datetime.now(timezone.utc)

@@ -10,12 +10,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm.attributes import flag_modified
-
 from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
-from ..core.models import Conversation, GeneratedMessage
+from ..core.models import Conversation, GeneratedMessage, ConversationMessage
 from .deps import get_current_user
 
 logger = get_logger("marketing_api")
@@ -32,39 +30,41 @@ def get_agent_v2(request: Request):
 # 대화 이력 헬퍼
 # ============================================================
 
-def _load_conversation_messages(conversation_id: Optional[str]) -> list:
-    """conversations.messages JSON에서 대화 이력 로드.
+_CONTEXT_LIMIT = 50  # LLM 컨텍스트용 최근 메시지 수
 
-    반환값: [{"role": "user"|"assistant", "content": str, ...}, ...] 목록
-    conversation_id가 없거나 대화를 찾을 수 없으면 빈 리스트 반환.
-    """
+
+def _load_conversation_messages(conversation_id: Optional[str]) -> list:
+    """conversation_messages 테이블에서 최근 N건을 시간순으로 반환."""
     if not conversation_id:
         return []
     db = SessionLocal()
     try:
-        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-        return list(conv.messages or []) if conv else []
+        rows = (
+            db.query(ConversationMessage)
+            .filter(ConversationMessage.conversation_id == conversation_id)
+            .order_by(ConversationMessage.id.desc())
+            .limit(_CONTEXT_LIMIT)
+            .all()
+        )
+        return [row.message_data for row in reversed(rows)]
     finally:
         db.close()
 
 
 def _save_conversation_messages(conversation_id: str, new_entries: list) -> None:
-    """conversations.messages JSON에 새 항목 추가 저장.
-
-    SQLAlchemy는 JSON 필드의 in-place 변경을 감지하지 못하므로
-    전체 리스트를 재할당 + flag_modified로 명시적 변경 표시.
-    """
+    """새 메시지를 conversation_messages 테이블에 INSERT한다."""
+    if not new_entries:
+        return
     db = SessionLocal()
     try:
-        conv = db.query(Conversation).filter(Conversation.id == conversation_id).with_for_update().first()
-        if not conv:
-            logger.warning("save_messages_no_conv", conversation_id=conversation_id)
-            return
-        current = list(conv.messages or [])
-        current.extend(new_entries)
-        conv.messages = current
-        flag_modified(conv, "messages")
-        conv.last_active_at = datetime.now(timezone.utc)
+        for entry in new_entries:
+            db.add(ConversationMessage(
+                conversation_id=conversation_id,
+                message_data=entry,
+            ))
+        db.query(Conversation).filter(
+            Conversation.id == conversation_id
+        ).update({"last_active_at": datetime.now(timezone.utc)})
         db.commit()
     except Exception as e:
         logger.error("save_messages_failed", error=str(e), conversation_id=conversation_id)
@@ -82,7 +82,6 @@ def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
             thread_id=conv_id,
             session_id=session_id,
             title="새 대화 (v2)",
-            messages=[],
         )
         db.add(conv)
         db.commit()
