@@ -53,13 +53,29 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
 
     if name_lower.endswith(".jsonl"):
         records = []
-        for line in content.decode("utf-8").splitlines():
-            line = line.strip()
-            if line:
-                try:
-                    records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+        skipped = 0
+        for line_no, raw in enumerate(content.decode("utf-8").splitlines(), start=1):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                skipped += 1
+                logger.warning(
+                    "jsonl_parse_error",
+                    filename=filename,
+                    line_no=line_no,
+                    preview=line[:50],
+                    error=str(exc),
+                )
+        if skipped:
+            logger.warning(
+                "jsonl_lines_skipped",
+                filename=filename,
+                skipped=skipped,
+                parsed=len(records),
+            )
         return records
 
     if name_lower.endswith(".csv"):
