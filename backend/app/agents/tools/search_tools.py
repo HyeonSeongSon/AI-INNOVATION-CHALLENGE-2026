@@ -1,11 +1,12 @@
 from langchain_core.tools import tool
+import asyncio
 import httpx
 from pathlib import Path
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
-from ...core.http_client_registry import register
+from ...core.http_client_registry import register, replace
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -25,9 +26,13 @@ _http_client: Optional[httpx.AsyncClient] = None
 
 def _get_http_client() -> httpx.AsyncClient:
     global _http_client
-    if _http_client is None or _http_client.is_closed:
+    if _http_client is None:
         _http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
         register(_http_client)
+    elif _http_client.is_closed:
+        old = _http_client
+        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        replace(old, _http_client)
     return _http_client
 
 # ============================================================
@@ -156,38 +161,38 @@ async def get_persona_by_id(persona_id: str) -> str:
 
 
 @tool
-def get_all_brands() -> str:
+async def get_all_brands() -> str:
     """
     현재 서비스에서 제공 중인 브랜드 목록을 반환합니다.
     사용자가 어떤 브랜드가 있는지 물어보거나, get_products_by_brand 호출 전에
     유효한 브랜드명을 확인할 때 사용하세요.
     """
-    brands = _load_json("brands.json").get("brands", [])
+    brands = (await asyncio.to_thread(_load_json, "brands.json")).get("brands", [])
     if not brands:
         return "등록된 브랜드가 없습니다."
     return format_get_all_brands(brands)
 
 
 @tool
-def get_all_categories() -> str:
+async def get_all_categories() -> str:
     """
     현재 서비스에서 제공 중인 상품 종류(카테고리) 목록을 반환합니다.
     사용자가 어떤 상품 종류가 있는지 물어보거나, get_products_by_tag 호출 전에
     유효한 카테고리명을 확인할 때 사용하세요.
     """
-    categories = _load_json("category.json").get("sub_tags", [])
+    categories = (await asyncio.to_thread(_load_json, "category.json")).get("sub_tags", [])
     if not categories:
         return "등록된 상품 종류가 없습니다."
     return format_get_all_categories(categories)
 
 
 @tool
-def get_all_message_types() -> str:
+async def get_all_message_types() -> str:
     """
     CRM 메시지 생성 시 사용할 수 있는 메시지 타입(목적) 목록과 각 설명을 반환합니다.
     사용자가 어떤 메시지 타입이 있는지 물어볼 때 사용하세요.
     """
-    purposes = _load_json("purposes.json").get("purposes", {})
+    purposes = (await asyncio.to_thread(_load_json, "purposes.json")).get("purposes", {})
     if not purposes:
         return "등록된 메시지 타입이 없습니다."
     return format_get_all_message_types(purposes)
