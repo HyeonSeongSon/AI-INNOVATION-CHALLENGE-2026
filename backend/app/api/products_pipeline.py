@@ -9,7 +9,7 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
@@ -19,6 +19,8 @@ from ..core.logging import get_logger
 logger = get_logger("products_pipeline")
 
 router = APIRouter(prefix="/api/pipeline", tags=["Products Pipeline"])
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
 
 # ──────────────────────────────────────────────────────
@@ -113,7 +115,9 @@ async def register_products_from_file(file: UploadFile = File(...)):
     완료 이벤트: {"type":"done","total":N,"succeeded":N,"failed":N}
     오류 이벤트: {"type":"error","detail":"..."}
     """
-    content = await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="파일 크기는 50MB를 초과할 수 없습니다.")
 
     try:
         records = _parse_file_to_records(file.filename or "", content)
