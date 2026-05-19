@@ -1,10 +1,10 @@
 from langchain_core.tools import tool
 import httpx
-import os
 from pathlib import Path
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
+from ...config.settings import settings
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -17,7 +17,7 @@ from .utils.formatters import (
     format_get_all_message_types,
 )
 
-DB_API_BASE_URL = os.getenv("DATABASE_API_URL", "http://localhost:8020") + "/api"
+DB_API_BASE_URL = settings.database_api_url + "/api"
 
 # ============================================================
 # 로컬 데이터 파일 로드 (ToDo: DB에서 호출하도록 변경)
