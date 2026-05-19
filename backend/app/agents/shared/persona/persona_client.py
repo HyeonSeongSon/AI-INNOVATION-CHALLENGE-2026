@@ -99,7 +99,7 @@ class PersonaClient:
             raise
         except Exception as e:
             logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
-            return None
+            raise
         
     @traced(name="save_persona", run_type="tool")
     async def save_persona(self, persona_data: Dict[str, Any]) -> str:
