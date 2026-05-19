@@ -24,7 +24,14 @@ from ....config.settings import settings
 from ...shared.product.product_client import ProductClient
 
 logger = get_logger("quality_check")
-_product_client = ProductClient()
+_product_client: Optional[ProductClient] = None
+
+
+def _get_product_client() -> ProductClient:
+    global _product_client
+    if _product_client is None:
+        _product_client = ProductClient()
+    return _product_client
 
 # ============================================================
 # LLM 구조화 출력 모델
@@ -127,7 +134,7 @@ class QualityChecker:
             "llm_judge_scores": None,
         }
 
-        db_products = await _product_client.get_products_detail_from_db([product_id])
+        db_products = await _get_product_client().get_products_detail_from_db([product_id])
         db_product = db_products[0] if db_products else {}
 
         if not db_product:
@@ -136,7 +143,7 @@ class QualityChecker:
             result["failure_reason"] = f"상품 정보를 찾을 수 없습니다 (product_id: {product_id})"
             return result
 
-        product = _product_client.flatten_product_data(db_product)
+        product = _get_product_client().flatten_product_data(db_product)
 
         product_name = db_product.get("product_name", "")
         brand_name = db_product.get("brand", "")
