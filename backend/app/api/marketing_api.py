@@ -3,6 +3,7 @@ Marketing Agent API 엔드포인트
 Supervisor + CRM subgraph 기반
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -55,7 +56,7 @@ def _save_conversation_messages(conversation_id: str, new_entries: list) -> None
     """
     db = SessionLocal()
     try:
-        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        conv = db.query(Conversation).filter(Conversation.id == conversation_id).with_for_update().first()
         if not conv:
             logger.warning("save_messages_no_conv", conversation_id=conversation_id)
             return
@@ -68,6 +69,99 @@ def _save_conversation_messages(conversation_id: str, new_entries: list) -> None
     except Exception as e:
         logger.error("save_messages_failed", error=str(e), conversation_id=conversation_id)
         db.rollback()
+    finally:
+        db.close()
+
+
+def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
+    db = SessionLocal()
+    try:
+        conv = Conversation(
+            id=conv_id,
+            user_id=user_id,
+            thread_id=conv_id,
+            session_id=session_id,
+            title="새 대화 (v2)",
+            messages=[],
+        )
+        db.add(conv)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _save_generated_messages(
+    conv_id: str,
+    user_id: str,
+    generated_tasks: list,
+    user_input: str,
+    thread_id: str,
+    regeneration_history: list | None,
+) -> None:
+    db = SessionLocal()
+    try:
+        for task in generated_tasks:
+            _quality = task.get("quality_check") or {}
+            _scores = _quality.get("llm_judge_scores") or {}
+            msg = task.get("message") or {}
+            content = msg.get("message") or msg.get("content", "")
+            if not content:
+                continue
+            if not _quality.get("passed"):
+                logger.info(
+                    "generated_message_skip_quality_failed",
+                    product_id=task.get("product_id"),
+                    failed_stage=_quality.get("failed_stage"),
+                )
+                continue
+            gm = GeneratedMessage(
+                conversation_id=conv_id,
+                user_id=user_id,
+                product_id=task.get("product_id", ""),
+                product_name=task.get("product_name"),
+                brand=task.get("brand"),
+                sub_tag=task.get("sub_tag"),
+                purpose=task.get("purpose"),
+                user_input=user_input,
+                title=msg.get("title"),
+                content=content,
+                quality_passed=_quality.get("passed"),
+                quality_failed_stage=_quality.get("failed_stage"),
+                quality_failure_reason=_quality.get("failure_reason"),
+                llm_score_accuracy=_scores.get("accuracy"),
+                llm_score_tone=_scores.get("tone"),
+                llm_score_personalization=_scores.get("personalization"),
+                llm_score_naturalness=_scores.get("naturalness"),
+                llm_score_cta_clarity=_scores.get("cta_clarity"),
+                llm_score_overall=_scores.get("overall"),
+                llm_feedback=_scores.get("feedback"),
+                quality_details={
+                    "rule_check_passed": _quality.get("rule_check_passed"),
+                    "rule_check_issues": _quality.get("rule_check_issues", []),
+                    "semantic_check_passed": _quality.get("semantic_check_passed"),
+                    "semantic_check_results": _quality.get("semantic_check_results", []),
+                },
+                regeneration_count=len(regeneration_history or []),
+                thread_id=thread_id,
+            )
+            db.add(gm)
+            db.commit()
+            logger.info(
+                "generated_message_saved",
+                conversation_id=conv_id,
+                product_id=gm.product_id,
+                user_id=user_id,
+                quality_passed=gm.quality_passed,
+                llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
+            )
+    except Exception as db_err:
+        db.rollback()
+        logger.error(
+            "generated_message_save_failed",
+            error=str(db_err),
+            conv_id=conv_id,
+            exc_info=True,
+        )
     finally:
         db.close()
 
@@ -125,20 +219,7 @@ async def chat_v2(
         conv_id = request.conversation_id
         if not conv_id:
             conv_id = str(uuid.uuid4())
-            db = SessionLocal()
-            try:
-                conv = Conversation(
-                    id=conv_id,
-                    user_id=user_id,
-                    thread_id=conv_id,   # thread_id = id 고정
-                    session_id=request.session_id,
-                    title="새 대화 (v2)",
-                    messages=[],
-                )
-                db.add(conv)
-                db.commit()
-            finally:
-                db.close()
+            await asyncio.to_thread(_create_conversation, conv_id, user_id, request.session_id)
 
         # 2. 에이전트 호출 — conversation_id 전달, history 제거
         result = await agent.chat(
@@ -186,77 +267,17 @@ async def chat_v2(
                 "thread_id": thread_id,
             })
 
-        _save_conversation_messages(conv_id, new_entries)
+        await asyncio.to_thread(_save_conversation_messages, conv_id, new_entries)
 
         # 품질 검사 통과 메시지만 generated_messages 저장
         if status == "completed" and conv_id:
             generated_tasks = result.get("generated_tasks", [])
-            db = SessionLocal()
-            try:
-                for task in generated_tasks:
-                    _quality = task.get("quality_check") or {}
-                    _scores = _quality.get("llm_judge_scores") or {}
-                    msg = task.get("message") or {}
-                    content = msg.get("message") or msg.get("content", "")
-                    if not content:
-                        continue
-                    if not _quality.get("passed"):
-                        logger.info(
-                            "generated_message_skip_quality_failed",
-                            product_id=task.get("product_id"),
-                            failed_stage=_quality.get("failed_stage"),
-                        )
-                        continue
-                    gm = GeneratedMessage(
-                        conversation_id=conv_id,
-                        user_id=user_id,
-                        product_id=task.get("product_id", ""),
-                        product_name=task.get("product_name"),
-                        brand=task.get("brand"),
-                        sub_tag=task.get("sub_tag"),
-                        purpose=task.get("purpose"),
-                        user_input=request.user_input,
-                        title=msg.get("title"),
-                        content=content,
-                        quality_passed=_quality.get("passed"),
-                        quality_failed_stage=_quality.get("failed_stage"),
-                        quality_failure_reason=_quality.get("failure_reason"),
-                        llm_score_accuracy=_scores.get("accuracy"),
-                        llm_score_tone=_scores.get("tone"),
-                        llm_score_personalization=_scores.get("personalization"),
-                        llm_score_naturalness=_scores.get("naturalness"),
-                        llm_score_cta_clarity=_scores.get("cta_clarity"),
-                        llm_score_overall=_scores.get("overall"),
-                        llm_feedback=_scores.get("feedback"),
-                        quality_details={
-                            "rule_check_passed": _quality.get("rule_check_passed"),
-                            "rule_check_issues": _quality.get("rule_check_issues", []),
-                            "semantic_check_passed": _quality.get("semantic_check_passed"),
-                            "semantic_check_results": _quality.get("semantic_check_results", []),
-                        },
-                        regeneration_count=len(result.get("regeneration_history") or []),
-                        thread_id=thread_id,
-                    )
-                    db.add(gm)
-                    db.commit()
-                    logger.info(
-                        "generated_message_saved",
-                        conversation_id=conv_id,
-                        product_id=gm.product_id,
-                        user_id=user_id,
-                        quality_passed=gm.quality_passed,
-                        llm_score_overall=float(gm.llm_score_overall) if gm.llm_score_overall else None,
-                    )
-            except Exception as db_err:
-                db.rollback()
-                logger.error(
-                    "generated_message_save_failed",
-                    error=str(db_err),
-                    conv_id=conv_id,
-                    exc_info=True,
-                )
-            finally:
-                db.close()
+            await asyncio.to_thread(
+                _save_generated_messages,
+                conv_id, user_id, generated_tasks,
+                request.user_input, thread_id,
+                result.get("regeneration_history"),
+            )
 
         logger.info(
             "chat_v2_completed",
