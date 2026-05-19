@@ -12,8 +12,6 @@ from ..prompts.apply_feedback_prompt import build_apply_feedback_prompt
 
 logger = get_logger("apply_feedback")
 
-_product_client = ProductClient()
-
 
 class MessageOutput(BaseModel):
     title: str = Field(..., min_length=5, max_length=40, description="메시지 제목")
@@ -23,6 +21,7 @@ class MessageOutput(BaseModel):
 class ApplyFeedback:
     def __init__(self):
         self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=0.5)
+        self._product_client = ProductClient()
 
     def _extract_feedback(self, quality_check: Dict[str, Any]) -> str:
         """
@@ -161,7 +160,7 @@ class ApplyFeedback:
 
         brand_tone = get_brand_tone(brand_name)
         if product_info is None:
-            product_info = await _product_client.get_merged_product_info(product_id)
+            product_info = await self._product_client.get_merged_product_info(product_id)
 
         prompt_messages = build_apply_feedback_prompt(
             existing_title=existing_message.get("title", ""),
@@ -221,13 +220,3 @@ class ApplyFeedback:
             return task
 
         return list(await asyncio.gather(*[improve_one(t) for t in tasks]))
-
-
-_applier: Optional[ApplyFeedback] = None
-
-
-def get_applier() -> ApplyFeedback:
-    global _applier
-    if _applier is None:
-        _applier = ApplyFeedback()
-    return _applier

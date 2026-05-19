@@ -7,7 +7,7 @@ from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger, get_logger
 from .services.generate_crm_message import CrmMessageGenerator
 from .services.quality_check import QualityChecker
-from .services.apply_feedback import get_applier
+from .services.apply_feedback import ApplyFeedback
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from typing import Dict, Any, Union, Optional
@@ -24,6 +24,7 @@ def _now_iso() -> str:
 
 _generator: Optional[CrmMessageGenerator] = None
 _checker: Optional[QualityChecker] = None
+_applier: Optional[ApplyFeedback] = None
 
 
 def get_generator() -> CrmMessageGenerator:
@@ -38,6 +39,13 @@ def get_checker() -> QualityChecker:
     if _checker is None:
         _checker = QualityChecker()
     return _checker
+
+
+def get_applier() -> ApplyFeedback:
+    global _applier
+    if _applier is None:
+        _applier = ApplyFeedback()
+    return _applier
 
 
 def _format_generated_tasks(tasks) -> str:

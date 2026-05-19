@@ -4,10 +4,11 @@ from langgraph.graph import END
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
-from ..services.apply_feedback import get_applier
+from ..services.apply_feedback import ApplyFeedback
 from ..services.parse_request import MultiValueParser
 from ..services.product_client import ProductClient
 from ....config.settings import settings
+from typing import Optional
 
 logger = get_logger("message_feedback_node")
 
@@ -16,6 +17,14 @@ _DEFAULT_PURPOSE = "브랜드/제품 첫소개"
 
 _parser = MultiValueParser()
 _product_client = ProductClient()
+_applier: Optional[ApplyFeedback] = None
+
+
+def get_applier() -> ApplyFeedback:
+    global _applier
+    if _applier is None:
+        _applier = ApplyFeedback()
+    return _applier
 
 
 async def message_feedback_node(state: MarketingAssistantState, config: RunnableConfig):
