@@ -189,7 +189,11 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
         if not remaining:
             _logger.info("supervisor_all_done", node_name="supervisor_agent")
-            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+            try:
+                final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+            except Exception as e:
+                _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
+                return {"status": "error", "error_message": str(e)}
             return {"messages": [final_answer], "task_plan": []}
 
         next_agent = remaining[0]
@@ -204,14 +208,22 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
-        final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+        try:
+            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+        except Exception as e2:
+            _logger.error("supervisor_final_answer_failed", error=str(e2), node_name="supervisor_agent")
+            return {"status": "error", "error_message": str(e2)}
         return {"messages": [final_answer]}
 
     _logger.info("supervisor_plan_decided", node_name="supervisor_agent",
                  task_plan=decision.task_plan, reason=decision.reason)
 
     if not decision.task_plan:
-        final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+        try:
+            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+        except Exception as e:
+            _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
+            return {"status": "error", "error_message": str(e)}
         return {"messages": [final_answer]}
 
     return Command(

@@ -2,7 +2,6 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage
 from ..prompts.generate_query_prompt import build_persona_structured_prompt, build_generate_query_prompt
-import json
 
 from app.core.logging import get_logger
 
@@ -38,6 +37,13 @@ class PersonaData(BaseModel):
     preferred_brands: List[str] = Field(default_factory=list, description="선호 브랜드 (예: 설화수, 이니스프리)")
     avoided_brands: List[str] = Field(default_factory=list, description="기피 브랜드")
     persona_summary: Optional[str] = Field(default=None, description="페르소나 전반을 자연스럽게 요약한 설명문")
+
+
+class SearchQuery(BaseModel):
+    need: str = Field(description="사용자의 명시적 니즈 기반 검색 쿼리")
+    preference: str = Field(description="사용자의 선호도 기반 검색 쿼리")
+    retrieval: str = Field(description="벡터 검색용 통합 쿼리")
+    persona: str = Field(description="페르소나 특성 기반 쿼리")
 
 
 async def generate_structured_persona_info(messages: List, llm) -> Dict:
@@ -83,11 +89,12 @@ async def generate_search_query(messages: List, llm) -> Dict:
         검색 쿼리를 담은 딕셔너리 {"need", "preference", "retrieval", "persona"}
     """
     logger.info("generate_search_query_started", message_count=len(messages))
+    structured_llm = llm.with_structured_output(SearchQuery)
     prompt_messages = [SystemMessage(content=build_generate_query_prompt()), *messages]
-    response = await llm.ainvoke(prompt_messages)
-    search_query = json.loads(response.content)
+    result: SearchQuery = await structured_llm.ainvoke(prompt_messages)
+    search_query = result.model_dump()
     logger.info(
         "generate_search_query_completed",
-        query_keys=list(search_query.keys()) if isinstance(search_query, dict) else None,
+        query_keys=list(search_query.keys()),
     )
     return search_query
