@@ -1,6 +1,6 @@
 import traceback
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -15,7 +15,14 @@ from .state import RecommendProductState
 import asyncio
 
 
-_recommender = ProductRecommender()
+_recommender: Optional[ProductRecommender] = None
+
+
+def get_recommender() -> ProductRecommender:
+    global _recommender
+    if _recommender is None:
+        _recommender = ProductRecommender()
+    return _recommender
 
 
 def _now_iso() -> str:
@@ -112,7 +119,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             source = "generated"
 
         if resolved_persona_id:
-            search_queries = await _recommender.get_product_search_queries(resolved_persona_id)
+            search_queries = await get_recommender().get_product_search_queries(resolved_persona_id)
 
             if search_queries is None:
                 logger.warning(
@@ -134,8 +141,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
                 generate_search_query(messages[-1:], query_llm)
             )
 
-            resolved_persona_id = await _recommender.persona_client.save_persona(structured_persona)
-            await _recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries)
+            resolved_persona_id = await get_recommender().persona_client.save_persona(structured_persona)
+            await get_recommender().persona_client.save_product_search_query(resolved_persona_id, raw_queries)
 
             search_queries = {
                 "user_need_query": raw_queries["need"],
@@ -184,13 +191,13 @@ async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any
         parsed_data = state.get("parsed_data")
         search_queries = state.get("search_queries")
 
-        retrieval_product_ids = await _recommender.product_retriever(
+        retrieval_product_ids = await get_recommender().product_retriever(
             retrieval_query=search_queries["retrieval"],
             brands=parsed_data.get("brands") or None,
             sub_tags=parsed_data.get("product_categories") or None
         )
 
-        recommended_products = await _recommender.recommend(
+        recommended_products = await get_recommender().recommend(
             search_queries,
             retrieval_product_ids,
             product_tags=parsed_data.get("product_categories") or None,

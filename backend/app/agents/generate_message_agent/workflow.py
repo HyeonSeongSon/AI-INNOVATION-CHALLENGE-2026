@@ -51,5 +51,3 @@ def build_workflow(checkpointer=None):
 
     return workflow.compile(checkpointer=checkpointer)
 
-graph = build_workflow()
-

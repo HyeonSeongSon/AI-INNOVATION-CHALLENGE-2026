@@ -15,5 +15,3 @@ def build_workflow(checkpointer=None):
     workflow.add_edge("data_registration_agent", END)
 
     return workflow.compile(checkpointer=checkpointer)
-
-graph = build_workflow()
