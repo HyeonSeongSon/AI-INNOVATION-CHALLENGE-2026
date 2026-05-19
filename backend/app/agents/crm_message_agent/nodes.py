@@ -2,7 +2,7 @@ import uuid
 import httpx
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage, RemoveMessage, SystemMessage as _SysMsg
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from pydantic import BaseModel, Field
@@ -27,6 +27,88 @@ from ..tools.search_tools import (
 )
 
 _logger = get_logger("crm_message_agent")
+
+_SUMMARIZE_THRESHOLD = 30
+_KEEP_MESSAGES = 10
+
+
+_SUMMARY_BASE_INSTRUCTION = """\
+당신은 CRM 마케팅 에이전트의 대화 요약 담당입니다.
+아래 대화 내역을 분석하여 다음 항목을 포함한 구조화된 요약을 작성하세요.
+
+## 요약 항목 (해당 정보가 있을 때만 작성)
+
+**[페르소나]**
+- 확정된 페르소나 ID (예: PERSONA_001)
+- 주요 특성 (피부타입, 주요 고민, 가치관 등 대화에서 언급된 것)
+
+**[수행한 작업]**
+- 조회/검색: 조회한 페르소나 조건, 브랜드, 카테고리
+- 상품 추천: 추천된 상품명·브랜드 (최대 3개)
+- 메시지 생성: 생성된 메시지 타입(문자/앱푸시 등), 핵심 내용 한 줄 요약
+- 데이터 등록: 등록한 항목 종류 및 건수
+
+**[사용자 선호 및 피드백]**
+- 톤/스타일 선호 (예: 친근한 톤, 격식체, 이모지 사용 등)
+- 수정 요청 내용 및 반영 여부
+
+**[미완료 / 다음 단계]**
+- 사용자가 언급했으나 아직 처리되지 않은 요청
+
+## 작성 규칙
+- 한국어로 작성
+- 각 항목은 정보가 있을 때만 포함 (없으면 항목 자체를 생략)
+- 불필요한 서술 없이 핵심 정보만 간결하게
+- 전체 500자 이내
+"""
+
+_SUMMARY_UPDATE_PREFIX = """\
+기존 요약을 아래 새 대화 내역으로 업데이트하세요.
+변경된 내용은 덮어쓰고, 새로 추가된 정보는 병합하세요.
+삭제된 메시지의 정보도 기존 요약에 이미 반영되어 있으므로 유지하세요.
+
+## 기존 요약
+{existing_summary}
+
+## 업데이트 규칙
+- 페르소나가 변경됐으면 교체, 동일하면 유지
+- 새로 수행한 작업은 [수행한 작업]에 추가
+- 사용자 선호·피드백이 추가됐으면 병합
+- 이미 처리된 항목은 [미완료]에서 제거
+- 전체 500자 이내 유지
+
+"""
+
+
+def _build_summary_prompt(messages: list, existing_summary: str) -> list:
+    if existing_summary:
+        instruction = _SUMMARY_UPDATE_PREFIX.format(existing_summary=existing_summary) + _SUMMARY_BASE_INSTRUCTION
+    else:
+        instruction = _SUMMARY_BASE_INSTRUCTION
+    return [_SysMsg(content=instruction)] + messages
+
+
+async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
+    messages = state.get("messages", [])
+    if len(messages) <= _SUMMARIZE_THRESHOLD:
+        return {}
+
+    model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
+    llm = get_llm(model, temperature=0)
+    existing_summary = state.get("summary", "")
+
+    response = await llm.ainvoke(_build_summary_prompt(messages, existing_summary))
+
+    messages_to_delete = messages[:-_KEEP_MESSAGES]
+    delete_ops = [RemoveMessage(id=m.id) for m in messages_to_delete]
+
+    _logger.info(
+        "conversation_summarized",
+        deleted=len(messages_to_delete),
+        kept=_KEEP_MESSAGES,
+    )
+    return {"summary": response.content, "messages": delete_ops}
+
 
 _ValidAgent = Literal[
     "search_agent", "recommend_product_agent",
@@ -94,6 +176,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     llm = get_llm(model, temperature=0)
     messages = state.get("messages", [])
     task_plan = state.get("task_plan", [])
+    summary = state.get("summary", "")
 
     # 플랜이 이미 확정된 경우: LLM 없이 결정
     if task_plan:
@@ -102,7 +185,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
         if not remaining:
             _logger.info("supervisor_all_done", node_name="supervisor_agent")
-            final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
+            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
             return {"messages": [final_answer], "task_plan": []}
 
         next_agent = remaining[0]
@@ -112,19 +195,19 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     # 첫 진입: LLM으로 전체 플랜 결정
     try:
         decision = await llm.with_structured_output(RouteDecision).ainvoke(
-            build_supervisor_prompt(messages)
+            build_supervisor_prompt(messages, summary)
         )
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
-        final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
+        final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
         return {"messages": [final_answer]}
 
     _logger.info("supervisor_plan_decided", node_name="supervisor_agent",
                  task_plan=decision.task_plan, reason=decision.reason)
 
     if not decision.task_plan:
-        final_answer = await llm.ainvoke(build_final_answer_prompt(messages))
+        final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
         return {"messages": [final_answer]}
 
     return Command(

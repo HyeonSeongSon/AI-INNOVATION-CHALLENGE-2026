@@ -93,9 +93,15 @@ _FINAL_ANSWER_SYSTEM_PROMPT = """당신은 CRM 마케팅 Supervisor입니다.
 """
 
 
-def build_supervisor_prompt(messages: list) -> list:
-    return [SystemMessage(content=_ROUTING_SYSTEM_PROMPT)] + messages
+def build_supervisor_prompt(messages: list, summary: str = "") -> list:
+    system = _ROUTING_SYSTEM_PROMPT
+    if summary:
+        system = f"## 이전 대화 요약\n{summary}\n\n---\n\n" + system
+    return [SystemMessage(content=system)] + messages
 
 
-def build_final_answer_prompt(messages: list) -> list:
-    return [SystemMessage(content=_FINAL_ANSWER_SYSTEM_PROMPT)] + messages
+def build_final_answer_prompt(messages: list, summary: str = "") -> list:
+    system = _FINAL_ANSWER_SYSTEM_PROMPT
+    if summary:
+        system = f"## 이전 대화 요약\n{summary}\n\n---\n\n" + system
+    return [SystemMessage(content=system)] + messages

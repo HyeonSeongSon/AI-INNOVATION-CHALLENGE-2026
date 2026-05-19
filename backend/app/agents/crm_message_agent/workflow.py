@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from a2a.client import A2AClient
 from ...config.settings import settings
-from .nodes import search_agent, supervisor_agent, make_recommend_product_node, make_generate_message_node, make_data_registration_node
+from .nodes import search_agent, supervisor_agent, maybe_summarize, make_recommend_product_node, make_generate_message_node, make_data_registration_node
 from .state import CRMMessageAgentState
 
 def build_workflow(checkpointer=None):
@@ -11,13 +11,15 @@ def build_workflow(checkpointer=None):
 
     workflow = StateGraph(CRMMessageAgentState)
 
+    workflow.add_node("maybe_summarize", maybe_summarize)
     workflow.add_node("supervisor", supervisor_agent)
     workflow.add_node("search_agent", search_agent)
     workflow.add_node("recommend_product_agent", make_recommend_product_node(recommend_client))
     workflow.add_node("generate_message_agent",  make_generate_message_node(generate_client))
     workflow.add_node("data_registration_agent", make_data_registration_node(data_reg_client))
 
-    workflow.add_edge(START, "supervisor")
+    workflow.add_edge(START, "maybe_summarize")
+    workflow.add_edge("maybe_summarize", "supervisor")
     workflow.add_edge("supervisor", END)
 
     return workflow.compile(checkpointer=checkpointer)
