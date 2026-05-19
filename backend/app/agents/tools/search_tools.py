@@ -5,6 +5,7 @@ from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
+from ...core.http_client_registry import register
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -18,6 +19,16 @@ from .utils.formatters import (
 )
 
 DB_API_BASE_URL = settings.database_api_url + "/api"
+
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        register(_http_client)
+    return _http_client
 
 # ============================================================
 # 로컬 데이터 파일 로드 (ToDo: DB에서 호출하도록 변경)
@@ -41,10 +52,10 @@ async def get_all_personas() -> str:
     데이터베이스에 저장된 모든 페르소나 목록을 조회합니다.
     사용자가 페르소나 목록을 보여달라고 하거나, 어떤 페르소나가 있는지 물어볼 때 사용하세요.
     """
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(f"{DB_API_BASE_URL}/personas/list")
-        response.raise_for_status()
-        personas = response.json()
+    client = _get_http_client()
+    response = await client.post(f"{DB_API_BASE_URL}/personas/list")
+    response.raise_for_status()
+    personas = response.json()
 
     if not personas:
         return "현재 등록된 페르소나가 없습니다."
@@ -63,13 +74,13 @@ async def get_products_by_tag(tag: str) -> str:
     사용자가 특정 상품 종류를 물어볼 때 사용하세요.
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{DB_API_BASE_URL}/products/by-tag",
-                json={"tag": tag}
-            )
-            response.raise_for_status()
-            products = response.json()
+        client = _get_http_client()
+        response = await client.post(
+            f"{DB_API_BASE_URL}/products/by-tag",
+            json={"tag": tag}
+        )
+        response.raise_for_status()
+        products = response.json()
 
     except httpx.HTTPStatusError as e:
         error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
@@ -94,13 +105,13 @@ async def get_products_by_brand(brand: str) -> str:
     예시: '설화수', '헤라', '이니스프리', '라네즈'
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{DB_API_BASE_URL}/products/by-brand",
-                json={"brand": brand}
-            )
-            response.raise_for_status()
-            products = response.json()
+        client = _get_http_client()
+        response = await client.post(
+            f"{DB_API_BASE_URL}/products/by-brand",
+            json={"brand": brand}
+        )
+        response.raise_for_status()
+        products = response.json()
 
     except httpx.HTTPStatusError as e:
         error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
@@ -124,13 +135,13 @@ async def get_persona_by_id(persona_id: str) -> str:
     확인하고 싶을 때 사용하세요.
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{DB_API_BASE_URL}/personas/get",
-                json={"persona_id": persona_id}
-            )
-            response.raise_for_status()
-            p = response.json()
+        client = _get_http_client()
+        response = await client.post(
+            f"{DB_API_BASE_URL}/personas/get",
+            json={"persona_id": persona_id}
+        )
+        response.raise_for_status()
+        p = response.json()
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
@@ -256,13 +267,13 @@ async def search_personas_by_filter(
         limit=limit,
     )
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{DB_API_BASE_URL}/personas/filter",
-                json=f.model_dump()
-            )
-            response.raise_for_status()
-            rows = response.json()
+        client = _get_http_client()
+        response = await client.post(
+            f"{DB_API_BASE_URL}/personas/filter",
+            json=f.model_dump()
+        )
+        response.raise_for_status()
+        rows = response.json()
     except httpx.HTTPStatusError as e:
         error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
         return f"페르소나 검색 중 오류가 발생했습니다: {error_detail}"
