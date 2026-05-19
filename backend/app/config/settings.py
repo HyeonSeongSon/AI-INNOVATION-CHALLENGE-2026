@@ -74,6 +74,12 @@ if settings.auth_mode == "api_key" and not settings.service_api_key:
 if settings.auth_mode == "jwt" and not settings.jwt_secret:
     raise RuntimeError("JWT_SECRET 환경변수가 설정되지 않았습니다.")
 
+if settings.auth_mode == "jwt":
+    raise RuntimeError(
+        "AUTH_MODE=jwt는 아직 구현되지 않았습니다. "
+        "현재는 AUTH_MODE=api_key만 지원합니다."
+    )
+
 _VALID_MODEL_PREFIXES = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
 
 if not any(settings.chatgpt_model_name.startswith(p) for p in _VALID_MODEL_PREFIXES):
