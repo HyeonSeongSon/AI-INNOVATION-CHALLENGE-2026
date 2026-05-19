@@ -192,10 +192,15 @@ def make_recommend_product_node(client: A2AClient):
 
         _logger.info("recommend_product_agent_done", node_name="recommend_product_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("recommend_product_agent")
+        try:
+            messages = deserialize_messages(result.get("messages", []))
+        except Exception as e:
+            _logger.error("deserialize_messages_failed", node_name="recommend_product_agent", error=str(e))
+            messages = []
         return Command(
             goto="supervisor",
             update={
-                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": messages + [ai_msg, tool_msg],
                 "recommended_products": result.get("recommended_products", []),
                 "active_persona_id": result.get("active_persona_id"),
                 "status": result.get("status"),
@@ -246,10 +251,15 @@ def make_generate_message_node(client: A2AClient):
 
         _logger.info("generate_message_agent_done", node_name="generate_message_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("generate_message_agent")
+        try:
+            messages = deserialize_messages(result.get("messages", []))
+        except Exception as e:
+            _logger.error("deserialize_messages_failed", node_name="generate_message_agent", error=str(e))
+            messages = []
         return Command(
             goto="supervisor",
             update={
-                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": messages + [ai_msg, tool_msg],
                 "generated_tasks": result.get("generated_tasks", []),
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
@@ -299,10 +309,15 @@ def make_data_registration_node(client: A2AClient):
 
         _logger.info("data_registration_agent_done", node_name="data_registration_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("data_registration_agent")
+        try:
+            messages = deserialize_messages(result.get("messages", []))
+        except Exception as e:
+            _logger.error("deserialize_messages_failed", node_name="data_registration_agent", error=str(e))
+            messages = []
         return Command(
             goto="supervisor",
             update={
-                "messages": deserialize_messages(result.get("messages", [])) + [ai_msg, tool_msg],
+                "messages": messages + [ai_msg, tool_msg],
                 "file_records": None,
                 "status": result.get("status"),
                 "logs": state.get("logs", []) + result.get("logs", []),
