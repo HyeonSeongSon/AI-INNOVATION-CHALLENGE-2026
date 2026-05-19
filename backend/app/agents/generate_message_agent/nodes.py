@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from typing import Dict, Any, Union
 from langgraph.types import Command
 import json
+import traceback
 
 _MAX_RETRIES = 2
 _logger = get_logger("generate_message_agent")
@@ -82,25 +83,35 @@ async def init_node(state: GenerateMessageState, config: RunnableConfig) -> dict
 async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
     logger = AgentLogger(state, node_name="router_node", agent_name="generate_message_agent")
     logger.info("router_started", user_message="[router] 라우팅 분석 시작")
-    messages = state.get("messages")
-    model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    router_llm = get_llm(model, settings.parser_model_temperature)
+    try:
+        messages = state.get("messages")
+        model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
+        router_llm = get_llm(model, settings.parser_model_temperature)
 
-    result = await generate_message_router(messages, router_llm)
+        result = await generate_message_router(messages, router_llm)
 
-    task_count = len(result.tasks) if result.tasks else 0
-    logger.info("router_done", user_message=f"[router] 라우팅 결정 완료 (task_count={task_count})", task_count=task_count)
+        task_count = len(result.tasks) if result.tasks else 0
+        logger.info("router_done", user_message=f"[router] 라우팅 결정 완료 (task_count={task_count})", task_count=task_count)
 
-    update = {
-        "decisions": {"next_node": result.next_node},
-        "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
-        "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
-        "persona_id": result.persona_id,
-        "logs": logger.get_user_logs(),
-    }
-    if result.persona_id:
-        update["active_persona_id"] = result.persona_id
-    return update
+        update = {
+            "decisions": {"next_node": result.next_node},
+            "tasks": [t.model_dump() for t in result.tasks] if result.tasks else None,
+            "feedback_input": result.feedback_input.model_dump() if result.feedback_input else None,
+            "persona_id": result.persona_id,
+            "logs": logger.get_user_logs(),
+        }
+        if result.persona_id:
+            update["active_persona_id"] = result.persona_id
+        return update
+    except Exception as e:
+        logger.error("router_error", user_message=f"[router] 오류: {e}", exc_info=True)
+        return {
+            "status": "failed",
+            "error": str(e),
+            "error_details": {"node": "router_node", "traceback": traceback.format_exc()},
+            "decisions": {"next_node": "output_node"},
+            "logs": logger.get_user_logs(),
+        }
 
 
 async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:

@@ -38,7 +38,11 @@ def build_workflow(checkpointer=None):
     workflow.add_conditional_edges(
         "router_node",
         _route_after_router,
-        {"generate_message_node": "generate_message_node", "message_feedback_node": "message_feedback_node"},
+        {
+            "generate_message_node": "generate_message_node",
+            "message_feedback_node": "message_feedback_node",
+            "output_node": "output_node",
+        },
     )
     workflow.add_edge("generate_message_node", "quality_check_node")
     workflow.add_conditional_edges(
