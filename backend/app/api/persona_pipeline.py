@@ -103,7 +103,7 @@ class CreateFromTextRequest(BaseModel):
 @router.post("/personas/create-from-text")
 async def create_persona_from_text(request: CreateFromTextRequest, req: Request):
     """자유 텍스트 입력으로 페르소나 1개 생성"""
-    persona_client = req.app.state.services.persona_client
+    persona_client = req.app.state.persona_client
     llm = get_llm(request.model or settings.chatgpt_model_name, temperature=0.3)
     result = await _process_one_text(0, request.text, llm, persona_client)
     if not result["success"]:
@@ -141,7 +141,7 @@ async def create_personas_from_file(file: UploadFile = File(...), req: Request =
 
     total = len(texts)
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
-    persona_client = req.app.state.services.persona_client
+    persona_client = req.app.state.persona_client
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()

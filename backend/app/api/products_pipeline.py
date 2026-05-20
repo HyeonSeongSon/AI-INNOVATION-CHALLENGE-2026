@@ -131,7 +131,7 @@ async def register_products_from_file(file: UploadFile = File(...), request: Req
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
     total = len(records)
-    service = request.app.state.services.registration
+    service = request.app.state.registration
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()

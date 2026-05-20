@@ -17,7 +17,6 @@ logger = get_logger("data_loader")
 # ── 경로 상수 ──────────────────────────────────────────────────────────────────
 _APP_DIR = Path(__file__).resolve().parents[1]               # backend/app/
 _PROJECT_ROOT = _APP_DIR.parents[1]                          # project root
-_AGENT_DIR = _APP_DIR / "agents" / "marketing_assistant"
 
 # ── 모듈 레벨 캐시 ─────────────────────────────────────────────────────────────
 _brand_tones: Dict[str, Any] | None = None
@@ -29,7 +28,7 @@ def get_brand_tones() -> Dict[str, Any]:
     """brand_tone.yaml을 1회 로드 후 캐시된 dict 반환."""
     global _brand_tones
     if _brand_tones is None:
-        path = _AGENT_DIR / "prompts" / "brand_tone.yaml"
+        path = _APP_DIR / "agents" / "generate_message_agent" / "prompts" / "brand_tone.yaml"
         try:
             with open(path, "r", encoding="utf-8") as f:
                 _brand_tones = yaml.safe_load(f) or {}
@@ -44,7 +43,7 @@ def get_forbidden_keywords() -> Dict[str, Any]:
     """forbidden_keyword.json을 1회 로드 후 캐시된 dict 반환."""
     global _forbidden_keywords
     if _forbidden_keywords is None:
-        path = _AGENT_DIR / "data" / "forbidden_keyword.json"
+        path = _APP_DIR / "agents" / "generate_message_agent" / "data" / "forbidden_keyword.json"
         try:
             with open(path, "r", encoding="utf-8") as f:
                 _forbidden_keywords = json.load(f)
