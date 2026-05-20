@@ -185,7 +185,7 @@ class ApplyFeedback:
                 product_id=product_id,
                 error=str(e),
             )
-            return task
+            return {**task, "_feedback_skipped": True}
 
         logger.info(
             "feedback_applied",

@@ -35,7 +35,7 @@ def get_brand_tones() -> Dict[str, Any]:
             logger.info("brand_tones_loaded", path=str(path))
         except Exception as e:
             logger.error("brand_tones_load_failed", path=str(path), error=str(e))
-            _brand_tones = {}
+            raise
     return _brand_tones
 
 
@@ -50,7 +50,7 @@ def get_forbidden_keywords() -> Dict[str, Any]:
             logger.info("forbidden_keywords_loaded", path=str(path))
         except Exception as e:
             logger.error("forbidden_keywords_load_failed", path=str(path), error=str(e))
-            _forbidden_keywords = {}
+            raise
     return _forbidden_keywords
 
 
@@ -83,5 +83,12 @@ def get_categories() -> List[str]:
             logger.info("categories_loaded", path=str(path), count=len(_categories))
         except Exception as e:
             logger.error("categories_load_failed", path=str(path), error=str(e))
-            _categories = []
+            raise
     return _categories
+
+
+def validate_static_configs() -> None:
+    """서버 기동 시 정적 설정 파일을 검증한다. 파일 누락 또는 파싱 실패 시 예외를 발생시킨다."""
+    get_brand_tones()
+    get_forbidden_keywords()
+    get_categories()

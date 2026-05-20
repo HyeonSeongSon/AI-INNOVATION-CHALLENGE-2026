@@ -27,12 +27,12 @@ class CrmMessageGenerator:
         }
 
     async def get_persona_info(self, persona_id: str) -> Optional[Dict]:
-        """persona_id로 DB에서 페르소나 정보를 조회해 반환. 실패 시 None."""
+        """persona_id로 DB에서 페르소나 정보를 조회해 반환."""
         try:
             return await self._persona_client.get_persona_info(persona_id)
-        except Exception:
-            logger.warning("persona_fetch_failed", persona_id=persona_id)
-            return None
+        except Exception as e:
+            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            raise
 
     async def _get_product_info(self, product_id: str) -> dict:
         """단일 상품 ID로 DB에서 상품 정보를 조회하고 flat dict로 반환.

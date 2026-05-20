@@ -103,7 +103,7 @@ class ProductClient:
 
         except Exception as e:
             logger.error("search_by_combined_vector.failed", error=str(e), exc_info=True)
-            return []
+            raise
 
     @traced(name="search_opensearch", run_type="retriever")
     async def search_with_multi_queries(
@@ -161,7 +161,7 @@ class ProductClient:
                 error=str(e),
                 exc_info=True,
             )
-            return []
+            raise
 
     @traced(name="search_persona_dimensions", run_type="retriever")
     async def search_persona_dimensions(
@@ -268,7 +268,7 @@ class ProductClient:
                 error=str(e),
                 exc_info=True,
             )
-            return []
+            raise
 
     @traced(name="search_by_multivector_combined", run_type="retriever")
     async def search_by_multivector_combined(

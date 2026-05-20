@@ -51,8 +51,8 @@ def _load_conversation_messages(conversation_id: Optional[str]) -> list:
         db.close()
 
 
-def _save_conversation_messages(conversation_id: str, new_entries: list) -> None:
-    """새 메시지를 conversation_messages 테이블에 INSERT한다."""
+def _save_conversation_messages_best_effort(conversation_id: str, new_entries: list) -> None:
+    """새 메시지를 conversation_messages 테이블에 INSERT한다. 실패해도 대화 흐름에 영향 없음."""
     if not new_entries:
         return
     db = SessionLocal()
@@ -67,8 +67,9 @@ def _save_conversation_messages(conversation_id: str, new_entries: list) -> None
         ).update({"last_active_at": datetime.now(timezone.utc)})
         db.commit()
     except Exception as e:
-        logger.error("save_messages_failed", error=str(e), conversation_id=conversation_id)
+        logger.warning("save_messages_best_effort_failed", error=str(e), conversation_id=conversation_id, exc_info=True)
         db.rollback()
+        # 의도적으로 raise하지 않음 — 대화 이력 저장은 부가 데이터
     finally:
         db.close()
 
@@ -89,7 +90,7 @@ def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
         db.close()
 
 
-def _save_generated_messages(
+def _save_generated_messages_best_effort(
     conv_id: str,
     user_id: str,
     generated_tasks: list,
@@ -97,6 +98,7 @@ def _save_generated_messages(
     thread_id: str,
     regeneration_history: list | None,
 ) -> None:
+    """생성된 메시지를 DB에 저장한다. 실패해도 응답에 영향 없음."""
     db = SessionLocal()
     try:
         for task in generated_tasks:
@@ -155,12 +157,13 @@ def _save_generated_messages(
             )
     except Exception as db_err:
         db.rollback()
-        logger.error(
-            "generated_message_save_failed",
+        logger.warning(
+            "save_generated_messages_best_effort_failed",
             error=str(db_err),
             conv_id=conv_id,
             exc_info=True,
         )
+        # 의도적으로 raise하지 않음 — 생성 메시지 저장은 부가 데이터
     finally:
         db.close()
 
@@ -266,13 +269,13 @@ async def chat_v2(
                 "thread_id": thread_id,
             })
 
-        await asyncio.to_thread(_save_conversation_messages, conv_id, new_entries)
+        await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
 
         # 품질 검사 통과 메시지만 generated_messages 저장
         if status == "completed" and conv_id:
             generated_tasks = result.get("generated_tasks", [])
             await asyncio.to_thread(
-                _save_generated_messages,
+                _save_generated_messages_best_effort,
                 conv_id, user_id, generated_tasks,
                 request.user_input, thread_id,
                 result.get("regeneration_history"),

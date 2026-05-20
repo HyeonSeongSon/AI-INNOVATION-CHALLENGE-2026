@@ -323,7 +323,16 @@ def make_recommend_product_node(client: A2AClient):
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
             _logger.error("deserialize_messages_failed", node_name="recommend_product_agent", error=str(e))
-            messages = []
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "error",
+                    "error_message": str(e),
+                    "task_plan": [],
+                    "logs": state.get("logs", []) + ["[에러] recommend_product_agent: 메시지 역직렬화 실패"],
+                    "messages": [AIMessage(content="상품 추천 에이전트 응답 처리에 실패했습니다.", name="recommend_product_agent")],
+                },
+            )
         return Command(
             goto="supervisor",
             update={
@@ -395,7 +404,16 @@ def make_generate_message_node(client: A2AClient):
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
             _logger.error("deserialize_messages_failed", node_name="generate_message_agent", error=str(e))
-            messages = []
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "error",
+                    "error_message": str(e),
+                    "task_plan": [],
+                    "logs": state.get("logs", []) + ["[에러] generate_message_agent: 메시지 역직렬화 실패"],
+                    "messages": [AIMessage(content="메시지 생성 에이전트 응답 처리에 실패했습니다.", name="generate_message_agent")],
+                },
+            )
         return Command(
             goto="supervisor",
             update={
@@ -466,7 +484,16 @@ def make_data_registration_node(client: A2AClient):
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
             _logger.error("deserialize_messages_failed", node_name="data_registration_agent", error=str(e))
-            messages = []
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "error",
+                    "error_message": str(e),
+                    "task_plan": [],
+                    "logs": state.get("logs", []) + ["[에러] data_registration_agent: 메시지 역직렬화 실패"],
+                    "messages": [AIMessage(content="데이터 등록 에이전트 응답 처리에 실패했습니다.", name="data_registration_agent")],
+                },
+            )
         return Command(
             goto="supervisor",
             update={

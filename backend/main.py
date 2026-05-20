@@ -17,6 +17,7 @@ from app.api import marketing_api
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.config.settings import settings
 from app.core.database import init_db
+from app.core.data_loader import validate_static_configs
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
     app.state.registration = ProductRegistrationService()
 
     init_db()
+    validate_static_configs()
     async with AsyncConnectionPool(
         conninfo=settings.postgres_url,
         min_size=1,
