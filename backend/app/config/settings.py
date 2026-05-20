@@ -16,8 +16,8 @@ class Settings:
     # Model
     chatgpt_model_name: str = os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
     parser_model_name: str = os.getenv("PARSER_MODEL_NAME", "gpt-5-nano")
-    chatgpt_model_temperature: float = os.getenv("CHATGPT_MODEL_TEMPERATURE", 0.7)
-    parser_model_temperature: float = os.getenv("PARSER_MODEL_TEMPERATURE", 0)
+    chatgpt_model_temperature: float = float(os.getenv("CHATGPT_MODEL_TEMPERATURE", "0.7"))
+    parser_model_temperature: float = float(os.getenv("PARSER_MODEL_TEMPERATURE", "0"))
 
     # External APIs
     opensearch_api_url: str = os.getenv("OPENSEARCH_API_URL", "http://localhost:8010")
