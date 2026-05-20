@@ -4,20 +4,13 @@
 파싱된 CRM 요청을 기반으로 페르소나 분석 및 상품 추천을 수행하는 노드
 """
 
-import os
 import json
 from typing import Dict, Any
-from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.logging import AgentLogger
 from ....core.llm_factory import get_llm
-
-# .env 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=True)
-
-# RRF 스코어 최소 임계값 (5개 쿼리 기준 최대 ~0.082, 기본값 0.01은 사실상 순위 기반 선택과 동일)
-MIN_RRF_SCORE_THRESHOLD = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))
+from ....config.settings import settings
 
 
 async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
@@ -80,7 +73,7 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
         )
 
         # 2. config에서 모델명 읽기 후 LLM 생성
-        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0.7)
 
         # 3. 사용자 입력 가져오기
@@ -180,7 +173,7 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
 
         # 9. 필터링된 상품 조회 (Fallback: 결과가 너무 적으면 필터 단계적 완화)
         avoided_ingredients = persona_info.get("기피 성분") or []
-        MIN_PRODUCTS = int(os.getenv("MIN_FILTERED_PRODUCTS", "3"))
+        MIN_PRODUCTS = settings.min_filtered_products
 
         with logger.track_duration("get_filtered_products", user_message="필터링된 상품 조회 중..."):
             # 레벨 1: brands + categories + avoided_ingredients(EXCLUDE)
@@ -266,15 +259,15 @@ async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Di
             # RRF 임계값 이상의 상품만 선택 후 상위 3개
             qualified_products = [
                 p for p in merged_products
-                if p.get("vector_search_score", 0) >= MIN_RRF_SCORE_THRESHOLD
+                if p.get("vector_search_score", 0) >= settings.min_rrf_score_threshold
             ]
             top_3_products = qualified_products[:3]
 
             if not top_3_products and merged_products:
                 logger.warning(
                     "no_qualified_products",
-                    user_message=f"임계값({MIN_RRF_SCORE_THRESHOLD}) 이상의 상품 없음 (최고 RRF 스코어: {merged_products[0].get('vector_search_score', 0):.4f})",
-                    threshold=MIN_RRF_SCORE_THRESHOLD,
+                    user_message=f"임계값({settings.min_rrf_score_threshold}) 이상의 상품 없음 (최고 RRF 스코어: {merged_products[0].get('vector_search_score', 0):.4f})",
+                    threshold=settings.min_rrf_score_threshold,
                     best_score=merged_products[0].get("vector_search_score", 0),
                 )
 

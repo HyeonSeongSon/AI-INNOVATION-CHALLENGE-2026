@@ -7,12 +7,12 @@
 3. Groundedness Check (비용 0)
 """
 
-import os
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.llm_factory import get_llm
 from ....core.logging import AgentLogger
+from ....config.settings import settings
 
 
 async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
@@ -77,7 +77,7 @@ async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[st
             }
 
         # 2. config에서 모델명 읽기 후 LLM 생성
-        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0)
 
         # 3. 각 메시지에 대해 품질 검사 실행

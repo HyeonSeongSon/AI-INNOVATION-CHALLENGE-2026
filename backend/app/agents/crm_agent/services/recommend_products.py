@@ -1,29 +1,24 @@
 from typing import Dict, Any, List, Optional
 from langchain_core.language_models import BaseChatModel
-from dotenv import load_dotenv
 from ..prompts.crm_recommend_products import build_multi_query_generate_prompt, build_analysis_prompt, build_persona_needs_analysis_prompt, build_needs_multi_query_generate_prompt
 from ..prompts.slot_keywords_generate_prompt import get_prompt_by_category_type
 from .slot_query_builder import validate_and_build
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.http_client_registry import register
-import os
+from ....config.settings import settings
 import json
 import httpx
 import asyncio
 
-# .env 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=True)
-
 logger = get_logger("recommend_products")
 
-RRF_K = int(os.getenv("RRF_K", "60"))  # Reciprocal Rank Fusion 상수 (표준값 60)
 
 class ProductRecommender:
     """상품 추천 로직"""
     def __init__(self):
-        self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
-        self.db_api_url = os.getenv("DATABASE_API_URL")
+        self.vector_db_api_url = settings.opensearch_api_url
+        self.db_api_url = settings.database_api_url
         self._http_client: Optional[httpx.AsyncClient] = None
         register(self)
         logger.info("recommender_initialized")
@@ -32,7 +27,7 @@ class ProductRecommender:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         return self._http_client
 
     async def aclose(self) -> None:
@@ -381,7 +376,7 @@ class ProductRecommender:
             for rank, result in enumerate(query_results, 1):
                 product_id = result.get("product_id")
                 raw_score = result.get("score", 0)
-                rrf_contribution = 1.0 / (RRF_K + rank)
+                rrf_contribution = 1.0 / (settings.rrf_k + rank)
 
                 if product_id not in product_rrf_map:
                     product_rrf_map[product_id] = {

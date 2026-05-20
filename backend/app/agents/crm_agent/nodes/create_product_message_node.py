@@ -4,12 +4,12 @@
 추천된 상품들에 대해 목적별 맞춤 메시지를 생성하는 노드
 """
 
-import os
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.llm_factory import get_llm
 from ....core.logging import AgentLogger
+from ....config.settings import settings
 
 
 async def create_product_message_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
@@ -149,7 +149,7 @@ async def create_product_message_node(state: CRMState, config: RunnableConfig) -
             )
 
         # 2. config에서 모델명 읽기 후 LLM 생성
-        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0.7)
 
         # 3. 선택된 상품에 대해 메시지 생성

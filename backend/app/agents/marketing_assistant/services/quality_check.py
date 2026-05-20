@@ -58,7 +58,7 @@ class QualityChecker:
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_short))
         return self._http_client
 
     async def aclose(self) -> None:
@@ -540,7 +540,7 @@ class QualityChecker:
             judge = llm.with_structured_output(LLMJudgeOutput)
             result: LLMJudgeOutput = await asyncio.wait_for(
                 judge.ainvoke(prompt_messages),
-                timeout=30,
+                timeout=settings.http_timeout_long,
             )
 
             scores = {

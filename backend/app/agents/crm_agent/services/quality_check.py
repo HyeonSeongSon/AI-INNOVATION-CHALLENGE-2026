@@ -8,23 +8,19 @@
 """
 
 import re
-import os
 import json
 import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from pydantic import BaseModel, Field
 from langchain_core.language_models import BaseChatModel
-from dotenv import load_dotenv
 import httpx
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.http_client_registry import register
+from ....config.settings import settings
 import yaml
-
-# .env 파일 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 logger = get_logger("quality_check")
 
@@ -54,8 +50,8 @@ class QualityChecker:
     def __init__(self):
         """초기화: brand_tone YAML, forbidden_keyword JSON 로드"""
         # brand_tone YAML 로드
-        if os.environ.get("APP_ROOT"):
-            root_dir = Path(os.environ.get("APP_ROOT"))
+        if settings.app_root:
+            root_dir = Path(settings.app_root)
             data_path = root_dir / "agents" / "crm_agent" / "prompts" / "brand_tone.yaml"
         else:
             root_dir = Path(__file__).resolve().parents[1]
@@ -64,7 +60,7 @@ class QualityChecker:
         self.brand_tones = self._load_yaml(data_path)
 
         # forbidden_keyword.json 로드
-        if os.environ.get("APP_ROOT"):
+        if settings.app_root:
             forbidden_path = root_dir / "agents" / "crm_agent" / "data" / "forbidden_keyword.json"
         else:
             forbidden_path = root_dir / "data" / "forbidden_keyword.json"
@@ -76,7 +72,7 @@ class QualityChecker:
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_short))
         return self._http_client
 
     async def aclose(self) -> None:
@@ -269,10 +265,7 @@ class QualityChecker:
             - passed=True  → 금지 표현 없음
             - passed=False → 임계값 초과 결과 목록 반환
         """
-        opensearch_api_url = os.getenv("OPENSEARCH_API_URL")
-        if not opensearch_api_url:
-            raise ValueError("OPENSEARCH_API_URL이 .env 파일에 설정되어 있지 않습니다.")
-        endpoint = f"{opensearch_api_url}/api/search/similar-sentences"
+        endpoint = f"{settings.opensearch_api_url}/api/search/similar-sentences"
 
         title = message.get("title", "")
         msg_body = message.get("message", "")

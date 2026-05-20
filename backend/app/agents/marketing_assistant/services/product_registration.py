@@ -210,7 +210,7 @@ class ProductRegistrationService:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
             "Referer": "https://www.amoremall.com/",
         }
-        response = await self.http_client.get(url, headers=headers, timeout=30.0)
+        response = await self.http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
         response.raise_for_status()
         return Image.open(io.BytesIO(response.content)).convert("RGB")
 
@@ -525,7 +525,7 @@ class ProductRegistrationService:
                     "group":      group,
                     "multivector": multivector,
                 },
-                timeout=60.0,
+                timeout=settings.http_timeout_upload,
             )
             r.raise_for_status()
             product_data["vectordb_id"] = r.json().get("vectordb_id", {})
@@ -536,7 +536,7 @@ class ProductRegistrationService:
             r = await self.http_client.post(
                 f"{settings.database_api_url}/api/products",
                 json=product_data,
-                timeout=30.0,
+                timeout=settings.http_timeout_long,
             )
             r.raise_for_status()
 

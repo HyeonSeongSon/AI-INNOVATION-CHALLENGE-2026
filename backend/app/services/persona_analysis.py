@@ -3,7 +3,6 @@
 CRM agent의 build_persona_info_analysis_prompt를 활용한 사전 분석 캐싱
 """
 
-import os
 import json
 import time
 from typing import Any, Dict, Optional
@@ -11,6 +10,7 @@ from typing import Any, Dict, Optional
 from openai import AsyncOpenAI
 
 from app.core.logging import get_logger
+from app.config.settings import settings
 
 logger = get_logger("persona_analysis")
 
@@ -323,13 +323,13 @@ async def run_persona_analysis(persona_data: Dict[str, Any], model: Optional[str
     Returns:
         multi_level_analysis + multi_dimensional_analysis 딕셔너리
     """
-    model_name = model or os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
+    model_name = model or settings.chatgpt_model_name
     persona_name = persona_data.get("name", "unknown")
 
     logger.info("persona_analysis_started", persona_name=persona_name, model=model_name)
     start = time.perf_counter()
 
-    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     # 영문 키 → 한국어 키 변환
     persona_info = _map_to_persona_info(persona_data)

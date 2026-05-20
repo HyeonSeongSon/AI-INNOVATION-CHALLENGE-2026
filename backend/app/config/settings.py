@@ -57,6 +57,19 @@ class Settings:
     data_registration_agent_url: str = os.getenv("DATA_REGISTRATION_AGENT_URL", "http://localhost:8003")
     a2a_timeout: float = float(os.getenv("A2A_TIMEOUT", "120"))
 
+    # CORS
+    allowed_origins: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
+    # Server bind
+    host: str = os.getenv("HOST", "0.0.0.0")
+    port: int = int(os.getenv("PORT", "8005"))
+
+    # HTTP client timeouts (seconds)
+    http_timeout_short: float = float(os.getenv("HTTP_TIMEOUT_SHORT", "10.0"))     # quality check
+    http_timeout_default: float = float(os.getenv("HTTP_TIMEOUT_DEFAULT", "15.0")) # 일반 API 호출
+    http_timeout_long: float = float(os.getenv("HTTP_TIMEOUT_LONG", "30.0"))       # 이미지 다운로드, LLM wait_for
+    http_timeout_upload: float = float(os.getenv("HTTP_TIMEOUT_UPLOAD", "60.0"))   # OpenSearch 대용량 인덱싱
+
     # Product recommendation tuning
     rrf_k: int = int(os.getenv("RRF_K", "60"))
     min_rrf_score_threshold: float = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))

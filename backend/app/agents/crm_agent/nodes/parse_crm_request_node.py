@@ -4,13 +4,13 @@ CRM 요청 파싱 노드
 사용자 입력을 구조화된 CRM 요청으로 파싱하는 노드
 """
 
-import os
 import json
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.logging import AgentLogger
 from ....core.llm_factory import get_llm
+from ....config.settings import settings
 
 
 async def parse_crm_request_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
@@ -54,7 +54,7 @@ async def parse_crm_request_node(state: CRMState, config: RunnableConfig) -> Dic
         )
 
         # config에서 모델명 읽기 (없으면 환경변수 기본값)
-        model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
+        model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0)
 
         # 파싱 수행 (JSON 문자열 반환)

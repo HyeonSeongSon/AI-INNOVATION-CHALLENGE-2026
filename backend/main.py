@@ -27,9 +27,9 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"), override=True)
 
 # Configure structured logging (must be first)
 configure_logging(
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_level=settings.log_level,
     json_output=True,
-    environment=os.getenv("ENVIRONMENT", "production"),
+    environment=settings.environment,
 )
 
 logger = get_logger("main")
@@ -100,7 +100,7 @@ app = FastAPI(
 
 # Middleware (order matters: outermost first)
 app.add_middleware(RequestLoggingMiddleware)
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+_allowed_origins = settings.allowed_origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
@@ -156,6 +156,6 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", "8005")),
+        host=settings.host,
+        port=settings.port,
     )

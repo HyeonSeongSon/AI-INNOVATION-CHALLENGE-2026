@@ -3,7 +3,6 @@
 OpenAI API로 페르소나 요약 생성
 """
 
-import os
 import uuid
 import time
 from typing import Any, Dict, Tuple
@@ -11,6 +10,7 @@ from typing import Any, Dict, Tuple
 from openai import AsyncOpenAI
 
 from app.core.logging import get_logger
+from app.config.settings import settings
 
 logger = get_logger("persona_analyzer")
 
@@ -56,13 +56,13 @@ async def generate_persona_summary(persona_data: Dict[str, Any], model: str = No
     Returns:
         (persona_id, persona_summary)
     """
-    model_name = model or os.getenv("CHATGPT_MODEL_NAME", "gpt-4o-mini")
+    model_name = model or settings.chatgpt_model_name
     persona_name = persona_data.get("name", "unknown")
 
     logger.info("persona_summary_started", persona_name=persona_name, model=model_name)
     start = time.perf_counter()
 
-    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     description = _build_persona_description(persona_data)
     try:

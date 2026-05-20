@@ -6,19 +6,15 @@
 import re
 from typing import Dict, Any, Optional
 from langchain_core.language_models import BaseChatModel
-from dotenv import load_dotenv
 from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.http_client_registry import register
+from ....config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
-import os
 import yaml
 import httpx
-
-# .env 파일 로드
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 logger = get_logger("create_product_message")
 
@@ -30,12 +26,12 @@ logger = get_logger("create_product_message")
 class ProductMessageGenerator:
     def __init__(self):
         """메시지 생성기 초기화"""
-        self.vector_db_api_url = os.getenv("OPENSEARCH_API_URL")
-        self.db_api_url = os.getenv("DATABASE_API_URL")
+        self.vector_db_api_url = settings.opensearch_api_url
+        self.db_api_url = settings.database_api_url
 
         # YAML 데이터 로드
-        if os.environ.get("APP_ROOT"):
-            ROOT_DIR = Path(os.environ.get("APP_ROOT"))
+        if settings.app_root:
+            ROOT_DIR = Path(settings.app_root)
             DATA_PATH = ROOT_DIR / "agents" / "crm_agent" / "prompts" / "brand_tone.yaml"
             logger.info("yaml_path_resolved", source="APP_ROOT")
         else:
@@ -57,7 +53,7 @@ class ProductMessageGenerator:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         return self._http_client
 
     async def aclose(self) -> None:

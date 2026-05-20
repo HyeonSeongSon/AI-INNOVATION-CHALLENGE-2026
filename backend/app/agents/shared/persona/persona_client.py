@@ -18,7 +18,7 @@ class PersonaClient:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         return self._http_client
 
     async def aclose(self) -> None:
