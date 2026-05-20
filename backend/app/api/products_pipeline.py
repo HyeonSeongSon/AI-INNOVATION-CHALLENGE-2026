@@ -9,11 +9,10 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
-from ..agents.marketing_assistant.services.product_registration import get_product_registration_service
 from ..core.logging import get_logger
 
 logger = get_logger("products_pipeline")
@@ -107,7 +106,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
 # ──────────────────────────────────────────────────────
 
 @router.post("/products/register")
-async def register_products_from_file(file: UploadFile = File(...)):
+async def register_products_from_file(file: UploadFile = File(...), request: Request = None):
     """
     JSONL / CSV / XLSX 파일 업로드로 상품 일괄 등록 (SSE 스트리밍)
 
@@ -132,7 +131,7 @@ async def register_products_from_file(file: UploadFile = File(...)):
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
     total = len(records)
-    service = get_product_registration_service()
+    service = request.app.state.services.registration
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()

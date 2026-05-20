@@ -4,30 +4,19 @@ from langgraph.graph import END
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
-from ..services.apply_feedback import ApplyFeedback
-from ..services.parse_request import MultiValueParser
-from ..services.product_client import ProductClient
 from ....config.settings import settings
-from typing import Optional
 
 logger = get_logger("message_feedback_node")
 
 _MAX_RETRIES = 2
 _DEFAULT_PURPOSE = "브랜드/제품 첫소개"
 
-_parser = MultiValueParser()
-_product_client = ProductClient()
-_applier: Optional[ApplyFeedback] = None
-
-
-def get_applier() -> ApplyFeedback:
-    global _applier
-    if _applier is None:
-        _applier = ApplyFeedback()
-    return _applier
-
 
 async def message_feedback_node(state: MarketingAssistantState, config: RunnableConfig):
+    services = config["configurable"]["services"]
+    parser = services.parser
+    product_client = services.product_client
+    applier = services.applier
     retry_count = state.get("feedback_retry_count", 0)
 
     if retry_count >= _MAX_RETRIES:
@@ -58,10 +47,10 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
         # 사용자 직접 피드백 분기 (오케스트레이터에서 진입)
         messages = state["messages"]
         parser_llm = get_llm(settings.parser_model_name, temperature=0)
-        parsed = await _parser.user_feedback_parser(messages, parser_llm)
+        parsed = await parser.user_feedback_parser(messages, parser_llm)
 
         # 상품 정보 조회 -> brand, product_name, product_tag 추출
-        product_info = await _product_client.get_merged_product_info(parsed["product_id"])
+        product_info = await product_client.get_merged_product_info(parsed["product_id"])
         brand = product_info.get("brand", "")
         product_name = product_info.get("product_name", "")
         product_tag = product_info.get("product_tag", "")
@@ -85,7 +74,7 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
                 "llm_judge_scores": {"feedback": parsed["feedback"]},
             },
         }
-        updated_task = await get_applier().apply_feedback(task, llm, product_info=product_info)
+        updated_task = await applier.apply_feedback(task, llm, product_info=product_info)
         return Command(
             goto="quality_check_node",
             update={
@@ -97,7 +86,7 @@ async def message_feedback_node(state: MarketingAssistantState, config: Runnable
 
     # 기존: quality_check 실패 분기
     tasks = state.get("generated_tasks", [])
-    updated_tasks = await get_applier().apply_feedback_batch(tasks, failed_ids, llm)
+    updated_tasks = await applier.apply_feedback_batch(tasks, failed_ids, llm)
 
     return Command(
         goto="quality_check_node",

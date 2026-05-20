@@ -23,8 +23,16 @@ _logger = get_logger("data_registration_server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.containers import DataRegistrationServices
+    from app.agents.data_registration_agent.services.product_registration import ProductRegistrationService
+    from app.agents.shared.persona.persona_client import PersonaClient
+
+    app.state.services = DataRegistrationServices(
+        registration=ProductRegistrationService(),
+        persona_client=PersonaClient(),
+    )
     app.state.graph = build_workflow()
-    _logger.info("graph_compiled")
+    _logger.info("services_and_graph_initialized")
     yield
     await close_all()
 

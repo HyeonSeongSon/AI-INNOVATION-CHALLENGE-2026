@@ -1,16 +1,15 @@
 from ..state import MarketingAssistantState
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
-from ..services.orchestrator import Orchestrator
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from ....config.settings import settings
 
-_orchestrator = Orchestrator()
 logger = get_logger("orchestrator_node")
 
 async def orchestrator_node(state: MarketingAssistantState, config: RunnableConfig):
+    orchestrator = config["configurable"]["services"].orchestrator
     try:
         messages = list(state.get("messages") or [])
 
@@ -20,7 +19,7 @@ async def orchestrator_node(state: MarketingAssistantState, config: RunnableConf
 
         model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
         llm = get_llm(model_name, temperature=0)
-        decision = await _orchestrator.orchestrator(messages, llm)
+        decision = await orchestrator.orchestrator(messages, llm)
 
         logger.info(
             "orchestrator_decision",

@@ -228,6 +228,7 @@ async def chat_v2(
             conversation_id=conv_id,
             model=request.model,
             file_records=request.file_records,
+            services=req.app.state.services,
         )
 
         result["conversation_id"] = conv_id

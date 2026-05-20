@@ -6,13 +6,11 @@ from langgraph.types import Command
 from langgraph.graph import END
 
 from ..state import MarketingAssistantState
-from ..services.product_registration import get_product_registration_service
 from ....core.logging import AgentLogger
-
-_service = get_product_registration_service()
 
 
 async def product_registration_node(state: MarketingAssistantState, config: RunnableConfig):
+    _service = config["configurable"]["services"].registration
     """
     file_records에 담긴 JSONL 레코드를 병렬 처리해 상품을 일괄 등록한다.
 

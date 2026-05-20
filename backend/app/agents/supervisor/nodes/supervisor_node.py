@@ -2,7 +2,6 @@
 from ..state import SupervisorState
 from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
-from ..services.supervisor import Supervisor
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
@@ -10,15 +9,15 @@ from langgraph.constants import END
 
 import os
 
-_supervisor = Supervisor()
 logger = get_logger("supervisor_node")
 
 async def supervisor_node(state: SupervisorState, config: RunnableConfig):
+    supervisor = config["configurable"]["services"].supervisor
     try:
         messages = state.get("messages")
         model_name = config.get("configurable", {}).get("model", os.getenv("CHATGPT_MODEL_NAME"))
         llm = get_llm(model_name, temperature=0)
-        decision = await _supervisor.supervisor(messages, llm)
+        decision = await supervisor.supervisor(messages, llm)
 
         logger.info(
             "supervisor_decision",

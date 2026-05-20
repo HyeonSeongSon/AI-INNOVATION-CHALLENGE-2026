@@ -7,12 +7,12 @@ from ....core.llm_factory import get_llm
 from ....core.logging import get_logger
 
 
-_product_client = ProductClient()
-_persona_client = PersonaClient()
 logger = get_logger(__name__)
 
 class ProductRecommender:
     def __init__(self):
+        self._product_client = ProductClient()
+        self._persona_client = PersonaClient()
         self.vector_db_api_url = settings.opensearch_api_url
         self.db_api_url = settings.database_api_url
         self.llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
@@ -21,7 +21,7 @@ class ProductRecommender:
         logger.info("product_search_queries.start", persona_id=persona_id)
         
         # 기존 상품 검색 쿼리 조회
-        existing_product_search_queries = await _persona_client.get_existing_product_search_query(persona_id)
+        existing_product_search_queries = await self._persona_client.get_existing_product_search_query(persona_id)
 
         if existing_product_search_queries:
             # 기존 검색 쿼리 사용
@@ -35,11 +35,11 @@ class ProductRecommender:
         else:
             # 기존 검색 쿼리 없으면 상품 검색 쿼리 생성
             logger.info("product_search_queries.generating", persona_id=persona_id)
-            persona_info = await _persona_client.get_persona_info(persona_id)
+            persona_info = await self._persona_client.get_persona_info(persona_id)
             raw_queries = await generate_search_query(persona_info, self.llm)
 
             # DB저장
-            await _persona_client.save_product_search_query(persona_id, raw_queries)
+            await self._persona_client.save_product_search_query(persona_id, raw_queries)
             logger.info("product_search_queries.saved", persona_id=persona_id)
 
             search_queries = {
@@ -59,7 +59,7 @@ class ProductRecommender:
             avoided_ingredients: Optional[List[str]]
         ):
         # 레벨 1: brands + sub_tags + avoided_ingredients(EXCLUDE)
-        filtered_products = await _product_client.get_filtered_products(
+        filtered_products = await self._product_client.get_filtered_products(
             brands=brands if brands else None,
             product_categories=sub_tags if sub_tags else None,
             avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
@@ -71,7 +71,7 @@ class ProductRecommender:
                 "filter_fallback_level2",
                 current_count=len(filtered_products),
             )
-            filtered_products = await _product_client.get_filtered_products(
+            filtered_products = await self._product_client.get_filtered_products(
                 brands=None,
                 product_categories=sub_tags if sub_tags else None,
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
@@ -83,7 +83,7 @@ class ProductRecommender:
                 "filter_fallback_level3",
                 current_count=len(filtered_products),
             )
-            filtered_products = await _product_client.get_filtered_products(
+            filtered_products = await self._product_client.get_filtered_products(
                 brands=None,
                 product_categories=None,
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None,
@@ -95,7 +95,7 @@ class ProductRecommender:
                 "filter_fallback_level4",
                 current_count=len(filtered_products),
             )
-            filtered_products = await _product_client.get_filtered_products()
+            filtered_products = await self._product_client.get_filtered_products()
 
         product_ids = [p["product_id"] for p in filtered_products]
         return product_ids
@@ -118,7 +118,7 @@ class ProductRecommender:
                 avoided_ingredients=avoided_ingredients if avoided_ingredients else None
             )
 
-        retrieval_result = await _product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=100)
+        retrieval_result = await self._product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=100)
         retrieval_result_ids = [p['product_id'] for p in retrieval_result]
         
         return retrieval_result_ids
@@ -149,7 +149,7 @@ class ProductRecommender:
             "get_product_documents.start",
             product_count=len(retrieval_result_ids),
         )
-        results = await _product_client.search_persona_dimensions_multivector(
+        results = await self._product_client.search_persona_dimensions_multivector(
             queries=queries,
             product_ids=retrieval_result_ids,
         )
@@ -295,7 +295,7 @@ class ProductRecommender:
         )
 
         # 상품 상세 정보 병렬 조회
-        products = await _product_client.get_products_detail_from_db(top_ids)
+        products = await self._product_client.get_products_detail_from_db(top_ids)
 
         # RRF 순위 보장 + 스코어 삽입
         id_to_product = {p.get("product_id"): p for p in products}

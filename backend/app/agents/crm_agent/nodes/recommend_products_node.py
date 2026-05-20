@@ -10,21 +10,18 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
-from ..services.recommend_products import ProductRecommender
 from ....core.logging import AgentLogger
 from ....core.llm_factory import get_llm
 
 # .env 로드
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"), override=True)
 
-# Recommender 인스턴스
-_recommender = ProductRecommender()
-
 # RRF 스코어 최소 임계값 (5개 쿼리 기준 최대 ~0.082, 기본값 0.01은 사실상 순위 기반 선택과 동일)
 MIN_RRF_SCORE_THRESHOLD = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))
 
 
 async def recommend_products_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
+    _recommender = config["configurable"]["services"].crm_recommender
     """
     파싱된 요청을 기반으로 상품 추천을 수행하는 노드
 

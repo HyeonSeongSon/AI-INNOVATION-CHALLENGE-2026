@@ -17,6 +17,7 @@ class CRMMessageAgent:
         session_id: str,
         user_id: str,
         model: Optional[str] = None,
+        services: Any = None,
     ) -> Dict:
         configurable = {
             "thread_id": thread_id,
@@ -25,6 +26,8 @@ class CRMMessageAgent:
         }
         if model:
             configurable["model"] = model
+        if services is not None:
+            configurable["services"] = services
         return {"configurable": configurable}
 
     def _extract_response_messages(self, result: Dict) -> list:
@@ -69,6 +72,7 @@ class CRMMessageAgent:
         conversation_id: str,
         model: Optional[str] = None,
         file_records: Optional[List[Dict[str, Any]]] = None,
+        services: Any = None,
     ) -> Dict[str, Any]:
         """
         대화 처리
@@ -92,7 +96,7 @@ class CRMMessageAgent:
             }
         """
         thread_id = conversation_id
-        config = self._build_config(thread_id, session_id, user_id, model)
+        config = self._build_config(thread_id, session_id, user_id, model, services)
 
         initial_state: CRMMessageAgentState = {
             "messages": [HumanMessage(content=user_input)],

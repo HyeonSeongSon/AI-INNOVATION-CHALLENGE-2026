@@ -23,8 +23,12 @@ _logger = get_logger("recommend_server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.containers import RecommendProductServices
+    from app.agents.recommend_product_agent.services.recommend_product_in_persona import ProductRecommender
+
+    app.state.services = RecommendProductServices(recommender=ProductRecommender())
     app.state.graph = build_workflow()
-    _logger.info("graph_compiled")
+    _logger.info("services_and_graph_initialized")
     yield
     await close_all()
 

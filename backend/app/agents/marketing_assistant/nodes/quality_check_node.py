@@ -5,19 +5,17 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END
 from langgraph.types import Command
 from ....core.llm_factory import get_llm
-from ..services.quality_check import QualityChecker
 from ....config.settings import settings
-
-_checker = QualityChecker()
 
 
 async def quality_check_node(state: MarketingAssistantState, config: RunnableConfig):
+    checker = config["configurable"]["services"].quality_checker
     tasks = state.get("generated_tasks", [])
     model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     llm = get_llm(model_name, temperature=0)
 
     async def check_one(task: dict) -> dict:
-        result = await _checker.check_quality(
+        result = await checker.check_quality(
             message=task["message"],
             product_id=task["product_id"],
             purpose=task["purpose"],

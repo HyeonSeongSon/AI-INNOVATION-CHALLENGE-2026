@@ -1,5 +1,3 @@
-from ..services.recommend_product import ProductRecommender
-from ..services.parse_request import MultiValueParser
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
 from langgraph.types import Command
@@ -10,10 +8,10 @@ from ....config.settings import settings
 from ....core.llm_factory import get_llm
 import json
 
-_parser = MultiValueParser()
-_recommender = ProductRecommender()
-
 async def recommend_product_node(state: MarketingAssistantState, config: RunnableConfig):
+    services = config["configurable"]["services"]
+    parser = services.parser
+    recommender = services.recommender
     logger = AgentLogger(state, node_name="recommend_product_node")
 
     logger.info(
@@ -25,7 +23,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     parser_llm = get_llm(settings.parser_model_name, temperature=0.7)
 
     # 전체 대화 히스토리에서 필요한 필드 추출 (이전 AI 메시지의 persona_id 포함)
-    parsed_json = await _parser.recommend_product_parser(messages, parser_llm)
+    parsed_json = await parser.recommend_product_parser(messages, parser_llm)
     parsed_data = json.loads(parsed_json)
 
     logger.info(
@@ -37,7 +35,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     # 페르소나 기반 검색 쿼리 조회
-    search_queries = await _recommender.get_product_search_queries(
+    search_queries = await recommender.get_product_search_queries(
         persona_id=parsed_data.get("persona_id")
     )
 
@@ -48,7 +46,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     # retrieval 쿼리(str)만 추출해서 벡터 검색 후보 상품 ID 수집
-    retrieval_product_ids = await _recommender.product_retriever(
+    retrieval_product_ids = await recommender.product_retriever(
         retrieval_query=search_queries["retrieval"],
         brands=parsed_data.get("brands") or None,
         sub_tags=parsed_data.get("product_categories") or None,
@@ -62,7 +60,7 @@ async def recommend_product_node(state: MarketingAssistantState, config: Runnabl
     )
 
     # 3차원 하이브리드 검색 + RRF로 최종 추천 상품 선정
-    recommended_products = await _recommender.recommend(
+    recommended_products = await recommender.recommend(
         search_queries,
         retrieval_product_ids,
         product_tags=parsed_data.get("product_categories") or None,

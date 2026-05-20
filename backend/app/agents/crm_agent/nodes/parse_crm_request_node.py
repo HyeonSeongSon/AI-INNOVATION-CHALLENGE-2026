@@ -9,16 +9,12 @@ import json
 from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
-from ..services.parse_crm_request import MultiValueParser
 from ....core.logging import AgentLogger
 from ....core.llm_factory import get_llm
 
 
-# Parser 인스턴스 
-_parser = MultiValueParser()
-
-
 async def parse_crm_request_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
+    _parser = config["configurable"]["services"].crm_parser
     """
     사용자 입력을 파싱하여 구조화된 CRM 요청으로 변환하는 노드
 

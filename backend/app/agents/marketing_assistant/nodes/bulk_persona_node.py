@@ -11,24 +11,21 @@ from ...shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ...shared.persona.persona_client import PersonaClient
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
 from ....core.logging import get_logger
 
 logger = get_logger("bulk_persona_node")
 
-_persona_client = PersonaClient()
 
-
-async def _process_one(index: int, record: dict, llm) -> dict:
+async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
     """단일 레코드 처리 — generate_persona_node와 동일한 파이프라인"""
     try:
         messages = [HumanMessage(content=json.dumps(record, ensure_ascii=False, indent=2))]
         structured_persona = await generate_structured_persona_info(messages, llm)
-        persona_id = await _persona_client.save_persona(structured_persona)
+        persona_id = await persona_client.save_persona(structured_persona)
         raw_queries = await generate_search_query(messages, llm)
-        await _persona_client.save_product_search_query(persona_id, raw_queries)
+        await persona_client.save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,
             "success": True,
@@ -42,13 +39,14 @@ async def _process_one(index: int, record: dict, llm) -> dict:
 
 async def bulk_persona_node(state: MarketingAssistantState, config: RunnableConfig):
     """파일에서 파싱된 레코드를 병렬로 처리해 페르소나를 일괄 생성."""
+    persona_client = config["configurable"]["services"].persona_client
     records = state.get("file_records") or []
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
     semaphore = asyncio.Semaphore(5)
 
     async def _bounded(i: int, rec: dict):
         async with semaphore:
-            return await _process_one(i, rec, llm)
+            return await _process_one(i, rec, llm, persona_client)
 
     results = await asyncio.gather(*[_bounded(i, r) for i, r in enumerate(records)])
 

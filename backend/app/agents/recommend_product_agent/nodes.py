@@ -1,6 +1,6 @@
 import traceback
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -10,19 +10,8 @@ from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger
 from ..shared.parser_and_router.parser_and_router_request import recommend_product_parser
 from ..shared.persona.generate_persona_and_query import generate_search_query, generate_structured_persona_info
-from .services.recommend_product_in_persona import ProductRecommender
 from .state import RecommendProductState
 import asyncio
-
-
-_recommender: Optional[ProductRecommender] = None
-
-
-def get_recommender() -> ProductRecommender:
-    global _recommender
-    if _recommender is None:
-        _recommender = ProductRecommender()
-    return _recommender
 
 
 def _now_iso() -> str:
@@ -88,6 +77,7 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
 
 
 async def get_search_query_node(state: RecommendProductState, config: RunnableConfig) -> Dict[str, Any]:
+    recommender = config["configurable"]["services"].recommender
     node_name = "get_search_query"
     logger = AgentLogger(state, node_name=node_name, agent_name="recommend_product_agent")
     logger.info("get_search_query_started", user_message=f"[{node_name}] 검색 쿼리 생성 시작")
@@ -119,7 +109,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             source = "generated"
 
         if resolved_persona_id:
-            search_queries = await get_recommender().get_product_search_queries(resolved_persona_id)
+            search_queries = await recommender.get_product_search_queries(resolved_persona_id)
 
             if search_queries is None:
                 logger.warning(
@@ -141,8 +131,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
                 generate_search_query(messages[-1:], query_llm)
             )
 
-            resolved_persona_id = await get_recommender().persona_client.save_persona(structured_persona)
-            await get_recommender().persona_client.save_product_search_query(resolved_persona_id, raw_queries)
+            resolved_persona_id = await recommender.persona_client.save_persona(structured_persona)
+            await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries)
 
             search_queries = {
                 "user_need_query": raw_queries["need"],
@@ -176,7 +166,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
         }
 
 
-async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any]:
+async def recommend_products_node(state: RecommendProductState, config: RunnableConfig) -> Dict[str, Any]:
+    recommender = config["configurable"]["services"].recommender
     node_name = "recommend_products"
     logger = AgentLogger(state, node_name=node_name, agent_name="recommend_product_agent")
     logger.info("recommend_products_started", user_message=f"[{node_name}] 상품 추천 시작")
@@ -191,13 +182,13 @@ async def recommend_products_node(state: RecommendProductState) -> Dict[str, Any
         parsed_data = state.get("parsed_data")
         search_queries = state.get("search_queries")
 
-        retrieval_product_ids = await get_recommender().product_retriever(
+        retrieval_product_ids = await recommender.product_retriever(
             retrieval_query=search_queries["retrieval"],
             brands=parsed_data.get("brands") or None,
             sub_tags=parsed_data.get("product_categories") or None
         )
 
-        recommended_products = await get_recommender().recommend(
+        recommended_products = await recommender.recommend(
             search_queries,
             retrieval_product_ids,
             product_tags=parsed_data.get("product_categories") or None,

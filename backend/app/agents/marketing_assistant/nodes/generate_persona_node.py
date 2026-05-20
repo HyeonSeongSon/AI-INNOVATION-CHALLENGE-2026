@@ -5,13 +5,11 @@ from langchain_core.messages import AIMessage
 from langgraph.types import Command
 from langgraph.graph import END
 from ...shared.persona.generate_persona_and_query import generate_structured_persona_info, generate_search_query
-from ...shared.persona.persona_client import PersonaClient
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
 
-_persona_client = PersonaClient()
-
 async def generate_persona_node(state: MarketingAssistantState, config: RunnableConfig):
+    persona_client = config["configurable"]["services"].persona_client
     messages = state.get("messages")
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
 
@@ -22,8 +20,8 @@ async def generate_persona_node(state: MarketingAssistantState, config: Runnable
     )
 
     # DB 저장
-    persona_id = await _persona_client.save_persona(structured_persona)
-    await _persona_client.save_product_search_query(persona_id, raw_queries)
+    persona_id = await persona_client.save_persona(structured_persona)
+    await persona_client.save_product_search_query(persona_id, raw_queries)
 
     # state 형식으로 변환
     search_queries = {

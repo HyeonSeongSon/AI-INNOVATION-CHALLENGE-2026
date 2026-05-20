@@ -9,15 +9,11 @@ from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.llm_factory import get_llm
-from ..services.create_product_message import ProductMessageGenerator
 from ....core.logging import AgentLogger
 
 
-# Generator 인스턴스 
-_generator = ProductMessageGenerator()
-
-
 async def create_product_message_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
+    _generator = config["configurable"]["services"].crm_generator_old
     """
     추천된 상품들에 대해 메시지를 생성하는 노드
 

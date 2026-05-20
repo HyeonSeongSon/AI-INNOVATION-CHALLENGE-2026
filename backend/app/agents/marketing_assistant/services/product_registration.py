@@ -556,16 +556,3 @@ _ALL_TABLE_FIELDS = _STRUCTURED_TABLE_FIELDS | {
     "vectordb_id", "product_details", "product_created_at",
 }
 
-
-# ──────────────────────────────────────────────────────
-# 싱글턴
-# ──────────────────────────────────────────────────────
-
-_instance: ProductRegistrationService | None = None
-
-
-def get_product_registration_service() -> ProductRegistrationService:
-    global _instance
-    if _instance is None:
-        _instance = ProductRegistrationService()
-    return _instance

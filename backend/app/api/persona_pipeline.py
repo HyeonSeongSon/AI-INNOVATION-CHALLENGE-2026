@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -20,7 +20,6 @@ from ..agents.shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ..agents.shared.persona.persona_client import PersonaClient
 from ..core.llm_factory import get_llm
 from ..config.settings import settings
 from ..core.logging import get_logger
@@ -31,28 +30,19 @@ router = APIRouter(prefix="/api/pipeline", tags=["Persona Pipeline"])
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
-_persona_client: PersonaClient | None = None
-
-
-def get_persona_client() -> PersonaClient:
-    global _persona_client
-    if _persona_client is None:
-        _persona_client = PersonaClient()
-    return _persona_client
-
 
 # ──────────────────────────────────────────────────────
 # 단건 처리 (내부 공통 함수)
 # ──────────────────────────────────────────────────────
 
-async def _process_one_text(index: int, text: str, llm) -> Dict[str, Any]:
+async def _process_one_text(index: int, text: str, llm, persona_client) -> Dict[str, Any]:
     """단일 텍스트로 페르소나 생성 — bulk_persona_node._process_one과 동일한 파이프라인"""
     try:
         messages = [HumanMessage(content=text)]
         structured_persona = await generate_structured_persona_info(messages, llm)
-        persona_id = await get_persona_client().save_persona(structured_persona)
+        persona_id = await persona_client.save_persona(structured_persona)
         raw_queries = await generate_search_query(messages, llm)
-        await get_persona_client().save_product_search_query(persona_id, raw_queries)
+        await persona_client.save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,
             "success": True,
@@ -111,10 +101,11 @@ class CreateFromTextRequest(BaseModel):
 
 
 @router.post("/personas/create-from-text")
-async def create_persona_from_text(request: CreateFromTextRequest):
+async def create_persona_from_text(request: CreateFromTextRequest, req: Request):
     """자유 텍스트 입력으로 페르소나 1개 생성"""
+    persona_client = req.app.state.services.persona_client
     llm = get_llm(request.model or settings.chatgpt_model_name, temperature=0.3)
-    result = await _process_one_text(0, request.text, llm)
+    result = await _process_one_text(0, request.text, llm, persona_client)
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result.get("error", "페르소나 생성 실패"))
     return {
@@ -124,7 +115,7 @@ async def create_persona_from_text(request: CreateFromTextRequest):
 
 
 @router.post("/personas/create-from-file")
-async def create_personas_from_file(file: UploadFile = File(...)):
+async def create_personas_from_file(file: UploadFile = File(...), req: Request = None):
     """
     CSV / JSONL / JSON 파일 업로드로 페르소나 일괄 생성 (SSE 스트리밍)
 
@@ -150,6 +141,7 @@ async def create_personas_from_file(file: UploadFile = File(...)):
 
     total = len(texts)
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    persona_client = req.app.state.services.persona_client
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
@@ -158,7 +150,7 @@ async def create_personas_from_file(file: UploadFile = File(...)):
         async def process_and_enqueue(i: int, text: str):
             try:
                 async with semaphore:
-                    result = await _process_one_text(i, text, llm)
+                    result = await _process_one_text(i, text, llm, persona_client)
             except Exception as e:
                 result = {
                     "success": False,

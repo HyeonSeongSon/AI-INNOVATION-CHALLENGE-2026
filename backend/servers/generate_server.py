@@ -23,8 +23,18 @@ _logger = get_logger("generate_server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.containers import GenerateMessageServices
+    from app.agents.generate_message_agent.services.generate_crm_message import CrmMessageGenerator
+    from app.agents.generate_message_agent.services.quality_check import QualityChecker
+    from app.agents.generate_message_agent.services.apply_feedback import ApplyFeedback
+
+    app.state.services = GenerateMessageServices(
+        generator=CrmMessageGenerator(),
+        checker=QualityChecker(),
+        applier=ApplyFeedback(),
+    )
     app.state.graph = build_workflow()
-    _logger.info("graph_compiled")
+    _logger.info("services_and_graph_initialized")
     yield
     await close_all()
 

@@ -12,15 +12,11 @@ from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from ..state import CRMState
 from ....core.llm_factory import get_llm
-from ..services.quality_check import QualityChecker
 from ....core.logging import AgentLogger
 
 
-# QualityChecker 인스턴스 
-_checker = QualityChecker()
-
-
 async def quality_check_node(state: CRMState, config: RunnableConfig) -> Dict[str, Any]:
+    _checker = config["configurable"]["services"].crm_checker
     """
     생성된 메시지의 품질을 검증하는 노드
 

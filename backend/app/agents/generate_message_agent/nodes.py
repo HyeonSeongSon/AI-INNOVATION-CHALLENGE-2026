@@ -5,12 +5,9 @@ from ..shared.parser_and_router.parser_and_router_request import generate_messag
 from ...config.settings import settings
 from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger, get_logger
-from .services.generate_crm_message import CrmMessageGenerator
-from .services.quality_check import QualityChecker
-from .services.apply_feedback import ApplyFeedback
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any, Union, Optional
+from typing import Dict, Any, Union
 from langgraph.types import Command
 import json
 import traceback
@@ -21,31 +18,6 @@ _logger = get_logger("generate_message_agent")
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-_generator: Optional[CrmMessageGenerator] = None
-_checker: Optional[QualityChecker] = None
-_applier: Optional[ApplyFeedback] = None
-
-
-def get_generator() -> CrmMessageGenerator:
-    global _generator
-    if _generator is None:
-        _generator = CrmMessageGenerator()
-    return _generator
-
-
-def get_checker() -> QualityChecker:
-    global _checker
-    if _checker is None:
-        _checker = QualityChecker()
-    return _checker
-
-
-def get_applier() -> ApplyFeedback:
-    global _applier
-    if _applier is None:
-        _applier = ApplyFeedback()
-    return _applier
 
 
 def _format_generated_tasks(tasks) -> str:
@@ -137,6 +109,7 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
 
 
 async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+    generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     message_llm = get_llm(model, temperature=0.7)
@@ -150,12 +123,12 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
+    persona_info = await generator.get_persona_info(persona_id) if persona_id else None
 
-    tasks = await get_generator().get_product_info(tasks)
-    tasks = await get_generator().get_brand_tone(tasks)
-    tasks = await get_generator().get_crm_prompt(tasks, persona_info=persona_info)
-    tasks = await get_generator().generate_crm_message(tasks, message_llm)
+    tasks = await generator.get_product_info(tasks)
+    tasks = await generator.get_brand_tone(tasks)
+    tasks = await generator.get_crm_prompt(tasks, persona_info=persona_info)
+    tasks = await generator.generate_crm_message(tasks, message_llm)
 
     generated_tasks = [
         {
@@ -182,13 +155,16 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
 
 
 async def quality_check_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+    services = config["configurable"]["services"]
+    generator = services.generator
+    checker = services.checker
     agent_logger = AgentLogger(state, node_name="quality_check_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     judge_llm = get_llm(model, temperature=0)
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
+    persona_info = await generator.get_persona_info(persona_id) if persona_id else None
 
     agent_logger.info(
         "quality_check_started",
@@ -200,7 +176,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     failed_task_ids = []
 
     for task in generated_tasks:
-        quality_check = await get_checker().check_quality(
+        quality_check = await checker.check_quality(
             message=task["message"],
             product_id=task["product_id"],
             purpose=task["purpose"],
@@ -249,13 +225,15 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             update={"status": failure_status, "failed_task_ids": failed_ids_list},
         )
 
-    applier = get_applier()
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
+    services = config["configurable"]["services"]
+    applier = services.applier
+    generator = services.generator
+    persona_info = await generator.get_persona_info(persona_id) if persona_id else None
 
     if feedback_input:
         agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
         raw = [{"product_id": feedback_input["product_id"], "purpose": feedback_input.get("purpose")}]
-        enriched = await get_generator().get_product_info(raw)
+        enriched = await generator.get_product_info(raw)
         product_info = enriched[0].get("product_info", {}) if enriched else {}
         task = {
             "product_id": feedback_input["product_id"],
