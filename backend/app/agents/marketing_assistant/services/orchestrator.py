@@ -19,5 +19,9 @@ class Orchestrator:
     async def orchestrator(self, messages, llm: BaseChatModel):
         supervisor = llm.with_structured_output(RouteResponse)
         prompt_messages = build_orchestrator_prompt(messages)
-        response = supervisor.ainvoke(prompt_messages)
-        return await response
+        try:
+            response = supervisor.ainvoke(prompt_messages)
+            return await response
+        except Exception as e:
+            logger.error("orchestrator_failed", error=str(e), exc_info=True)
+            raise

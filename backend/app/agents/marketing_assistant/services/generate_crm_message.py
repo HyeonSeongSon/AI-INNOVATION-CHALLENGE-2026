@@ -69,13 +69,17 @@ class CrmMessageGenerator:
         logger.info("generate_crm_message.start", task_count=len(tasks))
 
         fetch_tasks = [llm.ainvoke(item["prompt"]) for item in tasks]
-        results = await asyncio.gather(*fetch_tasks)
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         messages = [
             {**item, "message": message}
             for item, message in zip(tasks, results)
-            if message
+            if not isinstance(message, Exception) and message
         ]
+
+        skipped = sum(1 for r in results if isinstance(r, Exception))
+        if skipped:
+            logger.warning("generate_crm_message.partial_failure", skipped_count=skipped)
 
         logger.info("generate_crm_message.done", generated_count=len(messages))
         return messages

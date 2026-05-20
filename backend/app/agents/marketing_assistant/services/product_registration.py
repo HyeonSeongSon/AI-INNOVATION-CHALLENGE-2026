@@ -130,7 +130,11 @@ async def _extract_text_from_chunks(
         ),
     })
 
-    response = await llm.ainvoke([HumanMessage(content=image_content)])
+    try:
+        response = await llm.ainvoke([HumanMessage(content=image_content)])
+    except Exception as e:
+        logger.error("extract_text_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        raise
     return response.content
 
 
@@ -174,7 +178,11 @@ async def _extract_and_classify_from_chunks(
         ),
     })
 
-    response = await llm.ainvoke([HumanMessage(content=image_content)])
+    try:
+        response = await llm.ainvoke([HumanMessage(content=image_content)])
+    except Exception as e:
+        logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        raise
     return _parse_llm_json(response.content)
 
 
@@ -339,7 +347,11 @@ class ProductRegistrationService:
             )
 
         prompt = builder(extra_category, product_document, category_list)
-        response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+        try:
+            response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+        except Exception as e:
+            logger.error("build_structured_document_failed", main_category=main_category, error=str(e), exc_info=True)
+            raise
         return _parse_llm_json(response.content)
 
     async def generate_multivector_document(
@@ -374,7 +386,11 @@ class ProductRegistrationService:
         prompt, group = build_multivector_prompt(structured, main_category, tag, sub_tag)
 
         for attempt in range(2):
-            response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+            try:
+                response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+            except Exception as e:
+                logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error=str(e), exc_info=True)
+                raise
             result = _parse_llm_json(response.content)
             errors = _validate_multivector(result, group)
             if not errors:

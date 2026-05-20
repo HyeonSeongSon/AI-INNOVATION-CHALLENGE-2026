@@ -19,5 +19,9 @@ class Supervisor:
     async def supervisor(self, messages, llm: BaseChatModel):
         supervisor_agent = llm.with_structured_output(RouteResponse)
         prompt_messages = build_supervisor_prompt(messages)
-        response = supervisor_agent.ainvoke(prompt_messages)
-        return await response
+        try:
+            response = supervisor_agent.ainvoke(prompt_messages)
+            return await response
+        except Exception as e:
+            logger.error("supervisor_failed", error=str(e), exc_info=True)
+            raise

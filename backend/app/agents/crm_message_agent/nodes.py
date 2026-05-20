@@ -241,7 +241,11 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
         system_prompt=""
     )
     filtered_messages = _filter_handoff_messages(state.get("messages", []))
-    result = await agent.ainvoke({"messages": filtered_messages}, config)
+    try:
+        result = await agent.ainvoke({"messages": filtered_messages}, config)
+    except Exception as e:
+        _logger.error("search_agent_failed", error=str(e), exc_info=True)
+        return Command(goto="supervisor", update={"status": "error", "error_message": str(e)})
     ai_msg, tool_msg = create_handoff_messages("search_agent")
     _logger.info("search_agent_done", node_name="search_agent")
     return Command(

@@ -7,17 +7,23 @@ from langgraph.graph import END
 from ...shared.persona.generate_persona_and_query import generate_structured_persona_info, generate_search_query
 from ....core.llm_factory import get_llm
 from ....config.settings import settings
+from ....core.logging import get_logger
+
+_logger = get_logger("generate_persona_node")
 
 async def generate_persona_node(state: MarketingAssistantState, config: RunnableConfig):
     persona_client = config["configurable"]["services"].persona_client
     messages = state.get("messages")
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
 
-    # 페르소나 정보 구조화 + 검색 쿼리 생성
-    structured_persona, raw_queries = await asyncio.gather(
-        generate_structured_persona_info(messages, llm),
-        generate_search_query(messages, llm),
-    )
+    try:
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(messages, llm),
+            generate_search_query(messages, llm),
+        )
+    except Exception as e:
+        _logger.error("generate_persona_node_failed", error=str(e), exc_info=True)
+        return Command(update={"status": "error", "error_message": str(e)}, goto=END)
 
     # DB 저장
     persona_id = await persona_client.save_persona(structured_persona)
