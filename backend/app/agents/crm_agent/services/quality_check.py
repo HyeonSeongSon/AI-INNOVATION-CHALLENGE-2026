@@ -20,6 +20,7 @@ import httpx
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.http_client_registry import register
 import yaml
 
 # .env 파일 로드
@@ -68,8 +69,19 @@ class QualityChecker:
         else:
             forbidden_path = root_dir / "data" / "forbidden_keyword.json"
         self.forbidden_keywords = self._load_json(forbidden_path)
-
+        self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
         logger.info("quality_checker_initialized")
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+        return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     def _load_yaml(self, file_path) -> Dict[str, Any]:
         """YAML 파일 로드"""
@@ -276,29 +288,29 @@ class QualityChecker:
         if not sentences:
             return True, []
 
-        # 각 문장을 병렬로 유사도 검색
+        # 각 문장을 병렬로 유사도 검색 (공유 클라이언트를 클로저로 캡처)
+        client = self.http_client
         async def search_sentence(sentence: str) -> List[Dict[str, Any]]:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.post(
-                        endpoint,
-                        json={
-                            "index_name": self._SEMANTIC_INDEX,
-                            "query": sentence,
-                            "top_k": self._SEMANTIC_TOP_K,
-                        },
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                    return [
-                        {
-                            "query_sentence": sentence,
-                            "matched_sentence": r.get("sentence"),
-                            "score": r.get("score", 0.0),
-                            "source": r.get("source", {}),
-                        }
-                        for r in data.get("results", [])
-                    ]
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "index_name": self._SEMANTIC_INDEX,
+                        "query": sentence,
+                        "top_k": self._SEMANTIC_TOP_K,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                return [
+                    {
+                        "query_sentence": sentence,
+                        "matched_sentence": r.get("sentence"),
+                        "score": r.get("score", 0.0),
+                        "source": r.get("source", {}),
+                    }
+                    for r in data.get("results", [])
+                ]
             except Exception as e:
                 logger.warning(
                     "semantic_search_request_failed",

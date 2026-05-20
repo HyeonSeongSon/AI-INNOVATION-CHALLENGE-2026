@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 import httpx
 from langchain_core.messages import BaseMessage
@@ -6,12 +7,25 @@ from langchain_core.messages import BaseMessage
 from .models import DataPart, Message, Task, TaskSendRequest
 from .serialization import serialize_messages
 from app.config.settings import settings
+from app.core.http_client_registry import register
 
 
 class A2AClient:
     def __init__(self, base_url: str):
         # base_url: 에이전트 prefix까지 포함 (e.g. "http://localhost:8005/a2a/recommend-product")
         self.base_url = base_url.rstrip("/")
+        self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=settings.a2a_timeout)
+        return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     async def send_task(self, session_id: str, data: dict) -> Task:
         serialized = {
@@ -26,10 +40,9 @@ class A2AClient:
             sessionId=session_id,
             message=Message(role="user", parts=[DataPart(data=serialized)]),
         )
-        async with httpx.AsyncClient(timeout=settings.a2a_timeout) as http:
-            resp = await http.post(
-                f"{self.base_url}/tasks/send",
-                json=req.model_dump(),
-            )
-            resp.raise_for_status()
+        resp = await self.http_client.post(
+            f"{self.base_url}/tasks/send",
+            json=req.model_dump(),
+        )
+        resp.raise_for_status()
         return Task(**resp.json())
