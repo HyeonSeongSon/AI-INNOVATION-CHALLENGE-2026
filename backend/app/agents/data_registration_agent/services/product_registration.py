@@ -192,7 +192,7 @@ class ProductRegistrationService:
     def __init__(self, vision_model: str | None = None, document_model: str | None = None):
         self._http_client: httpx.AsyncClient | None = None
         register(self)
-        model = Settings.chatgpt_model_name
+        model = settings.chatgpt_model_name
         self._vision_llm   = get_llm(vision_model or model,   temperature=0)
         self._document_llm = get_llm(document_model or model, temperature=0.7)
 
