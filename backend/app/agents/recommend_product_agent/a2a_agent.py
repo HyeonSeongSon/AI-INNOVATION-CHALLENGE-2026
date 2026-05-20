@@ -72,5 +72,5 @@ async def send_task(request: TaskSendRequest, req: Request):
             id=request.id,
             sessionId=request.sessionId,
             status=TaskStatus.FAILED,
-            artifacts=[{"type": "data", "data": {"error": str(e), "status": "failed"}}],
+            artifacts=[{"type": "data", "data": {"error": "상품 추천 처리 중 오류가 발생했습니다.", "status": "failed"}}],
         )
