@@ -161,34 +161,42 @@ async def create_personas_from_file(file: UploadFile = File(...), req: Request =
 
         tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
 
-        succeeded = 0
-        failed = 0
-        for _ in range(total):
-            result = await queue.get()
-            if result["success"]:
-                succeeded += 1
-            else:
-                failed += 1
-            event = {
-                "type": "progress",
-                "current": succeeded + failed,
-                "total": total,
-                "name": result.get("name"),
-                "success": result["success"],
-                "persona_id": result.get("persona_id"),
-                "error": result.get("error"),
-            }
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        try:
+            succeeded = 0
+            failed = 0
+            for _ in range(total):
+                result = await queue.get()
+                if result["success"]:
+                    succeeded += 1
+                else:
+                    failed += 1
+                event = {
+                    "type": "progress",
+                    "current": succeeded + failed,
+                    "total": total,
+                    "name": result.get("name"),
+                    "success": result["success"],
+                    "persona_id": result.get("persona_id"),
+                    "error": result.get("error"),
+                }
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        logger.info(
-            "create_personas_from_file_completed",
-            filename=file.filename,
-            total=total,
-            succeeded=succeeded,
-            failed=failed,
-        )
-        yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+            logger.info(
+                "create_personas_from_file_completed",
+                filename=file.filename,
+                total=total,
+                succeeded=succeeded,
+                failed=failed,
+            )
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+        finally:
+            for task in tasks:
+                task.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(generate(), media_type="text/event-stream")

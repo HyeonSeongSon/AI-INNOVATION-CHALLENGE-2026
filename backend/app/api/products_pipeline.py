@@ -151,34 +151,42 @@ async def register_products_from_file(file: UploadFile = File(...), request: Req
 
         tasks = [asyncio.create_task(process_and_enqueue(r)) for r in records]
 
-        succeeded = 0
-        failed = 0
-        for _ in range(total):
-            result = await queue.get()
-            if result.get("success"):
-                succeeded += 1
-            else:
-                failed += 1
-            event = {
-                "type": "progress",
-                "current": succeeded + failed,
-                "total": total,
-                "name": result.get("product_name"),
-                "success": result.get("success", False),
-                "product_id": result.get("product_id"),
-                "error": result.get("error"),
-            }
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        try:
+            succeeded = 0
+            failed = 0
+            for _ in range(total):
+                result = await queue.get()
+                if result.get("success"):
+                    succeeded += 1
+                else:
+                    failed += 1
+                event = {
+                    "type": "progress",
+                    "current": succeeded + failed,
+                    "total": total,
+                    "name": result.get("product_name"),
+                    "success": result.get("success", False),
+                    "product_id": result.get("product_id"),
+                    "error": result.get("error"),
+                }
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        logger.info(
-            "register_products_completed",
-            filename=file.filename,
-            total=total,
-            succeeded=succeeded,
-            failed=failed,
-        )
-        yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+            logger.info(
+                "register_products_completed",
+                filename=file.filename,
+                total=total,
+                succeeded=succeeded,
+                failed=failed,
+            )
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+        finally:
+            for task in tasks:
+                task.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(generate(), media_type="text/event-stream")
