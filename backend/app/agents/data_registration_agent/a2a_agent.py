@@ -46,7 +46,7 @@ async def send_task(request: TaskSendRequest, req: Request):
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
-        status = TaskStatus.FAILED if result.get("status") == "failed" else TaskStatus.COMPLETED
+        status = TaskStatus.COMPLETED if result.get("status") == "completed" else TaskStatus.FAILED
 
         _logger.info("a2a_task_completed", task_id=request.id, status=status)
 

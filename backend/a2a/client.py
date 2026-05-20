@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Optional
 
@@ -7,7 +8,10 @@ from langchain_core.messages import BaseMessage
 from .models import DataPart, Message, Task, TaskSendRequest
 from .serialization import serialize_messages
 from app.config.settings import settings
+from app.core.logging import get_logger
 from app.core.http_client_registry import register
+
+_logger = get_logger("a2a_client")
 
 
 class A2AClient:
@@ -40,9 +44,28 @@ class A2AClient:
             sessionId=session_id,
             message=Message(role="user", parts=[DataPart(data=serialized)]),
         )
-        resp = await self.http_client.post(
-            f"{self.base_url}/tasks/send",
-            json=req.model_dump(),
-        )
-        resp.raise_for_status()
-        return Task(**resp.json())
+
+        last_exc: Exception | None = None
+        for attempt in range(settings.a2a_max_retries):
+            try:
+                resp = await self.http_client.post(
+                    f"{self.base_url}/tasks/send",
+                    json=req.model_dump(),
+                )
+                resp.raise_for_status()
+                return Task(**resp.json())
+            except httpx.HTTPStatusError:
+                raise
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                last_exc = e
+                if attempt < settings.a2a_max_retries - 1:
+                    _logger.warning(
+                        "a2a_send_task_retry",
+                        url=self.base_url,
+                        attempt=attempt + 1,
+                        max_retries=settings.a2a_max_retries,
+                        error=str(e),
+                    )
+                    await asyncio.sleep(2 ** attempt)
+
+        raise last_exc

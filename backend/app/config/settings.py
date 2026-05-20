@@ -56,6 +56,7 @@ class Settings:
     generate_message_agent_url: str = os.getenv("GENERATE_MESSAGE_AGENT_URL", "http://localhost:8002")
     data_registration_agent_url: str = os.getenv("DATA_REGISTRATION_AGENT_URL", "http://localhost:8003")
     a2a_timeout: float = float(os.getenv("A2A_TIMEOUT", "120"))
+    a2a_max_retries: int = int(os.getenv("A2A_MAX_RETRIES", "3"))
 
     # CORS
     allowed_origins: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
