@@ -113,7 +113,8 @@ async def health_check(req: Request):
             async with pool.connection() as conn:
                 await conn.execute("SELECT 1")
             db_ok = True
-        except Exception:
+        except Exception as e:
+            logger.warning("health_check_db_failed", error=str(e))
             db_ok = False
 
     overall = "healthy" if (agent_ok and db_ok) else "degraded"

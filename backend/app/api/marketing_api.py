@@ -47,6 +47,9 @@ def _load_conversation_messages(conversation_id: Optional[str]) -> list:
             .all()
         )
         return [row.message_data for row in reversed(rows)]
+    except Exception as e:
+        logger.warning("load_conversation_messages_failed", conversation_id=conversation_id, error=str(e))
+        return []
     finally:
         db.close()
 
@@ -86,6 +89,9 @@ def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
         )
         db.add(conv)
         db.commit()
+    except Exception as e:
+        logger.error("create_conversation_failed", conv_id=conv_id, user_id=user_id, error=str(e))
+        raise
     finally:
         db.close()
 

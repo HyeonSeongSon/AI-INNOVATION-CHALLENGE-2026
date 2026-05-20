@@ -59,13 +59,15 @@ class CrmMessageGenerator:
         logger.info("get_product_info.start", task_count=len(tasks))
 
         fetch_tasks = [self._get_product_info(item["product_id"]) for item in tasks]
-        results = await asyncio.gather(*fetch_tasks)
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
-        enriched = [
-            {**item, "product_info": product_info}
-            for item, product_info in zip(tasks, results)
-            if product_info
-        ]
+        enriched = []
+        for item, product_info in zip(tasks, results):
+            if isinstance(product_info, Exception):
+                logger.warning("get_product_info.fetch_failed", product_id=item["product_id"], error=str(product_info))
+                continue
+            if product_info:
+                enriched.append({**item, "product_info": product_info})
 
         logger.info("get_product_info.done", fetched_count=len(enriched))
         return enriched

@@ -76,6 +76,9 @@ def create_conversation(body: CreateConversationRequest):
         db.commit()
         logger.info("conversation_created", conv_id=new_id)
         return {"id": new_id, "thread_id": new_id}
+    except Exception as e:
+        logger.error("create_conversation_failed", user_id=body.user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 생성 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -92,6 +95,9 @@ def list_conversations(user_id: str = Query(...)):
             .all()
         )
         return convs
+    except Exception as e:
+        logger.error("list_conversations_failed", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 목록 조회 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -121,6 +127,11 @@ def get_conversation(conv_id: str, limit: int = Query(default=200, le=500)):
             "last_active_at": conv.last_active_at,
             "messages": [row.message_data for row in reversed(rows)],
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_conversation_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 조회 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -146,6 +157,11 @@ def update_messages(conv_id: str, body: UpdateMessagesRequest):
 
         logger.info("conversation_messages_updated", conv_id=conv_id)
         return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_messages_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="메시지 갱신 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -164,5 +180,10 @@ def delete_conversation(conv_id: str):
 
         logger.info("conversation_deleted", conv_id=conv_id)
         return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_conversation_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 삭제 중 오류가 발생했습니다.")
     finally:
         db.close()

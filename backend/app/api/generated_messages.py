@@ -88,6 +88,9 @@ def list_generated_messages(
                 conversation_title=conv_title,
             ))
         return result
+    except Exception as e:
+        logger.error("list_generated_messages_failed", user_id=user_id, limit=limit, error=str(e))
+        raise HTTPException(status_code=500, detail="메시지 목록 조회 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -99,6 +102,9 @@ def count_generated_messages(user_id: str = Query(...)):
     try:
         total = db.query(GeneratedMessage).filter(GeneratedMessage.user_id == user_id).count()
         return {"count": total}
+    except Exception as e:
+        logger.error("count_generated_messages_failed", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="메시지 개수 조회 중 오류가 발생했습니다.")
     finally:
         db.close()
 
@@ -123,5 +129,10 @@ def get_latest(
         if not msg:
             raise HTTPException(status_code=404, detail="No generated message found")
         return msg
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_latest_failed", conversation_id=conversation_id, product_id=product_id, error=str(e))
+        raise HTTPException(status_code=500, detail="메시지 조회 중 오류가 발생했습니다.")
     finally:
         db.close()
