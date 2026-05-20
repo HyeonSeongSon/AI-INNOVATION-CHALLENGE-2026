@@ -71,6 +71,10 @@ class Settings:
     http_timeout_long: float = float(os.getenv("HTTP_TIMEOUT_LONG", "30.0"))       # 이미지 다운로드, LLM wait_for
     http_timeout_upload: float = float(os.getenv("HTTP_TIMEOUT_UPLOAD", "60.0"))   # OpenSearch 대용량 인덱싱
 
+    # LLM call timeouts (seconds)
+    llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "60.0"))           # provider HTTP layer
+    llm_call_timeout: float = float(os.getenv("LLM_CALL_TIMEOUT", "70.0")) # asyncio layer (safety net, llm_timeout보다 크게 유지)
+
     # Product recommendation tuning
     rrf_k: int = int(os.getenv("RRF_K", "60"))
     min_rrf_score_threshold: float = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))

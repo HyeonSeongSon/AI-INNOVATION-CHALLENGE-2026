@@ -11,6 +11,7 @@ from PIL import Image
 from langchain_core.messages import HumanMessage
 
 from ....core.llm_factory import get_llm
+from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import Settings, settings
 from ..prompts.multivector_document_prompts import (
     GROUP_REQUIRED_COUNTS,
@@ -123,7 +124,7 @@ async def _extract_text_from_chunks(
     })
 
     try:
-        response = await llm.ainvoke([HumanMessage(content=image_content)])
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
     except Exception as e:
         logger.error("extract_text_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
         raise
@@ -171,7 +172,7 @@ async def _extract_and_classify_from_chunks(
     })
 
     try:
-        response = await llm.ainvoke([HumanMessage(content=image_content)])
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
     except Exception as e:
         logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
         raise
@@ -361,7 +362,7 @@ class ProductRegistrationService:
 
         prompt = builder(extra_category, product_document, category_list)
         try:
-            response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+            response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
         except Exception as e:
             logger.error("build_structured_document_failed", main_category=main_category, error=str(e), exc_info=True)
             raise
@@ -400,7 +401,7 @@ class ProductRegistrationService:
 
         for attempt in range(2):
             try:
-                response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+                response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
             except Exception as e:
                 logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error=str(e), exc_info=True)
                 raise

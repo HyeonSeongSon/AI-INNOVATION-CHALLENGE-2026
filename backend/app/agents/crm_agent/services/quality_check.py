@@ -18,6 +18,7 @@ import httpx
 from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.llm_utils import ainvoke_with_timeout
 from ....core.http_client_registry import register
 from ....config.settings import settings
 import yaml
@@ -387,7 +388,7 @@ class QualityChecker:
             )
 
             judge = llm.with_structured_output(LLMJudgeOutput)
-            result: LLMJudgeOutput = await judge.ainvoke(prompt_messages)
+            result: LLMJudgeOutput = await ainvoke_with_timeout(judge, prompt_messages)
 
             scores = {
                 "accuracy": result.accuracy,

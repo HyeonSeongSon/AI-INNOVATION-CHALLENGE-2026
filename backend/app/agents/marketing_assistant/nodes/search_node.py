@@ -1,5 +1,6 @@
 from ..state import MarketingAssistantState
 from ....core.llm_factory import get_llm
+from ....core.llm_utils import ainvoke_with_timeout
 from ....core.logging import get_logger
 from ....config.settings import settings
 from langgraph.graph import END
@@ -32,7 +33,7 @@ async def search_node(state: MarketingAssistantState, config: RunnableConfig):
         llm_with_tools = llm.bind_tools(_TOOLS)
 
         # LLM이 tool call 여부 결정
-        response = await llm_with_tools.ainvoke(build_search_node_prompt(messages))
+        response = await ainvoke_with_timeout(llm_with_tools, build_search_node_prompt(messages))
 
         _logger.info(
             "search_node_llm_response",
@@ -51,7 +52,7 @@ async def search_node(state: MarketingAssistantState, config: RunnableConfig):
                         ToolMessage(content=str(result), tool_call_id=tc["id"])
                     )
 
-            final_response = await llm.ainvoke(messages + [response] + tool_messages)
+            final_response = await ainvoke_with_timeout(llm, messages + [response] + tool_messages)
             final_response.name = "search_node"
             return Command(goto=END, update={"messages": [response] + tool_messages + [final_response]})
 

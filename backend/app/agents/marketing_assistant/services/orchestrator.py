@@ -2,6 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_core.language_models import BaseChatModel
 from ....core.logging import get_logger
+from ....core.llm_utils import ainvoke_with_timeout
 from ..prompts.orchestrator_prompt import build_orchestrator_prompt
 
 logger = get_logger("orchestrator")
@@ -20,8 +21,7 @@ class Orchestrator:
         supervisor = llm.with_structured_output(RouteResponse)
         prompt_messages = build_orchestrator_prompt(messages)
         try:
-            response = supervisor.ainvoke(prompt_messages)
-            return await response
+            return await ainvoke_with_timeout(supervisor, prompt_messages)
         except Exception as e:
             logger.error("orchestrator_failed", error=str(e), exc_info=True)
             raise

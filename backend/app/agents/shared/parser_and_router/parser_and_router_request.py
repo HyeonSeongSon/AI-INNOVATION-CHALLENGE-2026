@@ -5,6 +5,7 @@ from langchain_core.messages import AnyMessage, SystemMessage
 from ..prompts.parse_prompt import build_crm_parse_prompt, build_generate_message_router_prompt
 from ....core.logging import get_logger
 from ....core.data_loader import get_categories
+from ....core.llm_utils import ainvoke_with_timeout
 logger = get_logger("parse_request")
 
 class RecommendProductRequest(BaseModel):
@@ -63,7 +64,7 @@ async def recommend_product_parser(messages: List[AnyMessage], llm: BaseChatMode
         *messages,
     ]
     try:
-        response = await parser.ainvoke(prompt_messages)
+        response = await ainvoke_with_timeout(parser, prompt_messages)
         return response.model_dump()
     except Exception as e:
         logger.error("llm_parse_failed", error=str(e), exc_info=True)
@@ -84,7 +85,7 @@ async def generate_message_router(
     parser = llm.with_structured_output(GenerateMessageRouterResult)
     prompt_messages = [SystemMessage(content=build_generate_message_router_prompt()), *messages]
     try:
-        return await parser.ainvoke(prompt_messages)
+        return await ainvoke_with_timeout(parser, prompt_messages)
     except Exception as e:
         logger.error("llm_parse_failed", error=str(e), exc_info=True)
         raise

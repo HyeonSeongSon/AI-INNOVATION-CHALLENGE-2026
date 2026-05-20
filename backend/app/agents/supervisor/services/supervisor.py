@@ -2,6 +2,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_core.language_models import BaseChatModel
 from ....core.logging import get_logger
+from ....core.llm_utils import ainvoke_with_timeout
 from ..prompts.supervisor_prompt import build_supervisor_prompt
 
 logger = get_logger("supervisor")
@@ -20,8 +21,7 @@ class Supervisor:
         supervisor_agent = llm.with_structured_output(RouteResponse)
         prompt_messages = build_supervisor_prompt(messages)
         try:
-            response = supervisor_agent.ainvoke(prompt_messages)
-            return await response
+            return await ainvoke_with_timeout(supervisor_agent, prompt_messages)
         except Exception as e:
             logger.error("supervisor_failed", error=str(e), exc_info=True)
             raise

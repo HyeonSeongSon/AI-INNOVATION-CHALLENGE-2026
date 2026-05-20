@@ -6,6 +6,7 @@ from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.data_loader import get_brand_tone
 from ....core.llm_factory import get_llm
+from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import settings
 from .product_client import ProductClient
 from ..prompts.apply_feedback_prompt import build_apply_feedback_prompt
@@ -174,7 +175,7 @@ class ApplyFeedback:
         structured_llm = _llm.with_structured_output(MessageOutput)
 
         try:
-            result: MessageOutput = await structured_llm.ainvoke(prompt_messages)
+            result: MessageOutput = await ainvoke_with_timeout(structured_llm, prompt_messages)
             improved = {"title": result.title, "message": result.message}
         except Exception as e:
             logger.warning(

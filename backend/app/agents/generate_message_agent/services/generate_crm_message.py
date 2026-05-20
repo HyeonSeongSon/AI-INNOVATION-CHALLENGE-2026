@@ -1,5 +1,6 @@
 import asyncio
 from ....core.data_loader import get_brand_tone
+from ....core.llm_utils import ainvoke_with_timeout
 from ...shared.product.product_client import ProductClient
 from ...shared.persona.persona_client import PersonaClient
 from typing import Dict, List, Optional
@@ -125,7 +126,7 @@ class CrmMessageGenerator:
         """
         logger.info("generate_crm_message.start", task_count=len(tasks))
 
-        fetch_tasks = [llm.ainvoke(item["prompt"]) for item in tasks]
+        fetch_tasks = [ainvoke_with_timeout(llm, item["prompt"]) for item in tasks]
         results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         messages = [

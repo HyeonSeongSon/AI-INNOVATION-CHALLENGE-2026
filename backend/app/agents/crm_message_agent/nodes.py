@@ -11,6 +11,7 @@ from a2a.client import A2AClient
 from a2a.models import TaskStatus
 from a2a.serialization import deserialize_messages
 from ...core.llm_factory import get_llm
+from ...core.llm_utils import ainvoke_with_timeout
 from ...core.logging import get_logger
 from ...config.settings import settings
 from .state import CRMMessageAgentState
@@ -99,7 +100,7 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     existing_summary = state.get("summary", "")
 
     try:
-        response = await llm.ainvoke(_build_summary_prompt(messages, existing_summary))
+        response = await ainvoke_with_timeout(llm, _build_summary_prompt(messages, existing_summary))
     except Exception as e:
         _logger.warning("summarize_skipped", error=str(e))
         return {}
@@ -199,7 +200,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         if not remaining:
             _logger.info("supervisor_all_done", node_name="supervisor_agent")
             try:
-                final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+                final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
             except Exception as e:
                 _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
                 return {"status": "error", "error_message": str(e)}
@@ -211,14 +212,15 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     # 첫 진입: LLM으로 전체 플랜 결정
     try:
-        decision = await llm.with_structured_output(RouteDecision).ainvoke(
+        decision = await ainvoke_with_timeout(
+            llm.with_structured_output(RouteDecision),
             build_supervisor_prompt(messages, summary)
         )
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
         try:
-            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+            final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e2:
             _logger.error("supervisor_final_answer_failed", error=str(e2), node_name="supervisor_agent")
             return {"status": "error", "error_message": str(e2)}
@@ -229,7 +231,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     if not decision.task_plan:
         try:
-            final_answer = await llm.ainvoke(build_final_answer_prompt(messages, summary))
+            final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e:
             _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
             return {"status": "error", "error_message": str(e)}

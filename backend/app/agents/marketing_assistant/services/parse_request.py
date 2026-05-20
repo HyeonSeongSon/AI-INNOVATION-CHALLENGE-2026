@@ -5,6 +5,7 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from ..prompts.parse_prompt import build_crm_parse_prompt, build_crm_message_parse_prompt, build_user_feedback_parse_prompt
 from ....core.logging import get_logger
 from ....core.data_loader import get_categories
+from ....core.llm_utils import ainvoke_with_timeout
 import json
 
 logger = get_logger("parse_request")
@@ -67,7 +68,7 @@ class MultiValueParser:
             *messages,
         ]
         try:
-            response = await parser.ainvoke(prompt_messages)
+            response = await ainvoke_with_timeout(parser, prompt_messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
@@ -86,7 +87,7 @@ class MultiValueParser:
         parser = llm.with_structured_output(CRMMessageParseResult)
         prompt_messages = [SystemMessage(content=build_crm_message_parse_prompt()), *messages]
         try:
-            response = await parser.ainvoke(prompt_messages)
+            response = await ainvoke_with_timeout(parser, prompt_messages)
             return [t.model_dump() for t in response.tasks]
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)
@@ -105,7 +106,7 @@ class MultiValueParser:
         parser = llm.with_structured_output(UserFeedbackInput)
         prompt_messages = [SystemMessage(content=build_user_feedback_parse_prompt()), *messages]
         try:
-            response = await parser.ainvoke(prompt_messages)
+            response = await ainvoke_with_timeout(parser, prompt_messages)
             return response.model_dump()
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)

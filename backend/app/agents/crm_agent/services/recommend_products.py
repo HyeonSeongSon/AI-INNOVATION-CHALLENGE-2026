@@ -5,6 +5,7 @@ from ..prompts.slot_keywords_generate_prompt import get_prompt_by_category_type
 from .slot_query_builder import validate_and_build
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.llm_utils import ainvoke_with_timeout
 from ....core.http_client_registry import register
 from ....config.settings import settings
 import json
@@ -213,7 +214,7 @@ class ProductRecommender:
 
         # 3. LLM 호출하여 분석 수행
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
         except Exception as e:
             logger.error("llm_persona_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return {
@@ -297,7 +298,7 @@ class ProductRecommender:
 
         # LLM 호출하여 멀티 쿼리 생성
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
         except Exception as e:
             logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
             return [user_input]
@@ -489,7 +490,7 @@ class ProductRecommender:
 
         # 3. LLM 호출하여 분석 수행
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
         except Exception as e:
             logger.error("llm_persona_needs_analysis_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return {
@@ -564,7 +565,7 @@ class ProductRecommender:
 
         # 4. LLM 호출
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
         except Exception as e:
             logger.error("llm_multi_query_from_needs_failed", persona_id=persona_id, error=str(e), exc_info=True)
             return [user_input]
@@ -604,7 +605,7 @@ class ProductRecommender:
 
         # LLM 호출하여 슬롯 키워드 추출
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
         except Exception as e:
             logger.error("llm_multi_query_failed", error=str(e), exc_info=True)
             return []

@@ -4,6 +4,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..prompts.crm_parse_prompt import build_crm_parse_prompt
 from ....core.logging import get_logger
+from ....core.llm_utils import ainvoke_with_timeout
 from dotenv import load_dotenv
 import os
 import json
@@ -84,7 +85,7 @@ class MultiValueParser:
             HumanMessage(content=user_input)
         ]
         try:
-            response = await parser.ainvoke(messages)
+            response = await ainvoke_with_timeout(parser, messages)
             return json.dumps(response.model_dump(), ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error("llm_parse_failed", error=str(e), exc_info=True)

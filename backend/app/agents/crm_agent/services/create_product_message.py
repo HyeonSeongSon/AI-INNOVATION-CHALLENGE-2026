@@ -10,6 +10,7 @@ from pathlib import Path
 from ..prompts.purpose_prompt import (build_purpose_bestseller_prompt, build_purpose_ingredient_efficacy_point_prompt, build_purpose_introduction_prompt, build_purpose_lifestyle_and_age_point_prompt, build_purpose_new_products_prompt, build_purpose_promotion_and_evnet_prompt, build_purpose_skintype_and_concern_point_prompt)
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
+from ....core.llm_utils import ainvoke_with_timeout
 from ....core.http_client_registry import register
 from ....config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
@@ -407,7 +408,7 @@ class ProductMessageGenerator:
             prompt = prompt_text
 
         try:
-            response = await llm.ainvoke(prompt)
+            response = await ainvoke_with_timeout(llm, prompt)
             message_content = response.content
 
             logger.info("message_generation_completed", product_name=product_name, purpose=purpose)

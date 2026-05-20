@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage
 from ..prompts.generate_query_prompt import build_persona_structured_prompt, build_generate_query_prompt
 
 from app.core.logging import get_logger
+from app.core.llm_utils import ainvoke_with_timeout
 
 logger = get_logger("generate_persona_and_query")
 
@@ -64,7 +65,7 @@ async def generate_structured_persona_info(messages: List, llm) -> Dict:
     structured_llm = llm.with_structured_output(PersonaData)
     prompt_messages = [SystemMessage(content=build_persona_structured_prompt()), *messages]
     try:
-        result = await structured_llm.ainvoke(prompt_messages)
+        result = await ainvoke_with_timeout(structured_llm, prompt_messages)
     except Exception as e:
         logger.error("generate_structured_persona_info_failed", error=str(e), exc_info=True)
         raise
@@ -96,7 +97,7 @@ async def generate_search_query(messages: List, llm) -> Dict:
     structured_llm = llm.with_structured_output(SearchQuery)
     prompt_messages = [SystemMessage(content=build_generate_query_prompt()), *messages]
     try:
-        result: SearchQuery = await structured_llm.ainvoke(prompt_messages)
+        result: SearchQuery = await ainvoke_with_timeout(structured_llm, prompt_messages)
     except Exception as e:
         logger.error("generate_search_query_failed", error=str(e), exc_info=True)
         raise

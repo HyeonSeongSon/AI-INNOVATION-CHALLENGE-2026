@@ -19,6 +19,7 @@ from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.data_loader import get_forbidden_keywords, get_brand_tone
+from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import settings
 from ....core.http_client_registry import register
 from .product_client import ProductClient
@@ -538,10 +539,7 @@ class QualityChecker:
             )
 
             judge = llm.with_structured_output(LLMJudgeOutput)
-            result: LLMJudgeOutput = await asyncio.wait_for(
-                judge.ainvoke(prompt_messages),
-                timeout=settings.http_timeout_long,
-            )
+            result: LLMJudgeOutput = await ainvoke_with_timeout(judge, prompt_messages)
 
             scores = {
                 "accuracy": result.accuracy,
