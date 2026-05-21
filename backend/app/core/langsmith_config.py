@@ -14,12 +14,12 @@ LangSmith 트레이싱은 환경 변수로 제어됩니다:
 2. LangChain 외부 함수(API 호출, 검색 등)를 위한 @traced 데코레이터
 """
 
-import os
 import asyncio
 import functools
 from typing import Any, Callable, Optional
 
 from .logging import get_logger
+from ..config.settings import settings
 
 logger = get_logger("langsmith")
 
@@ -31,9 +31,9 @@ def configure_langsmith() -> bool:
 
     애플리케이션 시작 시 한 번만 호출하세요.
     """
-    tracing_enabled = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-    api_key = os.getenv("LANGCHAIN_API_KEY")
-    project = os.getenv("LANGCHAIN_PROJECT", "default")
+    tracing_enabled = settings.langchain_tracing_v2
+    api_key = settings.langchain_api_key or None
+    project = settings.langchain_project
 
     if tracing_enabled:
         if not api_key:
@@ -46,9 +46,7 @@ def configure_langsmith() -> bool:
         logger.info(
             "langsmith_enabled",
             project=project,
-            endpoint=os.getenv(
-                "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
-            ),
+            endpoint=settings.langchain_endpoint,
         )
         return True
     else:
@@ -91,7 +89,7 @@ def traced(
         except ImportError:
             ls_available = False
 
-        if ls_available and os.getenv("LANGCHAIN_TRACING_V2", "").lower() == "true":
+        if ls_available and settings.langchain_tracing_v2:
             trace_name = name or func.__name__
             trace_metadata = metadata or {}
 

@@ -25,12 +25,16 @@ from pathlib import Path
 env_path = Path(__file__).parent.parent / "database" / ".env"
 load_dotenv(env_path)
 
+_pg_password = os.getenv("POSTGRES_PASSWORD")
+if _pg_password is None:
+    raise ValueError("POSTGRES_PASSWORD 환경변수가 설정되지 않았습니다. database/.env를 확인하세요.")
+
 DB_CONFIG = {
     "host": os.getenv("POSTGRES_HOST", "localhost"),
     "port": int(os.getenv("POSTGRES_PORT", 5432)),
     "database": os.getenv("POSTGRES_DB", "ai_innovation_db"),
     "user": os.getenv("POSTGRES_USER", "postgres"),
-    "password": os.getenv("POSTGRES_PASSWORD", ""),
+    "password": _pg_password,
 }
 
 SEPARATOR = "=" * 70

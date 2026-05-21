@@ -517,7 +517,12 @@ export default function PersonaManager() {
         for (const chunk of chunks) {
           const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
           if (!dataLine) continue;
-          const event = JSON.parse(dataLine.slice(6));
+          let event;
+          try {
+            event = JSON.parse(dataLine.slice(6));
+          } catch {
+            continue;
+          }
 
           if (event.type === 'error') {
             addToast(`생성 실패: ${event.detail}`, 'error');

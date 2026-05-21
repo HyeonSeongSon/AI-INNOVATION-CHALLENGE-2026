@@ -1,95 +1,143 @@
-import os
 from pathlib import Path
-from dotenv import load_dotenv
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# .env를 한 번만 로드
-_ENV_PATH = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=_ENV_PATH, override=True)
+ALLOWED_MODEL_PREFIXES: tuple[str, ...] = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
 
 
-class Settings:
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).parent.parent / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     # API Keys
-    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
-    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    google_api_key: str = ""
 
     # Model
-    chatgpt_model_name: str = os.getenv("CHATGPT_MODEL_NAME", "gpt-5-mini")
-    parser_model_name: str = os.getenv("PARSER_MODEL_NAME", "gpt-5-nano")
-    chatgpt_model_temperature: float = os.getenv("CHATGPT_MODEL_TEMPERATURE", 0.7)
-    parser_model_temperature: float = os.getenv("PARSER_MODEL_TEMPERATURE", 0)
+    chatgpt_model_name: str = "gpt-5-mini"
+    parser_model_name: str = "gpt-5-nano"
+    chatgpt_model_temperature: float = 0.7
+    parser_model_temperature: float = 0.0
 
     # External APIs
-    opensearch_api_url: str = os.getenv("OPENSEARCH_API_URL", "http://localhost:8010")
-    database_api_url: str = os.getenv("DATABASE_API_URL", "http://localhost:8020")
+    opensearch_api_url: str = "http://localhost:8010"
+    database_api_url: str = "http://localhost:8020"
 
     # PostgreSQL (direct)
-    postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
-    postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))
-    postgres_db: str = os.getenv("POSTGRES_DB", "ai_innovation_db")
-    postgres_user: str = os.getenv("POSTGRES_USER", "postgres")
-    postgres_password: str = os.getenv("POSTGRES_PASSWORD", "")
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "ai_innovation_db"
+    postgres_user: str = "postgres"
+    postgres_password: str = ""
 
-    # PostgreSQL (LangGraph checkpointer)
-    postgres_url: str = os.getenv("POSTGRES_URL", "")
+    # PostgreSQL (LangGraph checkpointer, mandatory)
+    postgres_url: str = ""
 
     # LangSmith
-    langchain_tracing_v2: bool = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-    langchain_api_key: str = os.getenv("LANGCHAIN_API_KEY", "")
-    langchain_project: str = os.getenv("LANGCHAIN_PROJECT", "default")
-    langchain_endpoint: str = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str = ""
+    langchain_project: str = "default"
+    langchain_endpoint: str = "https://api.smith.langchain.com"
 
     # Logging
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
-    environment: str = os.getenv("ENVIRONMENT", "production")
+    log_level: str = "INFO"
+    environment: str = "production"
 
     # App
-    app_root: str = os.getenv("APP_ROOT", "")
+    app_root: str = ""
 
     # Auth
-    auth_mode: str = os.getenv("AUTH_MODE", "api_key")  # "api_key" | "jwt"
-    service_api_key: str = os.getenv("SERVICE_API_KEY", "")
-    jwt_secret: str = os.getenv("JWT_SECRET", "")
+    auth_mode: str = "api_key"
+    service_api_key: str = ""
+    jwt_secret: str = ""
 
-    # A2A agent URLs (각 에이전트 독립 포트: 8001/8002/8003)
-    recommend_agent_url: str = os.getenv("RECOMMEND_AGENT_URL", "http://localhost:8001")
-    generate_message_agent_url: str = os.getenv("GENERATE_MESSAGE_AGENT_URL", "http://localhost:8002")
-    data_registration_agent_url: str = os.getenv("DATA_REGISTRATION_AGENT_URL", "http://localhost:8003")
-    a2a_timeout: float = float(os.getenv("A2A_TIMEOUT", "120"))
+    # A2A URLs
+    recommend_agent_url: str = "http://localhost:8001"
+    generate_message_agent_url: str = "http://localhost:8002"
+    data_registration_agent_url: str = "http://localhost:8003"
+    a2a_timeout: float = 120.0
+    a2a_max_retries: int = 3
+
+    # CORS — 환경변수에서 콤마 구분 문자열로 받아 list[str]로 파싱
+    allowed_origins: list[str] = ["http://localhost:3000"]
+
+    # Server
+    host: str = "0.0.0.0"
+    port: int = 8005
+
+    # HTTP client timeouts (seconds)
+    http_timeout_short: float = 10.0
+    http_timeout_default: float = 15.0
+    http_timeout_long: float = 30.0
+    http_timeout_upload: float = 60.0
+
+    # LLM call timeouts (seconds)
+    llm_timeout: float = 60.0
+    llm_call_timeout: float = 70.0
+    llm_document_timeout: float = 150.0
+
+    # LangGraph
+    langgraph_recursion_limit: int = 100
 
     # Product recommendation tuning
-    rrf_k: int = int(os.getenv("RRF_K", "60"))
-    min_rrf_score_threshold: float = float(os.getenv("MIN_RRF_SCORE_THRESHOLD", "0.01"))
-    min_filtered_products: int = int(os.getenv("MIN_FILTERED_PRODUCTS", "3"))
+    rrf_k: int = 60
+    min_rrf_score_threshold: float = 0.01
+    min_filtered_products: int = 3
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v: object) -> object:
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
+    @field_validator("chatgpt_model_name", "parser_model_name")
+    @classmethod
+    def validate_model_name(cls, v: str) -> str:
+        if not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(
+                f"지원하지 않는 모델명: {v}. 지원 접두사: {', '.join(ALLOWED_MODEL_PREFIXES)}"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self) -> "Settings":
+        if not self.postgres_url:
+            raise ValueError("POSTGRES_URL 환경변수가 설정되지 않았습니다.")
+        if self.auth_mode == "api_key" and not self.service_api_key:
+            raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
+        if self.auth_mode == "jwt":
+            raise NotImplementedError(
+                "AUTH_MODE=jwt는 아직 구현되지 않았습니다. 현재는 AUTH_MODE=api_key만 지원합니다."
+            )
+
+        # 설정된 모델에 필요한 API 키 검증 — 서버 시작 시점에 fail-fast
+        active_models = [self.chatgpt_model_name, self.parser_model_name]
+        openai_prefixes = ("gpt-", "o1", "o3", "o4")
+        if any(m.startswith(openai_prefixes) for m in active_models) and not self.openai_api_key:
+            raise ValueError(
+                "OpenAI 모델이 설정되어 있지만 OPENAI_API_KEY가 비어 있습니다."
+            )
+        if any(m.startswith("claude-") for m in active_models) and not self.anthropic_api_key:
+            raise ValueError(
+                "Anthropic 모델이 설정되어 있지만 ANTHROPIC_API_KEY가 비어 있습니다."
+            )
+        if any(m.startswith("gemini-") for m in active_models) and not self.google_api_key:
+            raise ValueError(
+                "Google 모델이 설정되어 있지만 GOOGLE_API_KEY가 비어 있습니다."
+            )
+
+        # LangSmith 트레이싱 활성화 시 API 키 필요
+        if self.langchain_tracing_v2 and not self.langchain_api_key:
+            raise ValueError(
+                "LANGCHAIN_TRACING_V2=true일 때 LANGCHAIN_API_KEY가 필요합니다."
+            )
+
+        return self
 
 
 settings = Settings()
-
-if not settings.postgres_url:
-    raise RuntimeError("POSTGRES_URL 환경변수가 설정되지 않았습니다.")
-
-if settings.auth_mode == "api_key" and not settings.service_api_key:
-    raise RuntimeError("SERVICE_API_KEY 환경변수가 설정되지 않았습니다.")
-
-if settings.auth_mode == "jwt" and not settings.jwt_secret:
-    raise RuntimeError("JWT_SECRET 환경변수가 설정되지 않았습니다.")
-
-if settings.auth_mode == "jwt":
-    raise RuntimeError(
-        "AUTH_MODE=jwt는 아직 구현되지 않았습니다. "
-        "현재는 AUTH_MODE=api_key만 지원합니다."
-    )
-
-_VALID_MODEL_PREFIXES = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
-
-if not any(settings.chatgpt_model_name.startswith(p) for p in _VALID_MODEL_PREFIXES):
-    raise RuntimeError(
-        f"CHATGPT_MODEL_NAME '{settings.chatgpt_model_name}'은 지원하지 않는 모델명입니다. "
-        f"지원 접두사: {', '.join(_VALID_MODEL_PREFIXES)}"
-    )
-
-if not any(settings.parser_model_name.startswith(p) for p in _VALID_MODEL_PREFIXES):
-    raise RuntimeError(
-        f"PARSER_MODEL_NAME '{settings.parser_model_name}'은 지원하지 않는 모델명입니다. "
-        f"지원 접두사: {', '.join(_VALID_MODEL_PREFIXES)}"
-    )

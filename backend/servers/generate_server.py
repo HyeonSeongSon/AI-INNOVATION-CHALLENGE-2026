@@ -11,11 +11,12 @@ from app.agents.generate_message_agent.a2a_agent import router
 from app.agents.generate_message_agent.workflow import build_workflow
 from app.core.logging import configure_logging, get_logger
 from app.core.http_client_registry import close_all
+from app.config.settings import settings
 
 configure_logging(
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_level=settings.log_level,
     json_output=True,
-    environment=os.getenv("ENVIRONMENT", "production"),
+    environment=settings.environment,
 )
 
 _logger = get_logger("generate_server")
@@ -23,13 +24,23 @@ _logger = get_logger("generate_server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.containers import GenerateMessageServices
+    from app.agents.generate_message_agent.services.generate_crm_message import CrmMessageGenerator
+    from app.agents.generate_message_agent.services.quality_check import QualityChecker
+    from app.agents.generate_message_agent.services.apply_feedback import ApplyFeedback
+
+    app.state.services = GenerateMessageServices(
+        generator=CrmMessageGenerator(),
+        checker=QualityChecker(),
+        applier=ApplyFeedback(),
+    )
     app.state.graph = build_workflow()
-    _logger.info("graph_compiled")
+    _logger.info("services_and_graph_initialized")
     yield
     await close_all()
 
 
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+_allowed_origins = settings.allowed_origins
 app = FastAPI(title="Generate Message Agent", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,

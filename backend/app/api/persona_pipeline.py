@@ -11,18 +11,17 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..agents.shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
-from ..agents.shared.persona.persona_client import PersonaClient
 from ..core.llm_factory import get_llm
-from ..config.settings import settings
+from ..config.settings import settings, ALLOWED_MODEL_PREFIXES
 from ..core.logging import get_logger
 
 logger = get_logger("persona_pipeline")
@@ -31,28 +30,19 @@ router = APIRouter(prefix="/api/pipeline", tags=["Persona Pipeline"])
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
-_persona_client: PersonaClient | None = None
-
-
-def get_persona_client() -> PersonaClient:
-    global _persona_client
-    if _persona_client is None:
-        _persona_client = PersonaClient()
-    return _persona_client
-
 
 # ──────────────────────────────────────────────────────
 # 단건 처리 (내부 공통 함수)
 # ──────────────────────────────────────────────────────
 
-async def _process_one_text(index: int, text: str, llm) -> Dict[str, Any]:
+async def _process_one_text(index: int, text: str, llm, persona_client) -> Dict[str, Any]:
     """단일 텍스트로 페르소나 생성 — bulk_persona_node._process_one과 동일한 파이프라인"""
     try:
         messages = [HumanMessage(content=text)]
         structured_persona = await generate_structured_persona_info(messages, llm)
-        persona_id = await get_persona_client().save_persona(structured_persona)
+        persona_id = await persona_client.save_persona(structured_persona)
         raw_queries = await generate_search_query(messages, llm)
-        await get_persona_client().save_product_search_query(persona_id, raw_queries)
+        await persona_client.save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,
             "success": True,
@@ -61,7 +51,7 @@ async def _process_one_text(index: int, text: str, llm) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error("persona_pipeline_record_failed", index=index, error=str(e))
-        return {"index": index, "success": False, "error": str(e), "name": None}
+        return {"index": index, "success": False, "error": "페르소나 생성 중 오류가 발생했습니다.", "name": None}
 
 
 # ──────────────────────────────────────────────────────
@@ -72,7 +62,14 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
     name_lower = filename.lower()
 
     if name_lower.endswith(".csv"):
-        text_io = io.StringIO(content.decode("utf-8-sig"))
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("euc-kr")
+            except UnicodeDecodeError:
+                raise ValueError("지원하지 않는 인코딩입니다. UTF-8 또는 EUC-KR을 사용해주세요.")
+        text_io = io.StringIO(text)
         reader = csv.DictReader(text_io)
         texts = []
         for row in reader:
@@ -89,7 +86,8 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
                 obj = json.loads(line)
                 texts.append(json.dumps(obj, ensure_ascii=False))
             except json.JSONDecodeError:
-                texts.append(line)
+                logger.warning("jsonl_parse_error", preview=line[:50])
+                continue
         return texts
 
     if name_lower.endswith(".json"):
@@ -109,14 +107,22 @@ class CreateFromTextRequest(BaseModel):
     text: str
     model: Optional[str] = None
 
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(f"지원하지 않는 모델명: {v}")
+        return v
+
 
 @router.post("/personas/create-from-text")
-async def create_persona_from_text(request: CreateFromTextRequest):
+async def create_persona_from_text(request: CreateFromTextRequest, req: Request):
     """자유 텍스트 입력으로 페르소나 1개 생성"""
+    persona_client = req.app.state.persona_client
     llm = get_llm(request.model or settings.chatgpt_model_name, temperature=0.3)
-    result = await _process_one_text(0, request.text, llm)
+    result = await _process_one_text(0, request.text, llm, persona_client)
     if not result["success"]:
-        raise HTTPException(status_code=500, detail=result.get("error", "페르소나 생성 실패"))
+        raise HTTPException(status_code=500, detail="페르소나 생성 중 오류가 발생했습니다.")
     return {
         "persona_id": result["persona_id"],
         "name": result["name"],
@@ -124,7 +130,7 @@ async def create_persona_from_text(request: CreateFromTextRequest):
 
 
 @router.post("/personas/create-from-file")
-async def create_personas_from_file(file: UploadFile = File(...)):
+async def create_personas_from_file(file: UploadFile = File(...), req: Request = None):
     """
     CSV / JSONL / JSON 파일 업로드로 페르소나 일괄 생성 (SSE 스트리밍)
 
@@ -139,8 +145,9 @@ async def create_personas_from_file(file: UploadFile = File(...)):
     try:
         texts = _parse_file_to_texts(file.filename or "", content)
     except ValueError as e:
+        logger.warning("file_parse_failed", filename=file.filename, error=str(e))
         async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': '파일 형식이 올바르지 않습니다.'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     if not texts:
@@ -150,6 +157,7 @@ async def create_personas_from_file(file: UploadFile = File(...)):
 
     total = len(texts)
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    persona_client = req.app.state.persona_client
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
@@ -158,45 +166,53 @@ async def create_personas_from_file(file: UploadFile = File(...)):
         async def process_and_enqueue(i: int, text: str):
             try:
                 async with semaphore:
-                    result = await _process_one_text(i, text, llm)
+                    result = await _process_one_text(i, text, llm, persona_client)
             except Exception as e:
                 result = {
                     "success": False,
                     "name": None,
-                    "error": str(e),
+                    "error": "페르소나 생성 중 오류가 발생했습니다.",
                 }
             await queue.put(result)
 
         tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
 
-        succeeded = 0
-        failed = 0
-        for _ in range(total):
-            result = await queue.get()
-            if result["success"]:
-                succeeded += 1
-            else:
-                failed += 1
-            event = {
-                "type": "progress",
-                "current": succeeded + failed,
-                "total": total,
-                "name": result.get("name"),
-                "success": result["success"],
-                "persona_id": result.get("persona_id"),
-                "error": result.get("error"),
-            }
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        try:
+            succeeded = 0
+            failed = 0
+            for _ in range(total):
+                result = await queue.get()
+                if result["success"]:
+                    succeeded += 1
+                else:
+                    failed += 1
+                event = {
+                    "type": "progress",
+                    "current": succeeded + failed,
+                    "total": total,
+                    "name": result.get("name"),
+                    "success": result["success"],
+                    "persona_id": result.get("persona_id"),
+                    "error": result.get("error"),
+                }
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        logger.info(
-            "create_personas_from_file_completed",
-            filename=file.filename,
-            total=total,
-            succeeded=succeeded,
-            failed=failed,
-        )
-        yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+            logger.info(
+                "create_personas_from_file_completed",
+                filename=file.filename,
+                total=total,
+                succeeded=succeeded,
+                failed=failed,
+            )
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+        finally:
+            for task in tasks:
+                task.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(generate(), media_type="text/event-stream")

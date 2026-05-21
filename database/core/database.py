@@ -24,7 +24,10 @@ class DatabaseConfig:
         self.port = int(os.getenv('POSTGRES_PORT', 5432))
         self.database = os.getenv('POSTGRES_DB', 'ai_innovation_db')
         self.user = os.getenv('POSTGRES_USER', 'postgres')
-        self.password = os.getenv('POSTGRES_PASSWORD', '')
+        password = os.getenv('POSTGRES_PASSWORD')
+        if password is None:
+            raise ValueError("POSTGRES_PASSWORD 환경변수가 설정되지 않았습니다.")
+        self.password = password
 
     @property
     def database_url(self) -> str:

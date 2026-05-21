@@ -20,7 +20,9 @@ from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.data_loader import get_forbidden_keywords, get_brand_tone
+from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import settings
+from ....core.http_client_registry import register
 from ...shared.product.product_client import ProductClient
 
 logger = get_logger("quality_check")
@@ -49,11 +51,23 @@ class QualityChecker:
     _NUM_RE = re.compile(r'[\d%]')
 
     def __init__(self):
+        self._http_client: Optional[httpx.AsyncClient] = None
+        register(self)
         self._product_client = ProductClient()
         self._forbidden_expressions: List[str] = self._extract_forbidden_expressions()
         self._kiwi = Kiwi()
         self._automaton = self._build_automaton()
         logger.info("quality_checker_initialized")
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_short))
+        return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
 
 # ============================================================
@@ -392,9 +406,8 @@ class QualityChecker:
 
         all_results: List[Dict[str, Any]] = []
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            search_tasks = [self._search_sentence(client, s, endpoint) for s in sentences]
-            results_per_sentence = await asyncio.gather(*search_tasks)
+        search_tasks = [self._search_sentence(self.http_client, s, endpoint) for s in sentences]
+        results_per_sentence = await asyncio.gather(*search_tasks)
 
         # API 오류 시 검사 불가 → 실패 처리 (컴플라이언스 의무)
         api_errors = [s for s, r in zip(sentences, results_per_sentence) if r is None]
@@ -547,10 +560,7 @@ class QualityChecker:
             ]
 
             judge = llm.with_structured_output(LLMJudgeOutput)
-            result: LLMJudgeOutput = await asyncio.wait_for(
-                judge.ainvoke(prompt_messages),
-                timeout=30,
-            )
+            result: LLMJudgeOutput = await ainvoke_with_timeout(judge, prompt_messages)
 
             scores = {
                 "accuracy": result.accuracy,
@@ -575,5 +585,5 @@ class QualityChecker:
 
         except Exception as e:
             logger.error("llm_judge_failed", error=str(e), exc_info=True)
-            return False, {"feedback": f"LLM 평가 중 오류: {str(e)}"}
+            return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
 

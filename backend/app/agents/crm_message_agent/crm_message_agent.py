@@ -1,6 +1,7 @@
 from .workflow import build_workflow
 from .state import CRMMessageAgentState
 from ...core.logging import get_logger
+from ...config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import Optional, Dict, Any, List
 
@@ -17,6 +18,7 @@ class CRMMessageAgent:
         session_id: str,
         user_id: str,
         model: Optional[str] = None,
+        services: Any = None,
     ) -> Dict:
         configurable = {
             "thread_id": thread_id,
@@ -25,7 +27,12 @@ class CRMMessageAgent:
         }
         if model:
             configurable["model"] = model
-        return {"configurable": configurable}
+        if services is not None:
+            configurable["services"] = services
+        return {
+            "configurable": configurable,
+            "recursion_limit": settings.langgraph_recursion_limit,
+        }
 
     def _extract_response_messages(self, result: Dict) -> list:
         """
@@ -69,6 +76,7 @@ class CRMMessageAgent:
         conversation_id: str,
         model: Optional[str] = None,
         file_records: Optional[List[Dict[str, Any]]] = None,
+        services: Any = None,
     ) -> Dict[str, Any]:
         """
         대화 처리
@@ -92,7 +100,7 @@ class CRMMessageAgent:
             }
         """
         thread_id = conversation_id
-        config = self._build_config(thread_id, session_id, user_id, model)
+        config = self._build_config(thread_id, session_id, user_id, model, services)
 
         initial_state: CRMMessageAgentState = {
             "messages": [HumanMessage(content=user_input)],
@@ -131,6 +139,5 @@ class CRMMessageAgent:
                 "messages": [],
                 "generated_tasks": [],
                 "regeneration_history": [],
-                "logs": [f"[ERROR] 대화 처리 실패: {str(e)}"],
-                "error": str(e),
+                "logs": ["[ERROR] 대화 처리 실패"],
             }

@@ -19,7 +19,7 @@ class ProductClient:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         return self._http_client
 
     async def aclose(self) -> None:
@@ -103,7 +103,7 @@ class ProductClient:
 
         except Exception as e:
             logger.error("search_by_combined_vector.failed", error=str(e), exc_info=True)
-            return []
+            raise
 
     @traced(name="search_opensearch", run_type="retriever")
     async def search_with_multi_queries(
@@ -161,7 +161,7 @@ class ProductClient:
                 error=str(e),
                 exc_info=True,
             )
-            return []
+            raise
 
     @traced(name="search_persona_dimensions", run_type="retriever")
     async def search_persona_dimensions(
@@ -268,7 +268,7 @@ class ProductClient:
                 error=str(e),
                 exc_info=True,
             )
-            return []
+            raise
 
     @traced(name="search_by_multivector_combined", run_type="retriever")
     async def search_by_multivector_combined(

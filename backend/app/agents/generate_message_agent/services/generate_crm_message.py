@@ -1,5 +1,6 @@
 import asyncio
 from ....core.data_loader import get_brand_tone
+from ....core.llm_utils import ainvoke_with_timeout
 from ...shared.product.product_client import ProductClient
 from ...shared.persona.persona_client import PersonaClient
 from typing import Dict, List, Optional
@@ -26,12 +27,12 @@ class CrmMessageGenerator:
         }
 
     async def get_persona_info(self, persona_id: str) -> Optional[Dict]:
-        """persona_id로 DB에서 페르소나 정보를 조회해 반환. 실패 시 None."""
+        """persona_id로 DB에서 페르소나 정보를 조회해 반환."""
         try:
             return await self._persona_client.get_persona_info(persona_id)
-        except Exception:
-            logger.warning("persona_fetch_failed", persona_id=persona_id)
-            return None
+        except Exception as e:
+            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            raise
 
     async def _get_product_info(self, product_id: str) -> dict:
         """단일 상품 ID로 DB에서 상품 정보를 조회하고 flat dict로 반환.
@@ -58,13 +59,15 @@ class CrmMessageGenerator:
         logger.info("get_product_info.start", task_count=len(tasks))
 
         fetch_tasks = [self._get_product_info(item["product_id"]) for item in tasks]
-        results = await asyncio.gather(*fetch_tasks)
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
-        enriched = [
-            {**item, "product_info": product_info}
-            for item, product_info in zip(tasks, results)
-            if product_info
-        ]
+        enriched = []
+        for item, product_info in zip(tasks, results):
+            if isinstance(product_info, Exception):
+                logger.warning("get_product_info.fetch_failed", product_id=item["product_id"], error=str(product_info))
+                continue
+            if product_info:
+                enriched.append({**item, "product_info": product_info})
 
         logger.info("get_product_info.done", fetched_count=len(enriched))
         return enriched
@@ -125,14 +128,18 @@ class CrmMessageGenerator:
         """
         logger.info("generate_crm_message.start", task_count=len(tasks))
 
-        fetch_tasks = [llm.ainvoke(item["prompt"]) for item in tasks]
-        results = await asyncio.gather(*fetch_tasks)
+        fetch_tasks = [ainvoke_with_timeout(llm, item["prompt"]) for item in tasks]
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         messages = [
             {**item, "message": message}
             for item, message in zip(tasks, results)
-            if message
+            if not isinstance(message, Exception) and message
         ]
+
+        skipped = sum(1 for r in results if isinstance(r, Exception))
+        if skipped:
+            logger.warning("generate_crm_message.partial_failure", skipped_count=skipped)
 
         logger.info("generate_crm_message.done", generated_count=len(messages))
         return messages

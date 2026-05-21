@@ -27,11 +27,11 @@ _http_client: Optional[httpx.AsyncClient] = None
 def _get_http_client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         register(_http_client)
     elif _http_client.is_closed:
         old = _http_client
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
         replace(old, _http_client)
     return _http_client
 
@@ -57,10 +57,17 @@ async def get_all_personas() -> str:
     데이터베이스에 저장된 모든 페르소나 목록을 조회합니다.
     사용자가 페르소나 목록을 보여달라고 하거나, 어떤 페르소나가 있는지 물어볼 때 사용하세요.
     """
-    client = _get_http_client()
-    response = await client.post(f"{DB_API_BASE_URL}/personas/list")
-    response.raise_for_status()
-    personas = response.json()
+    try:
+        client = _get_http_client()
+        response = await client.post(f"{DB_API_BASE_URL}/personas/list")
+        response.raise_for_status()
+        personas = response.json()
+
+    except httpx.HTTPStatusError:
+        return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+    except httpx.RequestError:
+        return "DB API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
 
     if not personas:
         return "현재 등록된 페르소나가 없습니다."
@@ -87,12 +94,11 @@ async def get_products_by_tag(tag: str) -> str:
         response.raise_for_status()
         products = response.json()
 
-    except httpx.HTTPStatusError as e:
-        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        return f"상품 조회 중 오류가 발생했습니다: {error_detail}"
+    except httpx.HTTPStatusError:
+        return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
-    except httpx.RequestError as e:
-        return f"DB API 서버 연결 실패: {str(e)}"
+    except httpx.RequestError:
+        return "DB API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
 
     if not products:
         return f"'{tag}' 태그에 해당하는 상품이 없습니다."
@@ -118,12 +124,11 @@ async def get_products_by_brand(brand: str) -> str:
         response.raise_for_status()
         products = response.json()
 
-    except httpx.HTTPStatusError as e:
-        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        return f"상품 조회 중 오류가 발생했습니다: {error_detail}"
+    except httpx.HTTPStatusError:
+        return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
-    except httpx.RequestError as e:
-        return f"DB API 서버 연결 실패: {str(e)}"
+    except httpx.RequestError:
+        return "DB API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
 
     if not products:
         return f"'{brand}' 브랜드에 해당하는 상품이 없습니다."
@@ -151,11 +156,10 @@ async def get_persona_by_id(persona_id: str) -> str:
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return f"해당 ID의 페르소나를 찾을 수 없습니다: {persona_id}"
-        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        return f"페르소나 조회 중 오류가 발생했습니다: {error_detail}"
+        return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
-    except httpx.RequestError as e:
-        return f"DB API 서버 연결 실패: {str(e)}"
+    except httpx.RequestError:
+        return "DB API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
 
     return format_get_persona_by_id(p)
 
@@ -279,11 +283,10 @@ async def search_personas_by_filter(
         )
         response.raise_for_status()
         rows = response.json()
-    except httpx.HTTPStatusError as e:
-        error_detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        return f"페르소나 검색 중 오류가 발생했습니다: {error_detail}"
-    except httpx.RequestError as e:
-        return f"DB API 서버 연결 실패: {str(e)}"
+    except httpx.HTTPStatusError:
+        return "페르소나 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+    except httpx.RequestError:
+        return "DB API 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."
 
     if not rows:
         return "조건에 맞는 페르소나가 없습니다."

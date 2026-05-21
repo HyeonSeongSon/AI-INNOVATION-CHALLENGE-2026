@@ -11,6 +11,7 @@ from PIL import Image
 from langchain_core.messages import HumanMessage
 
 from ....core.llm_factory import get_llm
+from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import Settings, settings
 from ..prompts.multivector_document_prompts import (
     GROUP_REQUIRED_COUNTS,
@@ -23,6 +24,7 @@ from .category_config import (
     resolve_extra_category,
     PROMPT_BUILDERS as _PROMPT_BUILDERS,
 )
+from ....core.http_client_registry import register
 from ....core.logging import get_logger
 
 logger = get_logger("product_registration")
@@ -38,15 +40,6 @@ MAX_CHUNKS       = 10
 # 이미지 유틸
 # ──────────────────────────────────────────────────────
 
-async def _download_image(url: str) -> Image.Image:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
-        "Referer": "https://www.amoremall.com/",
-    }
-    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-    return Image.open(io.BytesIO(response.content)).convert("RGB")
 
 
 def _split_image(image: Image.Image) -> list[Image.Image]:
@@ -130,7 +123,11 @@ async def _extract_text_from_chunks(
         ),
     })
 
-    response = await llm.ainvoke([HumanMessage(content=image_content)])
+    try:
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
+    except Exception as e:
+        logger.error("extract_text_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        raise
     return response.content
 
 
@@ -174,7 +171,11 @@ async def _extract_and_classify_from_chunks(
         ),
     })
 
-    response = await llm.ainvoke([HumanMessage(content=image_content)])
+    try:
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
+    except Exception as e:
+        logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        raise
     return _parse_llm_json(response.content)
 
 
@@ -189,9 +190,30 @@ class ProductRegistrationService:
     """
 
     def __init__(self, vision_model: str | None = None, document_model: str | None = None):
-        model = Settings.chatgpt_model_name
+        self._http_client: httpx.AsyncClient | None = None
+        register(self)
+        model = settings.chatgpt_model_name
         self._vision_llm   = get_llm(vision_model or model,   temperature=0)
         self._document_llm = get_llm(document_model or model, temperature=0.7)
+
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_long))
+        return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+
+    async def _download_image(self, url: str) -> Image.Image:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "Referer": "https://www.amoremall.com/",
+        }
+        response = await self.http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
+        response.raise_for_status()
+        return Image.open(io.BytesIO(response.content)).convert("RGB")
 
     async def create_product_document(
         self,
@@ -249,7 +271,7 @@ class ProductRegistrationService:
     # 내부 메서드
 
     async def _prepare_chunks(self, image_urls: list[str]) -> list[Image.Image]:
-        images = await asyncio.gather(*[_download_image(url) for url in image_urls])
+        images = await asyncio.gather(*[self._download_image(url) for url in image_urls])
         chunks: list[Image.Image] = []
         for img in images:
             chunks.extend(_split_image(img))
@@ -339,7 +361,15 @@ class ProductRegistrationService:
             )
 
         prompt = builder(extra_category, product_document, category_list)
-        response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+        try:
+            response = await ainvoke_with_timeout(
+                self._document_llm,
+                [HumanMessage(content=prompt)],
+                timeout=settings.llm_document_timeout,
+            )
+        except Exception as e:
+            logger.error("build_structured_document_failed", main_category=main_category, error=str(e), exc_info=True)
+            raise
         return _parse_llm_json(response.content)
 
     async def generate_multivector_document(
@@ -374,7 +404,11 @@ class ProductRegistrationService:
         prompt, group = build_multivector_prompt(structured, main_category, tag, sub_tag)
 
         for attempt in range(2):
-            response = await self._document_llm.ainvoke([HumanMessage(content=prompt)])
+            try:
+                response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
+            except Exception as e:
+                logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error=str(e), exc_info=True)
+                raise
             result = _parse_llm_json(response.content)
             errors = _validate_multivector(result, group)
             if not errors:
@@ -489,27 +523,27 @@ class ProductRegistrationService:
                 product_id=product_id,
                 group=group,
             )
-            async with httpx.AsyncClient(timeout=60) as client:
-                r = await client.post(
-                    f"{settings.opensearch_api_url}/api/product/index-multivector",
-                    json={
-                        "product_id": product_id,
-                        "group":      group,
-                        "multivector": multivector,
-                    },
-                )
-                r.raise_for_status()
-                product_data["vectordb_id"] = r.json().get("vectordb_id", {})
+            r = await self.http_client.post(
+                f"{settings.opensearch_api_url}/api/product/index-multivector",
+                json={
+                    "product_id": product_id,
+                    "group":      group,
+                    "multivector": multivector,
+                },
+                timeout=settings.http_timeout_upload,
+            )
+            r.raise_for_status()
+            product_data["vectordb_id"] = r.json().get("vectordb_id", {})
             logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 
             # 5. DB 저장 (vectordb_id 포함)
             logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
-            async with httpx.AsyncClient(timeout=30) as client:
-                r = await client.post(
-                    f"{settings.database_api_url}/api/products",
-                    json=product_data,
-                )
-                r.raise_for_status()
+            r = await self.http_client.post(
+                f"{settings.database_api_url}/api/products",
+                json=product_data,
+                timeout=settings.http_timeout_long,
+            )
+            r.raise_for_status()
 
             logger.info(
                 "register_product_success",
@@ -528,7 +562,7 @@ class ProductRegistrationService:
                 error=str(e),
                 exc_info=True,
             )
-            return {"success": False, "product_name": product_name, "error": str(e)}
+            return {"success": False, "product_name": product_name, "error": "상품 등록 중 오류가 발생했습니다."}
 
 
 # ──────────────────────────────────────────────────────
@@ -556,16 +590,3 @@ _ALL_TABLE_FIELDS = _STRUCTURED_TABLE_FIELDS | {
     "vectordb_id", "product_details", "product_created_at",
 }
 
-
-# ──────────────────────────────────────────────────────
-# 싱글턴
-# ──────────────────────────────────────────────────────
-
-_instance: ProductRegistrationService | None = None
-
-
-def get_product_registration_service() -> ProductRegistrationService:
-    global _instance
-    if _instance is None:
-        _instance = ProductRegistrationService()
-    return _instance

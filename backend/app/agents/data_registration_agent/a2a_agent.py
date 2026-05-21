@@ -38,7 +38,10 @@ async def send_task(request: TaskSendRequest, req: Request):
         "messages": messages,
         "file_records": data.get("file_records"),
     }
-    config = {"configurable": {"thread_id": request.sessionId or request.id}}
+    config = {
+        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "recursion_limit": settings.langgraph_recursion_limit,
+    }
 
     _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
 
@@ -46,7 +49,7 @@ async def send_task(request: TaskSendRequest, req: Request):
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
-        status = TaskStatus.FAILED if result.get("status") == "failed" else TaskStatus.COMPLETED
+        status = TaskStatus.COMPLETED if result.get("status") == "completed" else TaskStatus.FAILED
 
         _logger.info("a2a_task_completed", task_id=request.id, status=status)
 
@@ -70,5 +73,5 @@ async def send_task(request: TaskSendRequest, req: Request):
             id=request.id,
             sessionId=request.sessionId,
             status=TaskStatus.FAILED,
-            artifacts=[{"type": "data", "data": {"error": str(e), "status": "failed"}}],
+            artifacts=[{"type": "data", "data": {"error": "데이터 등록 처리 중 오류가 발생했습니다.", "status": "failed"}}],
         )

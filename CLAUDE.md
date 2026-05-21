@@ -200,6 +200,8 @@ result = await asyncio.to_thread(heavy_cpu_function, data)
 ### P3. 에러 처리 — 명시적이고 복구 가능한 에러
 
 **에이전트 노드**: 예외를 삼키지 말 것. 에러 상태를 state에 기록하고 supervisor로 반환.
+`str(e)` 와 `traceback.format_exc()` 는 절대 state에 포함하지 않는다 — LangGraph state는
+체크포인터 DB에 직렬화되어 저장되므로 내부 스택·경로 정보가 영구 잔류한다.
 
 ```python
 async def recommend_node(state: RecommendState, config: RunnableConfig):
@@ -207,11 +209,19 @@ async def recommend_node(state: RecommendState, config: RunnableConfig):
         result = await search_service.query(state["query"])
         return {"intermediate": {**state["intermediate"], "recommended_products": result}}
     except SearchServiceError as e:
-        logger.error("search_failed", error=str(e))
-        return Command(goto="supervisor", update={"status": "error", "error_message": str(e)})
+        logger.error("search_failed", error=str(e), exc_info=True)  # str(e)는 로그에만
+        return Command(
+            goto="supervisor",
+            update={
+                "status": "error",
+                "error": "상품 검색 중 오류가 발생했습니다.",  # 클라이언트용 고정 메시지
+                "error_details": {"node": "recommend_node"},   # traceback 금지, 노드명만
+            },
+        )
 ```
 
 **FastAPI 엔드포인트**: 구체적인 예외 타입을 잡고 적절한 HTTP 상태코드 반환.
+`HTTPException(detail=str(e))` 패턴 금지 — 내부 에러 메시지가 클라이언트에 노출된다.
 
 ```python
 @router.post("/chat/v2")
@@ -223,6 +233,14 @@ async def chat(request: ChatRequest):
     except AgentTimeoutError:
         raise HTTPException(status_code=504, detail="Agent timed out")
     # Exception은 middleware에서 처리 — 여기서 catch하지 않음
+```
+
+**A2A / 외부 서비스 에러**: `type(e).__name__` 만 로그에 기록. `str(e)` 는 URL·내부 IP 등
+인프라 정보를 포함할 수 있다.
+
+```python
+except (httpx.RequestError, httpx.TimeoutException) as e:
+    logger.warning("a2a_retry", error_type=type(e).__name__)  # str(e) 금지
 ```
 
 **에러를 silently swallow하는 패턴 금지**:
@@ -322,13 +340,22 @@ client = OpenSearch(hosts=[settings.opensearch_url])
 llm = get_llm(settings.llm_model, temperature=settings.llm_temperature)
 ```
 
-**환경변수 기본값**: 개발용 기본값은 허용, 프로덕션 시크릿은 기본값 없이 required로.
+**환경변수 기본값**: 개발용 기본값은 허용. 프로덕션 시크릿은 `model_validator`로
+서버 **시작 시점**에 검증 — 빈 문자열 기본값 + 런타임 401은 가장 나쁜 패턴이다.
 
 ```python
 class Settings(BaseSettings):
     opensearch_url: str = "http://localhost:9200"   # 로컬 기본값 OK
-    anthropic_api_key: str                           # required, 기본값 없음
-    database_url: str                                # required
+    openai_api_key: str = ""                         # 기본값 허용, 아래 validator에서 검증
+    postgres_url: str = ""
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self) -> "Settings":
+        if not self.postgres_url:
+            raise ValueError("POSTGRES_URL 환경변수가 설정되지 않았습니다.")
+        if self.chatgpt_model_name.startswith("gpt-") and not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY가 필요합니다.")
+        return self
 ```
 
 ---
@@ -359,6 +386,17 @@ sub_config = {
     }
 }
 result = await subgraph.ainvoke(input_state, sub_config)
+```
+
+**recursion_limit 필수 설정**: 모든 `ainvoke` / `astream` 호출에 명시. 기본값 25는
+supervisor 순환 흐름에서 쉽게 초과된다.
+
+```python
+config = {
+    "configurable": {"thread_id": thread_id, ...},
+    "recursion_limit": settings.langgraph_recursion_limit,  # Settings에서 중앙 관리
+}
+result = await graph.ainvoke(initial_state, config)
 ```
 
 **노드 타임아웃**: LLM 노드는 `RunnableConfig`로 타임아웃 설정.
@@ -393,6 +431,23 @@ async def event_generator():
             yield f"data: {json.dumps(event['data'])}\n\n"
 
 return StreamingResponse(event_generator(), media_type="text/event-stream")
+```
+
+**SSE + asyncio.create_task 패턴**: 태스크를 생성했으면 반드시 `finally`에서 취소.
+클라이언트가 중간에 연결을 끊으면 generator가 취소되고, `finally` 없이는 나머지 태스크가
+백그라운드에서 계속 외부 API를 호출한다.
+
+```python
+async def generate():
+    tasks = [asyncio.create_task(process(r)) for r in records]
+    try:
+        for _ in range(len(records)):
+            result = await queue.get()
+            yield f"data: {json.dumps(result)}\n\n"
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 ```
 
 **헬스체크 엔드포인트**: 항상 구현. 의존 서비스 연결 확인 포함.
@@ -446,6 +501,12 @@ async def recommend(
 - [ ] API 키, 비밀번호를 로그, state, 응답 바디에 포함하지 않음
 - [ ] CORS `allow_origins=["*"]` 금지 → 명시적 도메인 목록
 - [ ] 파일 경로를 사용자 입력으로 구성할 때 path traversal 방지
+- [ ] `str(e)` 를 HTTP 응답 body / SSE 이벤트 / LangGraph state에 포함하지 않음 → 로그에만
+- [ ] `traceback.format_exc()` 를 state["error_details"]에 저장하지 않음 → 체크포인터 DB에 잔류
+- [ ] `type(e).__name__` 만 외부 서비스 에러 로그에 기록 → `str(e)` 는 URL·IP 포함 가능
+- [ ] 사용자가 지정 가능한 모델명은 화이트리스트로 검증 (허용 접두사: `ALLOWED_MODEL_PREFIXES`)
+- [ ] LangGraph `ainvoke` / `astream` 에 `recursion_limit` 설정 (`settings.langgraph_recursion_limit`)
+- [ ] 필수 LLM API 키는 `Settings.validate_required_secrets()` 에서 서버 시작 시점에 검증
 
 ---
 

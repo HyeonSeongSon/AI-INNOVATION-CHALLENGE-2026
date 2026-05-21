@@ -5,15 +5,11 @@ from ..shared.parser_and_router.parser_and_router_request import generate_messag
 from ...config.settings import settings
 from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger, get_logger
-from .services.generate_crm_message import CrmMessageGenerator
-from .services.quality_check import QualityChecker
-from .services.apply_feedback import ApplyFeedback
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any, Union, Optional
+from typing import Dict, Any, Union
 from langgraph.types import Command
 import json
-import traceback
 
 _MAX_RETRIES = 2
 _logger = get_logger("generate_message_agent")
@@ -21,31 +17,6 @@ _logger = get_logger("generate_message_agent")
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-_generator: Optional[CrmMessageGenerator] = None
-_checker: Optional[QualityChecker] = None
-_applier: Optional[ApplyFeedback] = None
-
-
-def get_generator() -> CrmMessageGenerator:
-    global _generator
-    if _generator is None:
-        _generator = CrmMessageGenerator()
-    return _generator
-
-
-def get_checker() -> QualityChecker:
-    global _checker
-    if _checker is None:
-        _checker = QualityChecker()
-    return _checker
-
-
-def get_applier() -> ApplyFeedback:
-    global _applier
-    if _applier is None:
-        _applier = ApplyFeedback()
-    return _applier
 
 
 def _format_generated_tasks(tasks) -> str:
@@ -126,17 +97,18 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
             update["active_persona_id"] = result.persona_id
         return update
     except Exception as e:
-        logger.error("router_error", user_message=f"[router] 오류: {e}", exc_info=True)
+        logger.error("router_error", user_message="[router] 오류가 발생했습니다.", error=str(e), exc_info=True)
         return {
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": "router_node", "traceback": traceback.format_exc()},
+            "error": "라우팅 중 오류가 발생했습니다.",
+            "error_details": {"node": "router_node"},
             "decisions": {"next_node": "output_node"},
             "logs": logger.get_user_logs(),
         }
 
 
-async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
+    generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     message_llm = get_llm(model, temperature=0.7)
@@ -150,12 +122,23 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
-
-    tasks = await get_generator().get_product_info(tasks)
-    tasks = await get_generator().get_brand_tone(tasks)
-    tasks = await get_generator().get_crm_prompt(tasks, persona_info=persona_info)
-    tasks = await get_generator().generate_crm_message(tasks, message_llm)
+    try:
+        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        tasks = await generator.get_product_info(tasks)
+        tasks = await generator.get_brand_tone(tasks)
+        tasks = await generator.get_crm_prompt(tasks, persona_info=persona_info)
+        tasks = await generator.generate_crm_message(tasks, message_llm)
+    except Exception as e:
+        agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        return Command(
+            goto="output_node",
+            update={
+                "status": "failed",
+                "error": "메시지 생성 중 오류가 발생했습니다.",
+                "error_details": {"node": "generate_message_node"},
+                "logs": agent_logger.get_user_logs(),
+            },
+        )
 
     generated_tasks = [
         {
@@ -182,13 +165,20 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
 
 
 async def quality_check_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
+    services = config["configurable"]["services"]
+    generator = services.generator
+    checker = services.checker
     agent_logger = AgentLogger(state, node_name="quality_check_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     judge_llm = get_llm(model, temperature=0)
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
+    try:
+        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+    except Exception as e:
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        persona_info = None
 
     agent_logger.info(
         "quality_check_started",
@@ -200,13 +190,22 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     failed_task_ids = []
 
     for task in generated_tasks:
-        quality_check = await get_checker().check_quality(
-            message=task["message"],
-            product_id=task["product_id"],
-            purpose=task["purpose"],
-            llm=judge_llm,
-            persona_info=persona_info,
-        )
+        try:
+            quality_check = await checker.check_quality(
+                message=task["message"],
+                product_id=task["product_id"],
+                purpose=task["purpose"],
+                llm=judge_llm,
+                persona_info=persona_info,
+            )
+        except Exception as e:
+            agent_logger.error(
+                "quality_check_task_error",
+                user_message=f"[quality_check] 태스크 검사 실패 (product_id={task['product_id']})",
+                product_id=task["product_id"],
+                error=str(e),
+            )
+            quality_check = {"passed": False, "failed_stage": "quality_check_error", "failure_reason": "품질 검사 중 오류가 발생했습니다."}
         checked_tasks.append({**task, "quality_check": quality_check})
         if not quality_check["passed"]:
             failed_task_ids.append(task["product_id"])
@@ -249,35 +248,53 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             update={"status": failure_status, "failed_task_ids": failed_ids_list},
         )
 
-    applier = get_applier()
-    persona_info = await get_generator().get_persona_info(persona_id) if persona_id else None
+    services = config["configurable"]["services"]
+    applier = services.applier
+    generator = services.generator
+    try:
+        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+    except Exception as e:
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        persona_info = None
 
-    if feedback_input:
-        agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
-        raw = [{"product_id": feedback_input["product_id"], "purpose": feedback_input.get("purpose")}]
-        enriched = await get_generator().get_product_info(raw)
-        product_info = enriched[0].get("product_info", {}) if enriched else {}
-        task = {
-            "product_id": feedback_input["product_id"],
-            "purpose": feedback_input.get("purpose"),
-            "brand": product_info.get("brand", ""),
-            "product_name": product_info.get("product_name", ""),
-            "sub_tag": product_info.get("sub_tag", ""),
-            "message": {"title": feedback_input["title"], "message": feedback_input["message"]},
-            "quality_check": {
-                "failed_stage": "user_feedback",
-                "failure_reason": feedback_input["feedback"],
+    try:
+        if feedback_input:
+            agent_logger.info("user_feedback_started", user_message="사용자 피드백 적용 시작")
+            raw = [{"product_id": feedback_input["product_id"], "purpose": feedback_input.get("purpose")}]
+            enriched = await generator.get_product_info(raw)
+            product_info = enriched[0].get("product_info", {}) if enriched else {}
+            task = {
+                "product_id": feedback_input["product_id"],
+                "purpose": feedback_input.get("purpose"),
+                "brand": product_info.get("brand", ""),
+                "product_name": product_info.get("product_name", ""),
+                "sub_tag": product_info.get("sub_tag", ""),
+                "message": {"title": feedback_input["title"], "message": feedback_input["message"]},
+                "quality_check": {
+                    "failed_stage": "user_feedback",
+                    "failure_reason": feedback_input["feedback"],
+                },
+            }
+            improved = await applier.apply_feedback(task, llm=feedback_llm, product_info=product_info, persona_info=persona_info)
+            updated_tasks = [improved]
+        else:
+            agent_logger.info(
+                "auto_feedback_started",
+                user_message=f"자동 피드백 적용 시작 ({len(failed_task_ids)}개)",
+                failed_count=len(failed_task_ids),
+            )
+            updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
+    except Exception as e:
+        agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        return Command(
+            goto="output_node",
+            update={
+                "status": "failed",
+                "error": "피드백 적용 중 오류가 발생했습니다.",
+                "error_details": {"node": "message_feedback_node"},
+                "logs": agent_logger.get_user_logs(),
             },
-        }
-        improved = await applier.apply_feedback(task, llm=feedback_llm, product_info=product_info, persona_info=persona_info)
-        updated_tasks = [improved]
-    else:
-        agent_logger.info(
-            "auto_feedback_started",
-            user_message=f"자동 피드백 적용 시작 ({len(failed_task_ids)}개)",
-            failed_count=len(failed_task_ids),
         )
-        updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
 
     agent_logger.info("feedback_done", user_message="피드백 적용 완료")
 

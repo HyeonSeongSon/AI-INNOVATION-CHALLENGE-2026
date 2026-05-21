@@ -11,11 +11,12 @@ from app.agents.recommend_product_agent.a2a_agent import router
 from app.agents.recommend_product_agent.workflow import build_workflow
 from app.core.logging import configure_logging, get_logger
 from app.core.http_client_registry import close_all
+from app.config.settings import settings
 
 configure_logging(
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_level=settings.log_level,
     json_output=True,
-    environment=os.getenv("ENVIRONMENT", "production"),
+    environment=settings.environment,
 )
 
 _logger = get_logger("recommend_server")
@@ -23,13 +24,17 @@ _logger = get_logger("recommend_server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.containers import RecommendProductServices
+    from app.agents.recommend_product_agent.services.recommend_product_in_persona import ProductRecommender
+
+    app.state.services = RecommendProductServices(recommender=ProductRecommender())
     app.state.graph = build_workflow()
-    _logger.info("graph_compiled")
+    _logger.info("services_and_graph_initialized")
     yield
     await close_all()
 
 
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+_allowed_origins = settings.allowed_origins
 app = FastAPI(title="Recommend Product Agent", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,

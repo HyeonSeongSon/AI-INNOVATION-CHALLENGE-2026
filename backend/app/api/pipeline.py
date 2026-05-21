@@ -6,10 +6,11 @@ Pipeline API Router
 import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
+from app.config.settings import ALLOWED_MODEL_PREFIXES
 from app.core.database import get_db, SessionLocal
 from app.core.logging import get_logger
 from app.core.models import AnalysisResult, Persona
@@ -55,6 +56,13 @@ class PersonaCreateRequest(BaseModel):
     avoided_brands: Optional[List[str]] = Field(default=[])
     model: Optional[str] = None
 
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(f"지원하지 않는 모델명: {v}")
+        return v
+
 
 class PersonaCreateResponse(BaseModel):
     persona_id: str
@@ -65,6 +73,13 @@ class PreAnalyzeRequest(BaseModel):
     persona_id: str
     persona_data: Dict[str, Any]
     model: Optional[str] = None
+
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(f"지원하지 않는 모델명: {v}")
+        return v
 
 
 # ============================================================

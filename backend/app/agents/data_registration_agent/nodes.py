@@ -1,17 +1,30 @@
-import traceback
+import json
 from datetime import datetime, timezone
+from functools import lru_cache
 
 from langchain.agents import create_agent
+from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger
 from ...config.settings import settings
 from .state import DataRegistrationState
-from .prompts.system_prompts import get_system_prompt
+from .prompts.system_prompts import get_base_system_prompt
 from .tools import register_personas_tool, register_products_tool, create_persona_from_text_tool
 
 _TOOLS = [register_personas_tool, register_products_tool, create_persona_from_text_tool]
+
+
+@lru_cache(maxsize=8)
+def _get_data_agent(model_name: str, has_records: bool):
+    llm = get_llm(model_name, temperature=0)
+    return create_agent(
+        model=llm,
+        tools=_TOOLS,
+        system_prompt=get_base_system_prompt(has_records),
+        state_schema=DataRegistrationState,
+    )
 
 
 def _now_iso() -> str:
@@ -53,15 +66,14 @@ async def data_registration_agent_node(state: DataRegistrationState, config: Run
     }
     try:
         sample = (state.get("file_records") or [])[:2]
+        has_records = bool(sample)
         model_name = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-        llm = get_llm(model_name, temperature=0)
-        agent = create_agent(
-            model=llm,
-            tools=_TOOLS,
-            system_prompt=get_system_prompt(sample),
-            state_schema=DataRegistrationState,
+        agent = _get_data_agent(model_name, has_records)
+        sample_msg = SystemMessage(
+            content=f"샘플 레코드:\n{json.dumps(sample, ensure_ascii=False, indent=2)}"
         )
-        result = await agent.ainvoke(state, config)
+        augmented_state = {**state, "messages": [sample_msg] + list(state.get("messages", []))}
+        result = await agent.ainvoke(augmented_state, config)
 
         end_time = _now_iso()
         start_time = state.get("start_time")
@@ -83,11 +95,11 @@ async def data_registration_agent_node(state: DataRegistrationState, config: Run
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("data_registration_error", user_message=f"[{node_name}] 오류: {e}", exc_info=True)
+        logger.error("data_registration_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
         return {
             **base,
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": node_name, "traceback": traceback.format_exc()},
+            "error": "데이터 등록 중 오류가 발생했습니다.",
+            "error_details": {"node": node_name},
             "logs": logger.get_user_logs(),
         }

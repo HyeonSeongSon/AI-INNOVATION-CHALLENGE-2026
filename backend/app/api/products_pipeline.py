@@ -9,11 +9,10 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
-from ..agents.marketing_assistant.services.product_registration import get_product_registration_service
 from ..core.logging import get_logger
 
 logger = get_logger("products_pipeline")
@@ -81,7 +80,14 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
         return records
 
     if name_lower.endswith(".csv"):
-        text_io = io.StringIO(content.decode("utf-8-sig"))
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("euc-kr")
+            except UnicodeDecodeError:
+                raise ValueError("지원하지 않는 인코딩입니다. UTF-8 또는 EUC-KR을 사용해주세요.")
+        text_io = io.StringIO(text)
         reader = csv.DictReader(text_io)
         return [_normalize_record(dict(row)) for row in reader]
 
@@ -89,7 +95,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
         try:
             import openpyxl
         except ImportError as e:
-            raise ValueError("XLSX 처리를 위해 openpyxl 패키지가 필요합니다: pip install openpyxl") from e
+            raise ValueError("XLSX 파일 처리를 지원하지 않습니다. 관리자에게 문의해주세요.") from e
         wb = openpyxl.load_workbook(io.BytesIO(content))
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
@@ -107,7 +113,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
 # ──────────────────────────────────────────────────────
 
 @router.post("/products/register")
-async def register_products_from_file(file: UploadFile = File(...)):
+async def register_products_from_file(file: UploadFile = File(...), request: Request = None):
     """
     JSONL / CSV / XLSX 파일 업로드로 상품 일괄 등록 (SSE 스트리밍)
 
@@ -122,8 +128,9 @@ async def register_products_from_file(file: UploadFile = File(...)):
     try:
         records = _parse_file_to_records(file.filename or "", content)
     except ValueError as e:
+        logger.warning("file_parse_failed", filename=file.filename, error=str(e))
         async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': '파일 형식이 올바르지 않습니다.'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     if not records:
@@ -132,7 +139,7 @@ async def register_products_from_file(file: UploadFile = File(...)):
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
     total = len(records)
-    service = get_product_registration_service()
+    service = request.app.state.registration
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
@@ -145,41 +152,49 @@ async def register_products_from_file(file: UploadFile = File(...)):
             except Exception as e:
                 result = {
                     "success": False,
-                    "product_name": record.get("product_name"),
-                    "error": str(e),
+                    "product_name": record.get("상품명", ""),
+                    "error": "상품 등록 중 오류가 발생했습니다.",
                 }
             await queue.put(result)
 
         tasks = [asyncio.create_task(process_and_enqueue(r)) for r in records]
 
-        succeeded = 0
-        failed = 0
-        for _ in range(total):
-            result = await queue.get()
-            if result.get("success"):
-                succeeded += 1
-            else:
-                failed += 1
-            event = {
-                "type": "progress",
-                "current": succeeded + failed,
-                "total": total,
-                "name": result.get("product_name"),
-                "success": result.get("success", False),
-                "product_id": result.get("product_id"),
-                "error": result.get("error"),
-            }
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        try:
+            succeeded = 0
+            failed = 0
+            for _ in range(total):
+                result = await queue.get()
+                if result.get("success"):
+                    succeeded += 1
+                else:
+                    failed += 1
+                event = {
+                    "type": "progress",
+                    "current": succeeded + failed,
+                    "total": total,
+                    "name": result.get("product_name"),
+                    "success": result.get("success", False),
+                    "product_id": result.get("product_id"),
+                    "error": result.get("error"),
+                }
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-        logger.info(
-            "register_products_completed",
-            filename=file.filename,
-            total=total,
-            succeeded=succeeded,
-            failed=failed,
-        )
-        yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+            logger.info(
+                "register_products_completed",
+                filename=file.filename,
+                total=total,
+                succeeded=succeeded,
+                failed=failed,
+            )
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
+        finally:
+            for task in tasks:
+                task.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(generate(), media_type="text/event-stream")
