@@ -310,7 +310,7 @@ async def get_product_by_id(
         logging.error(f"Product ID 조회 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"조회 중 오류가 발생했습니다: {str(e)}"
+            detail="조회 중 오류가 발생했습니다."
         )
 
 
@@ -443,7 +443,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         logging.error(f"검색 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}"
+            detail="검색 중 오류가 발생했습니다."
         )
 
 
@@ -509,7 +509,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         logging.error(f"유사 문장 검색 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}"
+            detail="검색 중 오류가 발생했습니다."
         )
     
 @app.post("/api/search/combined", response_model=CombinedSearchResponse)
@@ -555,7 +555,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
 
     except Exception as e:
         logging.error(f"combined_vector 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
 @app.post("/api/search/by-field", response_model=FieldSearchResponse)
@@ -609,7 +609,7 @@ async def search_by_field(request: FieldSearchRequest):
 
     except Exception as e:
         logging.error(f"by-field 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
 @app.post("/api/search/multivector", response_model=MultiVectorSearchResponse)
@@ -657,7 +657,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
 
     except Exception as e:
         logging.error(f"multivector 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
 _MULTIVECTOR_FIELD_NAMES = ["combined", "function_desc", "attribute_desc", "target_user", "spec_feature"]
@@ -718,7 +718,7 @@ async def index_multivector(request: IndexMultivectorRequest):
 
     except Exception as e:
         logging.error(f"멀티벡터 색인 중 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"색인 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="색인 중 오류가 발생했습니다.")
 
 
 if __name__ == "__main__":

@@ -7,10 +7,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
-from ..core.database import SessionLocal
+from ..core.database import get_db
 from ..core.models import Conversation, ConversationMessage
 from ..core.logging import get_logger
 
@@ -59,10 +60,9 @@ class UpdateMessagesRequest(BaseModel):
 # ============================================================
 
 @router.post("", status_code=201)
-def create_conversation(body: CreateConversationRequest):
+def create_conversation(body: CreateConversationRequest, db: Session = Depends(get_db)):
     """새 대화 세션 미리 생성 — 첫 메시지 전송 전 conv_id 확보용"""
     new_id = str(uuid.uuid4())
-    db = SessionLocal()
     try:
         conv = Conversation(
             id=new_id,
@@ -78,14 +78,11 @@ def create_conversation(body: CreateConversationRequest):
     except Exception as e:
         logger.error("create_conversation_failed", user_id=body.user_id, error=str(e))
         raise HTTPException(status_code=500, detail="대화 생성 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.get("", response_model=List[ConversationSummary])
-def list_conversations(user_id: str = Query(...)):
+def list_conversations(user_id: str = Query(...), db: Session = Depends(get_db)):
     """사용자의 대화 목록 조회 (최신순, messages 필드 제외)"""
-    db = SessionLocal()
     try:
         convs = (
             db.query(Conversation)
@@ -97,14 +94,11 @@ def list_conversations(user_id: str = Query(...)):
     except Exception as e:
         logger.error("list_conversations_failed", user_id=user_id, error=str(e))
         raise HTTPException(status_code=500, detail="대화 목록 조회 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-def get_conversation(conv_id: str, limit: int = Query(default=200, le=500)):
+def get_conversation(conv_id: str, limit: int = Query(default=200, le=500), db: Session = Depends(get_db)):
     """대화 상세 조회 (messages 포함, 최근 limit건)"""
-    db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
@@ -131,14 +125,11 @@ def get_conversation(conv_id: str, limit: int = Query(default=200, le=500)):
     except Exception as e:
         logger.error("get_conversation_failed", conv_id=conv_id, error=str(e))
         raise HTTPException(status_code=500, detail="대화 조회 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.put("/{conv_id}/messages")
-def update_messages(conv_id: str, body: UpdateMessagesRequest):
+def update_messages(conv_id: str, body: UpdateMessagesRequest, db: Session = Depends(get_db)):
     """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
-    db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
@@ -161,14 +152,11 @@ def update_messages(conv_id: str, body: UpdateMessagesRequest):
     except Exception as e:
         logger.error("update_messages_failed", conv_id=conv_id, error=str(e))
         raise HTTPException(status_code=500, detail="메시지 갱신 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.delete("/{conv_id}")
-def delete_conversation(conv_id: str):
+def delete_conversation(conv_id: str, db: Session = Depends(get_db)):
     """대화 삭제"""
-    db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
@@ -184,5 +172,3 @@ def delete_conversation(conv_id: str):
     except Exception as e:
         logger.error("delete_conversation_failed", conv_id=conv_id, error=str(e))
         raise HTTPException(status_code=500, detail="대화 삭제 중 오류가 발생했습니다.")
-    finally:
-        db.close()

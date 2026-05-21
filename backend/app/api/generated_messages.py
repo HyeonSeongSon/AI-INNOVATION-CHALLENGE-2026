@@ -5,10 +5,11 @@
 
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
-from ..core.database import SessionLocal
+from ..core.database import get_db
 from ..core.models import Conversation, GeneratedMessage
 from ..core.logging import get_logger
 
@@ -59,9 +60,9 @@ class GeneratedMessageResponse(BaseModel):
 def list_generated_messages(
     user_id: str = Query(...),
     limit: int = Query(10),
+    db: Session = Depends(get_db),
 ):
     """user_id 기준 최근 생성 메시지 목록 조회 (최신순)"""
-    db = SessionLocal()
     try:
         rows = (
             db.query(GeneratedMessage, Conversation.title.label("conversation_title"))
@@ -89,31 +90,26 @@ def list_generated_messages(
     except Exception as e:
         logger.error("list_generated_messages_failed", user_id=user_id, limit=limit, error=str(e))
         raise HTTPException(status_code=500, detail="메시지 목록 조회 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.get("/count")
-def count_generated_messages(user_id: str = Query(...)):
+def count_generated_messages(user_id: str = Query(...), db: Session = Depends(get_db)):
     """user_id 기준 생성 메시지 총 개수 조회"""
-    db = SessionLocal()
     try:
         total = db.query(GeneratedMessage).filter(GeneratedMessage.user_id == user_id).count()
         return {"count": total}
     except Exception as e:
         logger.error("count_generated_messages_failed", user_id=user_id, error=str(e))
         raise HTTPException(status_code=500, detail="메시지 개수 조회 중 오류가 발생했습니다.")
-    finally:
-        db.close()
 
 
 @router.get("/latest", response_model=GeneratedMessageResponse)
 def get_latest(
     conversation_id: str = Query(...),
     product_id: str = Query(...),
+    db: Session = Depends(get_db),
 ):
     """conversation_id + product_id 기준 가장 최근 생성 메시지 조회"""
-    db = SessionLocal()
     try:
         msg = (
             db.query(GeneratedMessage)
@@ -132,5 +128,3 @@ def get_latest(
     except Exception as e:
         logger.error("get_latest_failed", conversation_id=conversation_id, product_id=product_id, error=str(e))
         raise HTTPException(status_code=500, detail="메시지 조회 중 오류가 발생했습니다.")
-    finally:
-        db.close()

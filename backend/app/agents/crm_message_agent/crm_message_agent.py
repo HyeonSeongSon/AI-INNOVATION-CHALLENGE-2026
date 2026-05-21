@@ -135,6 +135,5 @@ class CRMMessageAgent:
                 "messages": [],
                 "generated_tasks": [],
                 "regeneration_history": [],
-                "logs": [f"[ERROR] 대화 처리 실패: {str(e)}"],
-                "error": str(e),
+                "logs": ["[ERROR] 대화 처리 실패"],
             }

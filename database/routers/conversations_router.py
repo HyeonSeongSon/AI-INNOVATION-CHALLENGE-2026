@@ -8,10 +8,11 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from core.database import SessionLocal
+from core.database import get_db
 from core.models import Conversation, ConversationMessage
 
 logger = logging.getLogger("conversations_api")
@@ -60,109 +61,89 @@ class UpdateMessagesRequest(BaseModel):
 # ============================================================
 
 @router.post("", status_code=201)
-def create_conversation(body: CreateConversationRequest):
+def create_conversation(body: CreateConversationRequest, db: Session = Depends(get_db)):
     """새 대화 세션 미리 생성 — 첫 메시지 전송 전 conv_id 확보용"""
     new_id = str(uuid.uuid4())
-    db = SessionLocal()
-    try:
-        conv = Conversation(
-            id=new_id,
-            user_id=body.user_id,
-            thread_id=new_id,
-            session_id=body.session_id,
-            title=body.title or "새 대화",
-        )
-        db.add(conv)
-        db.commit()
-        logger.info("conversation_created | conv_id=%s", new_id)
-        return {"id": new_id, "thread_id": new_id}
-    finally:
-        db.close()
+    conv = Conversation(
+        id=new_id,
+        user_id=body.user_id,
+        thread_id=new_id,
+        session_id=body.session_id,
+        title=body.title or "새 대화",
+    )
+    db.add(conv)
+    db.commit()
+    logger.info("conversation_created | conv_id=%s", new_id)
+    return {"id": new_id, "thread_id": new_id}
 
 
 @router.get("", response_model=List[ConversationSummary])
-def list_conversations(user_id: str = Query(...)):
+def list_conversations(user_id: str = Query(...), db: Session = Depends(get_db)):
     """사용자의 대화 목록 조회 (최신순, messages 필드 제외)"""
-    db = SessionLocal()
-    try:
-        convs = (
-            db.query(Conversation)
-            .filter(Conversation.user_id == user_id)
-            .order_by(Conversation.last_active_at.desc())
-            .all()
-        )
-        return convs
-    finally:
-        db.close()
+    convs = (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user_id)
+        .order_by(Conversation.last_active_at.desc())
+        .all()
+    )
+    return convs
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-def get_conversation(conv_id: str, limit: int = Query(default=200, le=500)):
+def get_conversation(conv_id: str, limit: int = Query(default=200, le=500), db: Session = Depends(get_db)):
     """대화 상세 조회 (messages 포함, 최근 limit건)"""
-    db = SessionLocal()
-    try:
-        conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        rows = (
-            db.query(ConversationMessage)
-            .filter(ConversationMessage.conversation_id == conv_id)
-            .order_by(ConversationMessage.id.desc())
-            .limit(limit)
-            .all()
-        )
-        return {
-            "id": conv.id,
-            "user_id": conv.user_id,
-            "thread_id": conv.thread_id,
-            "session_id": conv.session_id,
-            "title": conv.title,
-            "created_at": conv.created_at,
-            "last_active_at": conv.last_active_at,
-            "messages": [row.message_data for row in reversed(rows)],
-        }
-    finally:
-        db.close()
+    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    rows = (
+        db.query(ConversationMessage)
+        .filter(ConversationMessage.conversation_id == conv_id)
+        .order_by(ConversationMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "id": conv.id,
+        "user_id": conv.user_id,
+        "thread_id": conv.thread_id,
+        "session_id": conv.session_id,
+        "title": conv.title,
+        "created_at": conv.created_at,
+        "last_active_at": conv.last_active_at,
+        "messages": [row.message_data for row in reversed(rows)],
+    }
 
 
 @router.put("/{conv_id}/messages")
-def update_messages(conv_id: str, body: UpdateMessagesRequest):
+def update_messages(conv_id: str, body: UpdateMessagesRequest, db: Session = Depends(get_db)):
     """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
-    db = SessionLocal()
-    try:
-        conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
-        db.query(ConversationMessage).filter(
-            ConversationMessage.conversation_id == conv_id
-        ).delete()
-        for msg in body.messages:
-            db.add(ConversationMessage(conversation_id=conv_id, message_data=msg))
-        if body.title:
-            conv.title = body.title
-        conv.last_active_at = datetime.now(timezone.utc)
-        db.commit()
+    db.query(ConversationMessage).filter(
+        ConversationMessage.conversation_id == conv_id
+    ).delete()
+    for msg in body.messages:
+        db.add(ConversationMessage(conversation_id=conv_id, message_data=msg))
+    if body.title:
+        conv.title = body.title
+    conv.last_active_at = datetime.now(timezone.utc)
+    db.commit()
 
-        logger.info("conversation_messages_updated | conv_id=%s", conv_id)
-        return {"status": "ok"}
-    finally:
-        db.close()
+    logger.info("conversation_messages_updated | conv_id=%s", conv_id)
+    return {"status": "ok"}
 
 
 @router.delete("/{conv_id}")
-def delete_conversation(conv_id: str):
+def delete_conversation(conv_id: str, db: Session = Depends(get_db)):
     """대화 삭제"""
-    db = SessionLocal()
-    try:
-        conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-        if not conv:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
-        db.delete(conv)
-        db.commit()
+    db.delete(conv)
+    db.commit()
 
-        logger.info("conversation_deleted | conv_id=%s", conv_id)
-        return {"status": "ok"}
-    finally:
-        db.close()
+    logger.info("conversation_deleted | conv_id=%s", conv_id)
+    return {"status": "ok"}
