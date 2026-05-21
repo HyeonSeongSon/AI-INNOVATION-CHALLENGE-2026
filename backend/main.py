@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
+from app.api import auth_router
+from app.api import conversations
 from app.api import generated_messages
 from app.api import products_pipeline
 from app.api import persona_pipeline
@@ -85,6 +87,8 @@ app.add_middleware(
 )
 
 # 라우터 등록
+app.include_router(auth_router.router)
+app.include_router(conversations.router)
 app.include_router(generated_messages.router)
 app.include_router(products_pipeline.router)
 app.include_router(persona_pipeline.router)

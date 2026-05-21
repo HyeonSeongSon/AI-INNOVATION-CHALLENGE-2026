@@ -27,6 +27,7 @@ services:
       RECOMMEND_AGENT_URL: http://recommend-agent:8001
       GENERATE_MESSAGE_AGENT_URL: http://generate-agent:8002
       DATA_REGISTRATION_AGENT_URL: http://data-registration-agent:8003
+      AUTH_MODE: jwt
     ports:
       - "8005:8005"
     depends_on:

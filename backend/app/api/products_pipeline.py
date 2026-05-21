@@ -9,11 +9,13 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import Any, Dict, List
 
+from ..core.auth import UserContext
 from ..core.logging import get_logger
+from .deps import require_admin
 
 logger = get_logger("products_pipeline")
 
@@ -113,7 +115,11 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
 # ──────────────────────────────────────────────────────
 
 @router.post("/products/register")
-async def register_products_from_file(file: UploadFile = File(...), request: Request = None):
+async def register_products_from_file(
+    file: UploadFile = File(...),
+    request: Request = None,
+    current_user: UserContext = Depends(require_admin),
+):
     """
     JSONL / CSV / XLSX 파일 업로드로 상품 일괄 등록 (SSE 스트리밍)
 

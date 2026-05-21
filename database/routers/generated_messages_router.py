@@ -84,15 +84,13 @@ class FilterOptions(BaseModel):
 # ============================================================
 
 @router.get("/filter-options", response_model=FilterOptions)
-def get_filter_options(user_id: str = Query(...), db: Session = Depends(get_db)):
-    """user_id 기준 필터 드롭다운용 distinct 값 목록 조회"""
+def get_filter_options(user_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """user_id 기준 필터 드롭다운용 distinct 값 목록 조회 (user_id 없으면 전체)"""
     def _distinct_values(col):
-        rows = (
-            db.query(col)
-            .filter(GeneratedMessage.user_id == user_id, col.isnot(None), col != "")
-            .distinct()
-            .all()
-        )
+        q = db.query(col).filter(col.isnot(None), col != "")
+        if user_id:
+            q = q.filter(GeneratedMessage.user_id == user_id)
+        rows = q.distinct().all()
         return sorted([r[0] for r in rows])
 
     brands = _distinct_values(GeneratedMessage.brand)
@@ -104,7 +102,7 @@ def get_filter_options(user_id: str = Query(...), db: Session = Depends(get_db))
 
 @router.get("", response_model=GeneratedMessageFilterResponse)
 def list_generated_messages(
-    user_id: str = Query(...),
+    user_id: Optional[str] = Query(None),
     limit: int = Query(20),
     offset: int = Query(0),
     brand: Optional[str] = Query(None),
@@ -114,8 +112,10 @@ def list_generated_messages(
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """user_id 기준 생성 메시지 목록 조회 (필터링 + 페이지네이션 지원)"""
-    query = db.query(GeneratedMessage).filter(GeneratedMessage.user_id == user_id)
+    """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)"""
+    query = db.query(GeneratedMessage)
+    if user_id:
+        query = query.filter(GeneratedMessage.user_id == user_id)
 
     if brand:
         query = query.filter(GeneratedMessage.brand == brand)

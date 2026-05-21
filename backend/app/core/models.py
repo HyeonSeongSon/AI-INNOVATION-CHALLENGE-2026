@@ -10,7 +10,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, DECIMAL, TIMESTAMP, SmallInteger, Boolean, Numeric,
     ForeignKey, ARRAY, UniqueConstraint, JSON, BigInteger, Index
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func, text
 
@@ -67,6 +67,9 @@ class Persona(Base):
 
     # AI 요약
     persona_summary = Column(Text)
+
+    # 생성자
+    user_id = Column(String(100), nullable=True, index=True)
 
     # 타임스탬프
     persona_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
@@ -269,3 +272,48 @@ class GeneratedMessage(Base):
 
     def __repr__(self):
         return f"<GeneratedMessage(id='{self.id}', product_id='{self.product_id}', user_id='{self.user_id}')>"
+
+
+# ============================================================
+# 7. User Table
+# ============================================================
+
+class User(Base):
+    """사용자 계정 테이블"""
+    __tablename__ = 'users'
+
+    id            = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email         = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    role          = Column(String(20), nullable=False, default='user')  # 'admin' | 'user'
+    is_active     = Column(Boolean, nullable=False, default=True)
+    created_at    = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at    = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id='{self.id}', email='{self.email}', role='{self.role}')>"
+
+
+# ============================================================
+# 8. RefreshToken Table
+# ============================================================
+
+class RefreshToken(Base):
+    """Refresh Token 저장 테이블 (raw 값 아닌 SHA-256 해시만 저장)"""
+    __tablename__ = 'refresh_tokens'
+
+    id         = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id    = Column(PG_UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    token_hash = Column(String(255), nullable=False, unique=True)
+    expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    revoked    = Column(Boolean, nullable=False, default=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    user_agent = Column(Text)
+    ip_address = Column(String(45))
+
+    user = relationship("User", back_populates="refresh_tokens")
+
+    def __repr__(self):
+        return f"<RefreshToken(id='{self.id}', user_id='{self.user_id}', revoked={self.revoked})>"

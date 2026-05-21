@@ -3,8 +3,8 @@ import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FileText, Search, RotateCcw, ChevronLeft, ChevronRight, X, Trash2, Copy, Check } from 'lucide-react';
 import { dbApi } from '../api';
+import { useAuth } from '../context/AuthContext';
 
-const USER_ID = 'son';
 const LIMIT = 20;
 
 // ============================================================
@@ -497,6 +497,7 @@ function formatDateTime(dt) {
 
 export default function GeneratedMessages() {
   const location = useLocation();
+  const { user } = useAuth();
 
   const [filterOptions, setFilterOptions] = useState({ brands: [], product_tags: [], purposes: [] });
   const [filters, setFilters] = useState({ brand: '', sub_tag: '', purpose: '', start_date: '', end_date: '' });
@@ -521,7 +522,7 @@ export default function GeneratedMessages() {
         Object.entries(filterParams).filter(([, v]) => v)
       );
       const params = {
-        user_id: USER_ID,
+        ...(user?.role !== 'admin' && { user_id: user?.id }),
         limit: LIMIT,
         offset: (targetPage - 1) * LIMIT,
         ...cleanParams,
@@ -534,16 +535,17 @@ export default function GeneratedMessages() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // 페이지 진입 시 필터 옵션 + 전체 데이터 초기 로드
   useEffect(() => {
-    dbApi.get('/generated-messages/filter-options', { params: { user_id: USER_ID } })
+    if (!user) return;
+    dbApi.get('/generated-messages/filter-options', { params: user.role !== 'admin' ? { user_id: user.id } : {} })
       .then(res => setFilterOptions(res.data))
       .catch(err => console.error('필터 옵션 로드 실패:', err));
 
     doFetch({}, 1);
-  }, [doFetch]);
+  }, [doFetch, user]);
 
   // Home에서 넘어온 메시지가 있으면 모달 자동 오픈
   useEffect(() => {

@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star, Upload, Sparkles } from 'lucide-react';
 import { dbApi } from '../api';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 import brandsData from '../../data/brands.json';
 import categoryData from '../../data/category.json';
 
@@ -734,6 +735,8 @@ function getSubTagsForCategory(category) {
 const EMPTY_FILTERS = { search: '', brand: '', category: '', sub_tag: '', min_price: '', max_price: '', min_discount: '' };
 
 export default function Products() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -892,9 +895,11 @@ export default function Products() {
           <h1>상품 목록</h1>
           <TotalBadge>총 {total.toLocaleString()}개</TotalBadge>
         </div>
-        <RegisterButton onClick={() => { setShowRegisterModal(true); setUploadFile(null); setRegisterProgress(null); }}>
-          <Upload size={15} /> 상품 등록
-        </RegisterButton>
+        {isAdmin && (
+          <RegisterButton onClick={() => { setShowRegisterModal(true); setUploadFile(null); setRegisterProgress(null); }}>
+            <Upload size={15} /> 상품 등록
+          </RegisterButton>
+        )}
       </PageHeader>
 
       {/* 필터 바 */}

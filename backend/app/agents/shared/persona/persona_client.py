@@ -102,12 +102,15 @@ class PersonaClient:
             raise
         
     @traced(name="save_persona", run_type="tool")
-    async def save_persona(self, persona_data: Dict[str, Any]) -> str:
+    async def save_persona(self, persona_data: Dict[str, Any], user_id: str | None = None) -> str:
         """페르소나 정보를 DB에 저장하고 persona_id 반환"""
         try:
+            payload = {**persona_data}
+            if user_id:
+                payload["user_id"] = user_id
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas",
-                json=persona_data,
+                json=payload,
             )
             response.raise_for_status()
             result = response.json()

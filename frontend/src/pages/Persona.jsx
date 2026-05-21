@@ -7,6 +7,7 @@ import {
 
 import { useToast } from '../components/Toast';
 import api, { pipelineApi } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -354,6 +355,7 @@ function formatDate(dt) {
 
 export default function PersonaManager() {
   const location = useLocation();
+  const { user } = useAuth();
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -381,7 +383,10 @@ export default function PersonaManager() {
   const fetchPersonas = async () => {
     setLoading(true);
     try {
-      const response = await pipelineApi.post('/personas/list');
+      const response = await pipelineApi.post('/personas/list', {
+        user_id: user?.role === 'admin' ? undefined : user?.id,
+        role: user?.role,
+      });
       const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
       const formatted = rawData.map(p => ({
         ...p,

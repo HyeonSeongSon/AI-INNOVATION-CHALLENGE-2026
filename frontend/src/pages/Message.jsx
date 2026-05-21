@@ -14,12 +14,11 @@ import {
 // API 및 Context
 import api, { pipelineApi, dbApi } from '../api';
 import { useChat } from '../context/ChatContext';
+import { useAuth } from '../context/AuthContext';
 
 // 브랜드 / 카테고리 데이터
 import brandsData from '../data/brands.json';
 import categoriesData from '../data/categories.json';
-
-const USER_ID = 'son';
 
 /* --- [1] 스타일 컴포넌트 --- */
 const Container = styled.div` display: flex; height: calc(100vh - 100px); gap: 24px; max-width: 1400px; margin: 0 auto; `;
@@ -235,6 +234,9 @@ export default function Message() {
   const { convId } = useParams();
   const navigate = useNavigate();
 
+  // Auth
+  const { user } = useAuth();
+
   // ChatContext — 대화 목록 + in-flight 상태 관리
   const { saveMessages, loadConversations, activeConvs, setPendingConv, clearPendingConv } = useChat();
 
@@ -353,9 +355,9 @@ export default function Message() {
     // (clearPendingConv 후 effect 재실행 시 중복 로드 방지)
     if (loadedFromActive.current) return;
 
-    // DB에서 로드
+    // DB에서 로드 (포트 8005 — JWT 쿠키 인증)
     setIsConvLoading(true);
-    dbApi.get(`/conversations/${convId}`)
+    api.get(`/conversations/${convId}`)
       .then(res => {
         setMessages(res.data.messages || []);
         setThreadId(res.data.thread_id || null);
@@ -371,7 +373,10 @@ export default function Message() {
     loadConversations();
     const fetchPersonas = async () => {
       try {
-        const response = await pipelineApi.post('/personas/list');
+        const response = await pipelineApi.post('/personas/list', {
+          user_id: user?.role === 'admin' ? undefined : user?.id,
+          role: user?.role,
+        });
         const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
         const pData = rawData.map(p => ({
           ...p,
@@ -410,9 +415,8 @@ export default function Message() {
 
     try {
       if (!targetConvId) {
-        // 새 대화: DB에 레코드 미리 생성 → convId 확보
-        const created = await dbApi.post('/conversations', {
-          user_id: USER_ID,
+        // 새 대화: DB에 레코드 미리 생성 → convId 확보 (포트 8005 — JWT 쿠키 인증)
+        const created = await api.post('/conversations', {
           session_id: currentSessionId,
           title: text.slice(0, 40),
         });
@@ -433,7 +437,7 @@ export default function Message() {
         user_input: text,
         session_id: currentSessionId,
         conversation_id: targetConvId,
-      }, { headers: { 'X-User-Id': USER_ID } });
+      }, { headers: { 'X-User-Id': user?.id } });
 
       const result = response.data;
 
@@ -517,8 +521,8 @@ export default function Message() {
 
     try {
       if (!targetConvId) {
-        const created = await dbApi.post('/conversations', {
-          user_id: USER_ID, session_id: currentSessionId, title: userMsgText.slice(0, 40),
+        const created = await api.post('/conversations', {
+          session_id: currentSessionId, title: userMsgText.slice(0, 40),
         });
         targetConvId = created.data.id;
         await loadConversations();
@@ -535,7 +539,7 @@ export default function Message() {
         session_id: currentSessionId,
         conversation_id: targetConvId,
         file_records: records,
-      }, { headers: { 'X-User-Id': USER_ID } });
+      }, { headers: { 'X-User-Id': user?.id } });
 
       const result = response.data;
       const aiText = result.messages?.[0]?.content || result.messages?.[0]?.text || '처리가 완료되었습니다.';

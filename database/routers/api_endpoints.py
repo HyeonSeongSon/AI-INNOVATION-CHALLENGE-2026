@@ -32,6 +32,12 @@ def _build_ai_analysis(persona_summary: str | None) -> dict | None:
 # Pydantic Models
 # ============================================================
 
+class PersonaListRequest(BaseModel):
+    """페르소나 목록 조회 요청"""
+    user_id: Optional[str] = Field(None, description="조회할 사용자 ID (없으면 전체 조회)")
+    role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
+
+
 class PersonaCreate(BaseModel):
     """페르소나 생성 요청"""
     name: str = Field(..., description="이름", examples=["김지현"])
@@ -62,6 +68,7 @@ class PersonaCreate(BaseModel):
     preferred_brands: Optional[List[str]] = Field(default=[], description="선호 브랜드", examples=[["설화수"]])
     avoided_brands: Optional[List[str]] = Field(default=[], description="기피 브랜드", examples=[])
     persona_summary: Optional[str] = Field(None, description="AI 생성 페르소나 요약")
+    user_id: Optional[str] = Field(None, description="생성자 사용자 ID")
 
 
 class AnalysisResultCreate(BaseModel):
@@ -381,10 +388,18 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
 
 
 @router.post("/personas/list", response_model=List[PersonaDetailResponse], summary="전체 페르소나 목록 조회")
-async def list_personas(db: Session = Depends(get_db)):
+async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: Session = Depends(get_db)):
     from core.models import Persona
+    from sqlalchemy import or_
 
-    personas = db.query(Persona).order_by(Persona.persona_created_at.desc()).all()
+    query = db.query(Persona)
+    # admin이 아니고 user_id가 있으면: 본인 것 + admin 것(user_id IS NULL) 조회
+    if request.role != "admin" and request.user_id:
+        query = query.filter(
+            or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
+        )
+
+    personas = query.order_by(Persona.persona_created_at.desc()).all()
 
     return [
         PersonaDetailResponse(

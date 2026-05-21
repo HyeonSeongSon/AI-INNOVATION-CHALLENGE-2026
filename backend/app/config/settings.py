@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     auth_mode: str = "api_key"
     service_api_key: str = ""
     jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 15
+    jwt_refresh_token_expire_days: int = 7
 
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
@@ -111,9 +114,10 @@ class Settings(BaseSettings):
         if self.auth_mode == "api_key" and not self.service_api_key:
             raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
         if self.auth_mode == "jwt":
-            raise NotImplementedError(
-                "AUTH_MODE=jwt는 아직 구현되지 않았습니다. 현재는 AUTH_MODE=api_key만 지원합니다."
-            )
+            if not self.jwt_secret:
+                raise ValueError("AUTH_MODE=jwt일 때 JWT_SECRET이 필요합니다.")
+            if len(self.jwt_secret) < 32:
+                raise ValueError("JWT_SECRET은 최소 32자 이상이어야 합니다.")
 
         # 설정된 모델에 필요한 API 키 검증 — 서버 시작 시점에 fail-fast
         active_models = [self.chatgpt_model_name, self.parser_model_name]
