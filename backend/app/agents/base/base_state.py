@@ -48,7 +48,7 @@ class BaseState(TypedDict, total=False):
     # 에러 / 로그
     # -------------------------
     error: Optional[str]            # 에러 메시지
-    error_details: Optional[Dict[str, Any]]  # 상세 에러 정보 (traceback 등)
+    error_details: Optional[Dict[str, Any]]  # 에러 발생 노드 정보
     logs: List[str]                 # 실행 로그
 
     # -------------------------

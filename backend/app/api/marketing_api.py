@@ -8,8 +8,9 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any
+from ..config.settings import ALLOWED_MODEL_PREFIXES
 from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
@@ -191,6 +192,13 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None  # None이면 신규 대화 레코드 생성
     model: Optional[str] = None
     file_records: Optional[List[Dict[str, Any]]] = None  # 파일 업로드 시 파싱된 레코드 배열
+
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(f"지원하지 않는 모델명: {v}")
+        return v
 
     model_config = ConfigDict(json_schema_extra={
         "example": {

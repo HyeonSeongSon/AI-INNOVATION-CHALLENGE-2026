@@ -246,8 +246,8 @@ async def health_check():
             return {"status": "healthy", "opensearch": "connected"}
         else:
             return {"status": "unhealthy", "opensearch": "disconnected"}
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+    except Exception:
+        return {"status": "unhealthy"}
 
 
 @app.get("/api/product/{product_id}")

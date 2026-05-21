@@ -14,14 +14,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..agents.shared.persona.generate_persona_and_query import (
     generate_structured_persona_info,
     generate_search_query,
 )
 from ..core.llm_factory import get_llm
-from ..config.settings import settings
+from ..config.settings import settings, ALLOWED_MODEL_PREFIXES
 from ..core.logging import get_logger
 
 logger = get_logger("persona_pipeline")
@@ -51,7 +51,7 @@ async def _process_one_text(index: int, text: str, llm, persona_client) -> Dict[
         }
     except Exception as e:
         logger.error("persona_pipeline_record_failed", index=index, error=str(e))
-        return {"index": index, "success": False, "error": str(e), "name": None}
+        return {"index": index, "success": False, "error": "페르소나 생성 중 오류가 발생했습니다.", "name": None}
 
 
 # ──────────────────────────────────────────────────────
@@ -107,6 +107,13 @@ class CreateFromTextRequest(BaseModel):
     text: str
     model: Optional[str] = None
 
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
+            raise ValueError(f"지원하지 않는 모델명: {v}")
+        return v
+
 
 @router.post("/personas/create-from-text")
 async def create_persona_from_text(request: CreateFromTextRequest, req: Request):
@@ -115,7 +122,7 @@ async def create_persona_from_text(request: CreateFromTextRequest, req: Request)
     llm = get_llm(request.model or settings.chatgpt_model_name, temperature=0.3)
     result = await _process_one_text(0, request.text, llm, persona_client)
     if not result["success"]:
-        raise HTTPException(status_code=500, detail=result.get("error", "페르소나 생성 실패"))
+        raise HTTPException(status_code=500, detail="페르소나 생성 중 오류가 발생했습니다.")
     return {
         "persona_id": result["persona_id"],
         "name": result["name"],
@@ -138,8 +145,9 @@ async def create_personas_from_file(file: UploadFile = File(...), req: Request =
     try:
         texts = _parse_file_to_texts(file.filename or "", content)
     except ValueError as e:
+        logger.warning("file_parse_failed", filename=file.filename, error=str(e))
         async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': '파일 형식이 올바르지 않습니다.'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     if not texts:
@@ -163,7 +171,7 @@ async def create_personas_from_file(file: UploadFile = File(...), req: Request =
                 result = {
                     "success": False,
                     "name": None,
-                    "error": str(e),
+                    "error": "페르소나 생성 중 오류가 발생했습니다.",
                 }
             await queue.put(result)
 

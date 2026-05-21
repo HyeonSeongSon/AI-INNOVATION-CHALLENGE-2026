@@ -2,6 +2,8 @@ from pathlib import Path
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ALLOWED_MODEL_PREFIXES: tuple[str, ...] = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -93,10 +95,9 @@ class Settings(BaseSettings):
     @field_validator("chatgpt_model_name", "parser_model_name")
     @classmethod
     def validate_model_name(cls, v: str) -> str:
-        valid_prefixes = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
-        if not any(v.startswith(p) for p in valid_prefixes):
+        if not any(v.startswith(p) for p in ALLOWED_MODEL_PREFIXES):
             raise ValueError(
-                f"지원하지 않는 모델명: {v}. 지원 접두사: {', '.join(valid_prefixes)}"
+                f"지원하지 않는 모델명: {v}. 지원 접두사: {', '.join(ALLOWED_MODEL_PREFIXES)}"
             )
         return v
 

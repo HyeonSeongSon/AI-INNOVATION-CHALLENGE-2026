@@ -95,7 +95,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
         try:
             import openpyxl
         except ImportError as e:
-            raise ValueError("XLSX 처리를 위해 openpyxl 패키지가 필요합니다: pip install openpyxl") from e
+            raise ValueError("XLSX 파일 처리를 지원하지 않습니다. 관리자에게 문의해주세요.") from e
         wb = openpyxl.load_workbook(io.BytesIO(content))
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
@@ -128,8 +128,9 @@ async def register_products_from_file(file: UploadFile = File(...), request: Req
     try:
         records = _parse_file_to_records(file.filename or "", content)
     except ValueError as e:
+        logger.warning("file_parse_failed", filename=file.filename, error=str(e))
         async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': '파일 형식이 올바르지 않습니다.'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     if not records:
@@ -152,7 +153,7 @@ async def register_products_from_file(file: UploadFile = File(...), request: Req
                 result = {
                     "success": False,
                     "product_name": record.get("상품명", ""),
-                    "error": str(e),
+                    "error": "상품 등록 중 오류가 발생했습니다.",
                 }
             await queue.put(result)
 
