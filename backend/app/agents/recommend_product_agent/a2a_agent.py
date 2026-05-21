@@ -38,7 +38,10 @@ async def send_task(request: TaskSendRequest, req: Request):
         "messages": messages,
         "active_persona_id": data.get("active_persona_id"),
     }
-    config = {"configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services}}
+    config = {
+        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "recursion_limit": settings.langgraph_recursion_limit,
+    }
 
     _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
 

@@ -1,6 +1,7 @@
 from .workflow import build_workflow
 from .state import CRMMessageAgentState
 from ...core.logging import get_logger
+from ...config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import Optional, Dict, Any, List
 
@@ -28,7 +29,10 @@ class CRMMessageAgent:
             configurable["model"] = model
         if services is not None:
             configurable["services"] = services
-        return {"configurable": configurable}
+        return {
+            "configurable": configurable,
+            "recursion_limit": settings.langgraph_recursion_limit,
+        }
 
     def _extract_response_messages(self, result: Dict) -> list:
         """

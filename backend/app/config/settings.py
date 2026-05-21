@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     llm_call_timeout: float = 70.0
     llm_document_timeout: float = 150.0
 
+    # LangGraph
+    langgraph_recursion_limit: int = 100
+
     # Product recommendation tuning
     rrf_k: int = 60
     min_rrf_score_threshold: float = 0.01
