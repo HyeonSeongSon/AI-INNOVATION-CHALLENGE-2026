@@ -7,11 +7,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
-from ..core.database import SessionLocal
-from ..core.models import Conversation
+from ..core.database import get_db
+from ..core.models import Conversation, ConversationMessage
 from ..core.logging import get_logger
 
 logger = get_logger("conversations_api")
@@ -33,8 +34,7 @@ class ConversationSummary(BaseModel):
     created_at: Optional[Any]
     last_active_at: Optional[Any]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationDetail(ConversationSummary):
@@ -60,10 +60,9 @@ class UpdateMessagesRequest(BaseModel):
 # ============================================================
 
 @router.post("", status_code=201)
-def create_conversation(body: CreateConversationRequest):
+def create_conversation(body: CreateConversationRequest, db: Session = Depends(get_db)):
     """새 대화 세션 미리 생성 — 첫 메시지 전송 전 conv_id 확보용"""
     new_id = str(uuid.uuid4())
-    db = SessionLocal()
     try:
         conv = Conversation(
             id=new_id,
@@ -71,20 +70,19 @@ def create_conversation(body: CreateConversationRequest):
             thread_id=new_id,  # thread_id = conversation_id 고정
             session_id=body.session_id,
             title=body.title or "새 대화",
-            messages=[],
         )
         db.add(conv)
         db.commit()
         logger.info("conversation_created", conv_id=new_id)
         return {"id": new_id, "thread_id": new_id}
-    finally:
-        db.close()
+    except Exception as e:
+        logger.error("create_conversation_failed", user_id=body.user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 생성 중 오류가 발생했습니다.")
 
 
 @router.get("", response_model=List[ConversationSummary])
-def list_conversations(user_id: str = Query(...)):
+def list_conversations(user_id: str = Query(...), db: Session = Depends(get_db)):
     """사용자의 대화 목록 조회 (최신순, messages 필드 제외)"""
-    db = SessionLocal()
     try:
         convs = (
             db.query(Conversation)
@@ -93,33 +91,55 @@ def list_conversations(user_id: str = Query(...)):
             .all()
         )
         return convs
-    finally:
-        db.close()
+    except Exception as e:
+        logger.error("list_conversations_failed", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 목록 조회 중 오류가 발생했습니다.")
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-def get_conversation(conv_id: str):
-    """대화 상세 조회 (messages 포함)"""
-    db = SessionLocal()
+def get_conversation(conv_id: str, limit: int = Query(default=200, le=500), db: Session = Depends(get_db)):
+    """대화 상세 조회 (messages 포함, 최근 limit건)"""
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        return conv
-    finally:
-        db.close()
+        rows = (
+            db.query(ConversationMessage)
+            .filter(ConversationMessage.conversation_id == conv_id)
+            .order_by(ConversationMessage.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return {
+            "id": conv.id,
+            "user_id": conv.user_id,
+            "thread_id": conv.thread_id,
+            "session_id": conv.session_id,
+            "title": conv.title,
+            "created_at": conv.created_at,
+            "last_active_at": conv.last_active_at,
+            "messages": [row.message_data for row in reversed(rows)],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_conversation_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 조회 중 오류가 발생했습니다.")
 
 
 @router.put("/{conv_id}/messages")
-def update_messages(conv_id: str, body: UpdateMessagesRequest):
-    """메시지 배열 및 제목 갱신"""
-    db = SessionLocal()
+def update_messages(conv_id: str, body: UpdateMessagesRequest, db: Session = Depends(get_db)):
+    """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        conv.messages = body.messages
+        db.query(ConversationMessage).filter(
+            ConversationMessage.conversation_id == conv_id
+        ).delete()
+        for msg in body.messages:
+            db.add(ConversationMessage(conversation_id=conv_id, message_data=msg))
         if body.title:
             conv.title = body.title
         conv.last_active_at = datetime.now(timezone.utc)
@@ -127,14 +147,16 @@ def update_messages(conv_id: str, body: UpdateMessagesRequest):
 
         logger.info("conversation_messages_updated", conv_id=conv_id)
         return {"status": "ok"}
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_messages_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="메시지 갱신 중 오류가 발생했습니다.")
 
 
 @router.delete("/{conv_id}")
-def delete_conversation(conv_id: str):
+def delete_conversation(conv_id: str, db: Session = Depends(get_db)):
     """대화 삭제"""
-    db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
         if not conv:
@@ -145,5 +167,8 @@ def delete_conversation(conv_id: str):
 
         logger.info("conversation_deleted", conv_id=conv_id)
         return {"status": "ok"}
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_conversation_failed", conv_id=conv_id, error=str(e))
+        raise HTTPException(status_code=500, detail="대화 삭제 중 오류가 발생했습니다.")

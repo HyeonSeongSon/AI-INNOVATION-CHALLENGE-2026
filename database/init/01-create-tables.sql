@@ -137,6 +137,20 @@ CREATE INDEX idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX idx_conversations_thread_id ON conversations(thread_id);
 
 -- ============================================================
+-- 5b. 대화 메시지 테이블 (conversation_messages)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS conversation_messages (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL
+                        REFERENCES conversations(id) ON DELETE CASCADE,
+    message_data    JSONB NOT NULL,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_messages_conv_id
+    ON conversation_messages(conversation_id, id);
+
+-- ============================================================
 -- 6. 생성된 마케팅 메시지 테이블 (generated_messages)
 -- 품질 검사(3단계)를 통과한 최종 메시지만 저장
 -- ============================================================

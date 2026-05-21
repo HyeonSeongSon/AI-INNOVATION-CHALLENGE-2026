@@ -1,0 +1,81 @@
+---
+name: backend
+
+x-backend-common: &backend-common
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  working_dir: /app
+  volumes:
+    - .:/app
+    - ../data:/data
+  env_file:
+    - app/.env
+  networks:
+    - backend-net
+
+services:
+  fastapi-backend:
+    <<: *backend-common
+    container_name: fastapi-backend
+    command: python main.py
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8005
+      APP_ROOT: /app/app
+      DATA_ROOT: /data
+      RECOMMEND_AGENT_URL: http://recommend-agent:8001
+      GENERATE_MESSAGE_AGENT_URL: http://generate-agent:8002
+      DATA_REGISTRATION_AGENT_URL: http://data-registration-agent:8003
+    ports:
+      - "8005:8005"
+    depends_on:
+      recommend-agent:
+        condition: service_healthy
+      generate-agent:
+        condition: service_healthy
+      data-registration-agent:
+        condition: service_healthy
+
+  recommend-agent:
+    <<: *backend-common
+    container_name: recommend-agent
+    command: uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  generate-agent:
+    <<: *backend-common
+    container_name: generate-agent
+    command: uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  data-registration-agent:
+    <<: *backend-common
+    container_name: data-registration-agent
+    command: uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  backend-net:
+    driver: bridge

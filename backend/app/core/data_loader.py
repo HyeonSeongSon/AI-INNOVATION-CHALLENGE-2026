@@ -17,7 +17,6 @@ logger = get_logger("data_loader")
 # ── 경로 상수 ──────────────────────────────────────────────────────────────────
 _APP_DIR = Path(__file__).resolve().parents[1]               # backend/app/
 _PROJECT_ROOT = _APP_DIR.parents[1]                          # project root
-_AGENT_DIR = _APP_DIR / "agents" / "marketing_assistant"
 
 # ── 모듈 레벨 캐시 ─────────────────────────────────────────────────────────────
 _brand_tones: Dict[str, Any] | None = None
@@ -29,14 +28,14 @@ def get_brand_tones() -> Dict[str, Any]:
     """brand_tone.yaml을 1회 로드 후 캐시된 dict 반환."""
     global _brand_tones
     if _brand_tones is None:
-        path = _AGENT_DIR / "prompts" / "brand_tone.yaml"
+        path = _APP_DIR / "agents" / "generate_message_agent" / "prompts" / "brand_tone.yaml"
         try:
             with open(path, "r", encoding="utf-8") as f:
                 _brand_tones = yaml.safe_load(f) or {}
             logger.info("brand_tones_loaded", path=str(path))
         except Exception as e:
             logger.error("brand_tones_load_failed", path=str(path), error=str(e))
-            _brand_tones = {}
+            raise
     return _brand_tones
 
 
@@ -44,14 +43,14 @@ def get_forbidden_keywords() -> Dict[str, Any]:
     """forbidden_keyword.json을 1회 로드 후 캐시된 dict 반환."""
     global _forbidden_keywords
     if _forbidden_keywords is None:
-        path = _AGENT_DIR / "data" / "forbidden_keyword.json"
+        path = _APP_DIR / "agents" / "generate_message_agent" / "data" / "forbidden_keyword.json"
         try:
             with open(path, "r", encoding="utf-8") as f:
                 _forbidden_keywords = json.load(f)
             logger.info("forbidden_keywords_loaded", path=str(path))
         except Exception as e:
             logger.error("forbidden_keywords_load_failed", path=str(path), error=str(e))
-            _forbidden_keywords = {}
+            raise
     return _forbidden_keywords
 
 
@@ -84,5 +83,12 @@ def get_categories() -> List[str]:
             logger.info("categories_loaded", path=str(path), count=len(_categories))
         except Exception as e:
             logger.error("categories_load_failed", path=str(path), error=str(e))
-            _categories = []
+            raise
     return _categories
+
+
+def validate_static_configs() -> None:
+    """서버 기동 시 정적 설정 파일을 검증한다. 파일 누락 또는 파싱 실패 시 예외를 발생시킨다."""
+    get_brand_tones()
+    get_forbidden_keywords()
+    get_categories()

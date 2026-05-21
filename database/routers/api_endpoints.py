@@ -3,11 +3,9 @@ PostgreSQL 데이터베이스 API 엔드포인트
 새로운 테이블 스키마에 맞춰 재구성 (POST 전용)
 """
 
-import re
-
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import Any, List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
@@ -80,6 +78,7 @@ class SearchQueryCreate(BaseModel):
 
 class ProductCreate(BaseModel):
     """상품 생성 요청"""
+    model_config = ConfigDict(extra="forbid")
     product_id: str = Field(..., description="상품 ID", examples=["A20251200001"])
     vectordb_id: Optional[dict] = Field(None, description="VectorDB ID (index별 doc_id 맵)")
     product_name: str = Field(..., description="상품명", examples=["수분 세럼 50ml"])
@@ -283,12 +282,39 @@ class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
 
 
-class PersonaQueryRequest(BaseModel):
-    sql_query: str = Field(
-        ...,
-        description="실행할 SELECT SQL 쿼리",
-        examples=["SELECT persona_id, name, skin_type FROM personas WHERE '지성' = ANY(skin_type) LIMIT 10"]
-    )
+class PersonaFilterRequest(BaseModel):
+    gender: Optional[str] = None
+    age_min: Optional[int] = None
+    age_max: Optional[int] = None
+    skin_type: Optional[List[str]] = None
+    concerns: Optional[List[str]] = None
+    personal_color: Optional[str] = None
+    lifestyle_values: Optional[List[str]] = None
+    stress_level: Optional[str] = None
+    price_sensitivity: Optional[str] = None
+    preferred_ingredients: Optional[List[str]] = None
+    avoided_ingredients: Optional[List[str]] = None
+    occupation: Optional[str] = None
+    beauty_interests: Optional[List[str]] = None
+    shopping_style: Optional[List[str]] = None
+    preferred_brands: Optional[List[str]] = None
+    avoided_brands: Optional[List[str]] = None
+    preferred_scents: Optional[List[str]] = None
+    preferred_colors: Optional[List[str]] = None
+    preferred_texture: Optional[List[str]] = None
+    hair_type: Optional[List[str]] = None
+    skincare_routine: Optional[List[str]] = None
+    main_environment: Optional[List[str]] = None
+    purchase_decision_factors: Optional[List[str]] = None
+    pets: Optional[List[str]] = None
+    shade_number_min: Optional[int] = None
+    shade_number_max: Optional[int] = None
+    avg_sleep_hours_min: Optional[int] = None
+    avg_sleep_hours_max: Optional[int] = None
+    daily_screen_hours_min: Optional[int] = None
+    daily_screen_hours_max: Optional[int] = None
+    array_modes: Dict[str, str] = Field(default_factory=dict)
+    limit: int = Field(10, ge=1, le=20)
 
 
 # ============================================================
@@ -429,51 +455,79 @@ async def delete_personas_bulk(request: PersonaBulkDeleteRequest, db: Session = 
     return {"deleted": deleted}
 
 
-@router.post("/personas/query", summary="Text2SQL 페르소나 쿼리")
-async def query_personas_by_sql(request: PersonaQueryRequest, db: Session = Depends(get_db)) -> List[Any]:
-    raw_sql = request.sql_query.strip()
+@router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
+async def filter_personas(request: PersonaFilterRequest, db: Session = Depends(get_db)) -> List[Any]:
+    from core.models import Persona
+    from sqlalchemy import cast
+    from sqlalchemy.dialects.postgresql import ARRAY
+    from sqlalchemy.types import Text
 
-    if not raw_sql.upper().lstrip().startswith("SELECT"):
-        raise HTTPException(
-            status_code=400,
-            detail="SELECT 쿼리만 허용됩니다. INSERT/UPDATE/DELETE/DROP 등은 사용할 수 없습니다."
-        )
+    def array_filter(col, values: list, field_name: str):
+        op = '&&' if request.array_modes.get(field_name) == "any" else '@>'
+        return col.op(op)(cast(values, ARRAY(Text)))
 
-    sql_upper = raw_sql.upper()
-    dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE"]
-    for keyword in dangerous_keywords:
-        if re.search(rf'\b{keyword}\b', sql_upper):
-            raise HTTPException(
-                status_code=400,
-                detail=f"허용되지 않는 SQL 키워드가 포함되어 있습니다: {keyword}"
-            )
+    query = db.query(Persona)
 
-    if "LIMIT" not in sql_upper:
-        final_sql = f"{raw_sql.rstrip(';')} LIMIT 50"
-    else:
-        final_sql = raw_sql.rstrip(';')
+    if request.gender is not None:
+        query = query.filter(Persona.gender == request.gender)
+    if request.age_min is not None:
+        query = query.filter(Persona.age >= request.age_min)
+    if request.age_max is not None:
+        query = query.filter(Persona.age <= request.age_max)
+    if request.personal_color is not None:
+        query = query.filter(Persona.personal_color == request.personal_color)
+    if request.stress_level is not None:
+        query = query.filter(Persona.stress_level == request.stress_level)
+    if request.price_sensitivity is not None:
+        query = query.filter(Persona.price_sensitivity == request.price_sensitivity)
+    if request.occupation is not None:
+        query = query.filter(Persona.occupation == request.occupation)
+    if request.shade_number_min is not None:
+        query = query.filter(Persona.shade_number >= request.shade_number_min)
+    if request.shade_number_max is not None:
+        query = query.filter(Persona.shade_number <= request.shade_number_max)
+    if request.avg_sleep_hours_min is not None:
+        query = query.filter(Persona.avg_sleep_hours >= request.avg_sleep_hours_min)
+    if request.avg_sleep_hours_max is not None:
+        query = query.filter(Persona.avg_sleep_hours <= request.avg_sleep_hours_max)
+    if request.daily_screen_hours_min is not None:
+        query = query.filter(Persona.daily_screen_hours >= request.daily_screen_hours_min)
+    if request.daily_screen_hours_max is not None:
+        query = query.filter(Persona.daily_screen_hours <= request.daily_screen_hours_max)
 
-    try:
-        result = db.execute(sa_text(final_sql))
-        columns = list(result.keys())
-        rows = []
-        for row in result.fetchall():
-            row_dict = {}
-            for col, val in zip(columns, row):
-                if hasattr(val, 'isoformat'):
-                    row_dict[col] = val.isoformat()
-                else:
-                    row_dict[col] = val
-            rows.append(row_dict)
-        return rows
+    _ARRAY_FIELDS = [
+        ("skin_type", Persona.skin_type),
+        ("concerns", Persona.concerns),
+        ("lifestyle_values", Persona.lifestyle_values),
+        ("preferred_ingredients", Persona.preferred_ingredients),
+        ("avoided_ingredients", Persona.avoided_ingredients),
+        ("beauty_interests", Persona.beauty_interests),
+        ("shopping_style", Persona.shopping_style),
+        ("preferred_brands", Persona.preferred_brands),
+        ("avoided_brands", Persona.avoided_brands),
+        ("preferred_scents", Persona.preferred_scents),
+        ("preferred_colors", Persona.preferred_colors),
+        ("preferred_texture", Persona.preferred_texture),
+        ("hair_type", Persona.hair_type),
+        ("skincare_routine", Persona.skincare_routine),
+        ("main_environment", Persona.main_environment),
+        ("purchase_decision_factors", Persona.purchase_decision_factors),
+        ("pets", Persona.pets),
+    ]
+    for field_name, column in _ARRAY_FIELDS:
+        values = getattr(request, field_name)
+        if values:
+            query = query.filter(array_filter(column, values, field_name))
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"SQL 실행 중 오류가 발생했습니다: {str(e)}"
-        )
+    personas = query.limit(request.limit).all()
+    rows = []
+    for p in personas:
+        row = {c.name: getattr(p, c.name) for c in p.__table__.columns}
+        for k, v in row.items():
+            if hasattr(v, 'isoformat'):
+                row[k] = v.isoformat()
+        rows.append(row)
+    return rows
 
 
 @router.post("/analysis-results", response_model=AnalysisResultResponse, summary="분석 결과 생성")
@@ -589,7 +643,6 @@ async def generate_product_search_queries(request: ProductSearchQueryCreate, db:
     for query_type, query_text in query_map.items():
         row = db.execute(upsert_sql, {"persona_id": request.persona_id, "query_type": query_type, "query_text": query_text}).fetchone()
         saved[row[1]] = {"query_id": row[0], "text": row[2]}
-    db.commit()
 
     return ProductSearchQueryResponse(
         need=QueryItem(**saved["need"]),
@@ -634,7 +687,7 @@ async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Product with ID '{request.product_id}' already exists")
 
-    product = Product(**request.dict())
+    product = Product(**request.model_dump())
     db.add(product)
     db.commit()
     db.refresh(product)

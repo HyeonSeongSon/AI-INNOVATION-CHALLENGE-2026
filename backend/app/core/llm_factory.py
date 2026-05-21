@@ -10,6 +10,7 @@ LLM 팩토리
 """
 
 from langchain_core.language_models import BaseChatModel
+from ..config.settings import settings
 
 # (model_name, temperature) 키로 LLM 인스턴스를 캐싱한다.
 _cache: dict[tuple, BaseChatModel] = {}
@@ -66,15 +67,15 @@ def create_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatMod
     """
     if model_name.startswith(("gpt-", "o1", "o3", "o4")):
         from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=model_name, temperature=temperature, **kwargs)
+        return ChatOpenAI(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
 
     elif model_name.startswith("claude-"):
         from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(model=model_name, temperature=temperature, **kwargs)
+        return ChatAnthropic(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
 
     elif model_name.startswith("gemini-"):
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, **kwargs)
+        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
 
     else:
         raise ValueError(

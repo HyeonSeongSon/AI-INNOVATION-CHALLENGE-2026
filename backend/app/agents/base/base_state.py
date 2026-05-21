@@ -1,5 +1,8 @@
 from typing import Any, Dict, List, Optional, Literal
 from typing_extensions import TypedDict
+from typing import Annotated
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 
 
 class BaseState(TypedDict, total=False):
@@ -11,27 +14,23 @@ class BaseState(TypedDict, total=False):
     - graph 재진입 안전
     - node 간 공유 데이터 명확
     - 상태 추적 및 디버깅 용이
-
-    NOTE: input / messages 는 에이전트마다 형태가 다르므로 각 State에서 정의
-    - 단발성 에이전트: input: str (원본 텍스트)
-    - 대화형 에이전트: messages: Annotated[list[AnyMessage], add_messages]
     """
 
     # -------------------------
     # 기본 정보
     # -------------------------
-    context: Dict[str, Any]         # 실행 컨텍스트 (session, user, meta)
+    messages: Annotated[list[AnyMessage], add_messages]  # 대화 메시지 이력
 
     # -------------------------
     # 실행 상태 관리
     # -------------------------
     step: int                       # 현재 step (기본값: 0)
     max_steps: int                  # 최대 허용 step (무한루프 방지)
-    last_node: str                  # 마지막 실행 node
+    last_node: Optional[str]        # 마지막 실행 node
     current_node: str               # 현재 실행 중인 node
     node_history: List[str]         # node 실행 이력 (디버깅용)
     is_interrupted: bool            # interrupt 여부
-    status: Literal["running", "completed", "failed", "interrupted"]  # 실행 상태
+    status: Literal["running", "completed", "failed", "partial_failure", "interrupted"]  # 실행 상태
 
     # -------------------------
     # 에이전트 판단 / 중간 결과
@@ -46,15 +45,10 @@ class BaseState(TypedDict, total=False):
     tool_calls: List[Dict[str, Any]]  # tool 호출 이력
 
     # -------------------------
-    # 최종 결과
-    # -------------------------
-    output: Any                     # 최종 출력 결과
-
-    # -------------------------
     # 에러 / 로그
     # -------------------------
     error: Optional[str]            # 에러 메시지
-    error_details: Optional[Dict[str, Any]]  # 상세 에러 정보 (traceback 등)
+    error_details: Optional[Dict[str, Any]]  # 에러 발생 노드 정보
     logs: List[str]                 # 실행 로그
 
     # -------------------------

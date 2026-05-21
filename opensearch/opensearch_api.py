@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional, List, Union
+from typing import Dict, Optional, List, Union
 import logging
 import os
 from dotenv import load_dotenv
@@ -24,9 +24,10 @@ app = FastAPI(
 )
 
 # CORS 설정
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프로덕션에서는 특정 origin만 허용
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -185,6 +186,21 @@ class MultiVectorSearchResponse(BaseModel):
     results: List[FieldSearchResult]
 
 
+class IndexMultivectorRequest(BaseModel):
+    product_id: str = Field(..., description="등록할 상품 ID")
+    group: str = Field(..., description="멀티벡터 그룹 (A~G)")
+    multivector: Dict[str, List[str]] = Field(
+        ..., description="필드명 → 문장 리스트 (combined, function_desc, attribute_desc, target_user, spec_feature)"
+    )
+
+
+class IndexMultivectorResponse(BaseModel):
+    success: bool
+    product_id: str
+    indexed_counts: Dict[str, int]
+    vectordb_id: Dict[str, List[str]]
+
+
 def get_opensearch_client() -> OpenSearchHybridClient:
     """OpenSearch 클라이언트 싱글톤"""
     global opensearch_client
@@ -230,8 +246,8 @@ async def health_check():
             return {"status": "healthy", "opensearch": "connected"}
         else:
             return {"status": "unhealthy", "opensearch": "disconnected"}
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+    except Exception:
+        return {"status": "unhealthy"}
 
 
 @app.get("/api/product/{product_id}")
@@ -294,7 +310,7 @@ async def get_product_by_id(
         logging.error(f"Product ID 조회 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"조회 중 오류가 발생했습니다: {str(e)}"
+            detail="조회 중 오류가 발생했습니다."
         )
 
 
@@ -427,7 +443,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         logging.error(f"검색 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}"
+            detail="검색 중 오류가 발생했습니다."
         )
 
 
@@ -493,7 +509,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         logging.error(f"유사 문장 검색 중 오류 발생: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}"
+            detail="검색 중 오류가 발생했습니다."
         )
     
 @app.post("/api/search/combined", response_model=CombinedSearchResponse)
@@ -539,7 +555,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
 
     except Exception as e:
         logging.error(f"combined_vector 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
 @app.post("/api/search/by-field", response_model=FieldSearchResponse)
@@ -593,7 +609,7 @@ async def search_by_field(request: FieldSearchRequest):
 
     except Exception as e:
         logging.error(f"by-field 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
 @app.post("/api/search/multivector", response_model=MultiVectorSearchResponse)
@@ -641,7 +657,68 @@ async def search_multivector(request: MultiVectorSearchRequest):
 
     except Exception as e:
         logging.error(f"multivector 검색 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"검색 중 오류가 발생했습니다: {str(e)}")
+        raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
+
+
+_MULTIVECTOR_FIELD_NAMES = ["combined", "function_desc", "attribute_desc", "target_user", "spec_feature"]
+_EMBEDDING_MODEL_VERSION = "KURE-v1"
+_INDEX_PREFIX = "product_v4"
+
+
+@app.post("/api/product/index-multivector", response_model=IndexMultivectorResponse)
+async def index_multivector(request: IndexMultivectorRequest):
+    """
+    단일 상품의 멀티벡터 문서를 5개 product_v4_{field} 인덱스에 색인한다.
+    """
+    try:
+        client = get_opensearch_client()
+        indexed_counts: Dict[str, int] = {}
+        vectordb_id: Dict[str, List[str]] = {}
+
+        for field in _MULTIVECTOR_FIELD_NAMES:
+            sentences = [s.strip() for s in request.multivector.get(field, []) if s.strip()]
+            if not sentences:
+                indexed_counts[field] = 0
+                vectordb_id[f"{_INDEX_PREFIX}_{field}"] = []
+                continue
+
+            vectors = client.model.encode(sentences, batch_size=64)
+            index_name = f"{_INDEX_PREFIX}_{field}"
+            doc_ids: List[str] = []
+            bulk_body = []
+
+            for idx, (text, vec) in enumerate(zip(sentences, vectors)):
+                doc_id = f"{request.product_id}_{field}_{idx}"
+                doc_ids.append(doc_id)
+                bulk_body.append({"index": {"_index": index_name, "_id": doc_id}})
+                bulk_body.append({
+                    "product_id":      request.product_id,
+                    "group":           request.group,
+                    "sentence_idx":    idx,
+                    "text":            text,
+                    "vector":          vec.tolist(),
+                    "is_active":       True,
+                    "embedding_model": _EMBEDDING_MODEL_VERSION,
+                })
+
+            response = client.client.bulk(body=bulk_body, refresh=True)
+            failed = [item for item in response.get("items", []) if "error" in item.get("index", {})]
+            indexed_counts[field] = len(doc_ids) - len(failed)
+            vectordb_id[index_name] = doc_ids
+
+        logging.info(
+            f"멀티벡터 색인 완료 - product_id: {request.product_id}, counts: {indexed_counts}"
+        )
+        return IndexMultivectorResponse(
+            success=True,
+            product_id=request.product_id,
+            indexed_counts=indexed_counts,
+            vectordb_id=vectordb_id,
+        )
+
+    except Exception as e:
+        logging.error(f"멀티벡터 색인 중 오류: {e}")
+        raise HTTPException(status_code=500, detail="색인 중 오류가 발생했습니다.")
 
 
 if __name__ == "__main__":

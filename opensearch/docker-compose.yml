@@ -1,5 +1,5 @@
 ---
-name: final-project # Docker 프로젝트 이름을 명시적으로 지정
+name: ai_innovation_vector_db
 
 x-opensearch-common-env: &opensearch-common-env
   cluster.name: opensearch-cluster
@@ -112,21 +112,23 @@ services:
         condition: service_healthy
       opensearch-node3:
         condition: service_healthy
+
   fastapi-search:
     image: python:3.11-slim
     container_name: fastapi-search
     working_dir: /app
     command: >
       bash -c "
-        pip install -r requirements.txt &&
+        pip install uv &&
+        uv pip install -r requirements.txt --system &&
         python opensearch_api.py
       "
     volumes:
-      - .:/app  # 현재 디렉토리를 /app으로 마운트
+      - .:/app
     ports:
       - 8010:8010
     environment:
-      - OPENSEARCH_HOST=opensearch-node1  # docker-compose 내부에서는 서비스명 사용
+      - OPENSEARCH_HOST=opensearch-node1
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
     networks:
@@ -138,31 +140,6 @@ services:
         condition: service_healthy
       opensearch-node3:
         condition: service_healthy
-
-  fastapi-backend:
-    image: python:3.11-slim
-    container_name: fastapi-backend
-    working_dir: /app
-    command: >
-      bash -c "
-        pip install -r /requirements.txt &&
-        python main.py
-      "
-    volumes:
-      - ../backend:/app  # backend 디렉토리를 /app으로 마운트
-      - ./requirements.txt:/requirements.txt  # opensearch 디렉토리의 requirements.txt 사용
-      - ../data:/data  # data 디렉토리를 /data로 마운트 (프롬프트 YAML 파일 접근용)
-    environment:
-      HOST: 0.0.0.0
-      PORT: 8005
-      APP_ROOT: /app/app
-      DATA_ROOT: /data
-    env_file:
-      - ../backend/app/.env  # backend 환경 변수 로드
-    ports:
-      - 8005:8005
-    networks:
-      - opensearch-net
 
 volumes:
   opensearch-data1:

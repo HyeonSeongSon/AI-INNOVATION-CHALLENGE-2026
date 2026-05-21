@@ -12,7 +12,12 @@ INDEX_NAME = "product_index_v2"
 
 def get_client() -> OpenSearch:
     host = os.getenv("OPENSEARCH_HOST")
-    port = int(os.getenv("OPENSEARCH_PORT"))
+    port_str = os.getenv("OPENSEARCH_PORT")
+    if not host:
+        raise ValueError("OPENSEARCH_HOST 환경변수가 설정되지 않았습니다.")
+    if not port_str:
+        raise ValueError("OPENSEARCH_PORT 환경변수가 설정되지 않았습니다.")
+    port = int(port_str)
 
     client = OpenSearch(
         hosts=[{"host": host, "port": port}],

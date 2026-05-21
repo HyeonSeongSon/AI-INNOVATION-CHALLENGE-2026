@@ -3,28 +3,24 @@ Database Connection and Session Management
 PostgreSQL 데이터베이스 연결 관리
 """
 
-import os
 from typing import Generator
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
-from dotenv import load_dotenv
 
 from app.core.models import Base
-
-# .env 파일 로드
-load_dotenv()
+from app.config.settings import settings
 
 
 class DatabaseConfig:
     """데이터베이스 설정"""
 
     def __init__(self):
-        self.host = os.getenv('POSTGRES_HOST', 'localhost')
-        self.port = int(os.getenv('POSTGRES_PORT', 5432))
-        self.database = os.getenv('POSTGRES_DB', 'ai_innovation_db')
-        self.user = os.getenv('POSTGRES_USER', 'postgres')
-        self.password = os.getenv('POSTGRES_PASSWORD', '')
+        self.host = settings.postgres_host
+        self.port = settings.postgres_port
+        self.database = settings.postgres_db
+        self.user = settings.postgres_user
+        self.password = settings.postgres_password
 
     @property
     def database_url(self) -> str:

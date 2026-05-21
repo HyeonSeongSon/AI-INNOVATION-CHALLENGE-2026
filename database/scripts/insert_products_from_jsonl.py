@@ -4,9 +4,12 @@ v3 JSONL 파일에서 직접 PostgreSQL에 상품 데이터 삽입
 대상 파일 (data/ 디렉토리):
   v3_product_data_rewritten_beauty_tool.jsonl
   v3_product_data_rewritten_color_tone.jsonl
+  v3_product_data_structured_color_tone_add.jsonl
   v3_product_data_rewritten_fragrance_body.jsonl
+  v3_product_data_structured_fragrance_body_add.jsonl
   v3_product_data_rewritten_hair.jsonl
   v3_product_data_rewritten_inner_beauty.jsonl
+  v3_product_data_structured_inner_beauty_add.jsonl
   v3_product_data_rewritten_living_supplies.jsonl
   v3_product_data_rewritten_skincare.jsonl
 
@@ -23,9 +26,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
 import json
+from datetime import datetime
+from uuid import uuid4
+
 from app.core.database import get_db
 from app.core.models import Product
 from sqlalchemy.exc import IntegrityError
+
+_CATEGORY_CODE: dict[str, str] = {
+    "스킨케어": "S", "색조": "C", "헤어": "H", "향수/바디": "F",
+    "이너뷰티": "I", "생활도구": "L", "뷰티툴": "B",
+}
+
+def _make_product_id(category: str | None) -> str:
+    code = _CATEGORY_CODE.get(category or "", "X")
+    return f"{code}{datetime.now().strftime('%Y%m')}{uuid4().hex[:6].upper()}"
 
 
 # ── 대상 파일 목록 ────────────────────────────────────────────
@@ -34,9 +49,12 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 SOURCE_FILES = [
     DATA_DIR / "v3_product_data_rewritten_beauty_tool.jsonl",
     DATA_DIR / "v3_product_data_rewritten_color_tone.jsonl",
+    DATA_DIR / "v3_product_data_structured_color_tone_add.jsonl",
     DATA_DIR / "v3_product_data_rewritten_fragrance_body.jsonl",
+    DATA_DIR / "v3_product_data_structured_fragrance_body_add.jsonl",
     DATA_DIR / "v3_product_data_rewritten_hair.jsonl",
     DATA_DIR / "v3_product_data_rewritten_inner_beauty.jsonl",
+    DATA_DIR / "v3_product_data_structured_inner_beauty_add.jsonl",
     DATA_DIR / "v3_product_data_rewritten_living_supplies.jsonl",
     DATA_DIR / "v3_product_data_rewritten_skincare.jsonl",
 ]
@@ -113,15 +131,24 @@ def insert_products_from_jsonl():
                 if not isinstance(persona_tags, dict):
                     persona_tags = {}
 
+                # 기존 파일: 한글 키 / 신규 파일: 영문 키 — 양쪽 모두 지원
+                category  = data.get("카테고리") or data.get("category")
+                tag       = data.get("태그")     or data.get("tag")
+                sub_tag   = data.get("서브태그") or data.get("sub_tag")
+                page_url  = data.get("product_url") or data.get("url")
+
+                # 기존 파일은 product_id가 있고, 신규 파일은 없으므로 생성
+                product_id = data.get("product_id") or _make_product_id(category)
+
                 product = Product(
-                    product_id=data.get("product_id"),
+                    product_id=product_id,
                     vectordb_id=data.get("vectordb_id"),        # OpenSearch 색인 후 채워짐
                     product_name=data.get("상품명", ""),
                     brand=data.get("브랜드"),
                     # 카테고리 계층
-                    category=data.get("카테고리"),
-                    tag=data.get("태그"),
-                    sub_tag=data.get("서브태그"),
+                    category=category,
+                    tag=tag,
+                    sub_tag=sub_tag,
                     # 평점/리뷰
                     rating=_safe_float(data.get("별점")),
                     review_count=_safe_int(data.get("리뷰_갯수")) or 0,
@@ -146,7 +173,7 @@ def insert_products_from_jsonl():
                     skin_shades=data.get("피부호수") or persona_tags.get("피부톤번호") or [],
                     # URL / 이미지
                     product_image_url=data.get("상품이미지") or [],
-                    product_page_url=data.get("product_url"),
+                    product_page_url=page_url,
                     # 소개
                     product_comment=data.get("한줄소개"),
                     # 구조화 상품 정보 (_original_semantic 제외)
