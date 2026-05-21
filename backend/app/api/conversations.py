@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Any
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..core.database import SessionLocal
 from ..core.models import Conversation, ConversationMessage
@@ -33,8 +33,7 @@ class ConversationSummary(BaseModel):
     created_at: Optional[Any]
     last_active_at: Optional[Any]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationDetail(ConversationSummary):

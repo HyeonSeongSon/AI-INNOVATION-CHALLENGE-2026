@@ -6,7 +6,7 @@
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..core.database import SessionLocal
 from ..core.models import Conversation, GeneratedMessage
@@ -33,8 +33,7 @@ class GeneratedMessageListItem(BaseModel):
     created_at: Optional[Any] = None
     conversation_title: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeneratedMessageResponse(BaseModel):
@@ -49,8 +48,7 @@ class GeneratedMessageResponse(BaseModel):
     thread_id: Optional[str] = None
     created_at: Optional[Any] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================

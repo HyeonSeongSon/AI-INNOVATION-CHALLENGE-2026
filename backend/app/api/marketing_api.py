@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
 from ..core.auth import UserContext
 from ..core.logging import get_logger
@@ -191,15 +191,14 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     file_records: Optional[List[Dict[str, Any]]] = None  # 파일 업로드 시 파싱된 레코드 배열
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "user_input": "PERSONA_001로 설화수 크림 신상품 홍보 메시지 만들어줘",
-                "session_id": "sess_abc123",
-                "conversation_id": None,
-                "model": "gpt-4o-mini"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "user_input": "PERSONA_001로 설화수 크림 신상품 홍보 메시지 만들어줘",
+            "session_id": "sess_abc123",
+            "conversation_id": None,
+            "model": "gpt-4o-mini"
         }
+    })
 
 
 # ============================================================
