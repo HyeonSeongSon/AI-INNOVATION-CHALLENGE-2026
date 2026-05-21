@@ -1,5 +1,6 @@
 import uuid
 import httpx
+from functools import lru_cache
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage, RemoveMessage, SystemMessage as _SysMsg
@@ -176,6 +177,12 @@ _SEARCH_TOOLS = [
 ]
 
 
+@lru_cache(maxsize=4)
+def _get_search_agent(model_name: str):
+    llm = get_llm(model_name, temperature=0.7)
+    return create_agent(model=llm, tools=_SEARCH_TOOLS, system_prompt="")
+
+
 async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     _logger.info("supervisor_started", node_name="supervisor_agent")
 
@@ -245,12 +252,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
     _logger.info("search_agent_started", node_name="search_agent")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    llm = get_llm(model, temperature=0.7)
-    agent = create_agent(
-        model=llm,
-        tools=_SEARCH_TOOLS,
-        system_prompt=""
-    )
+    agent = _get_search_agent(model)
     filtered_messages = _filter_handoff_messages(state.get("messages", []))
     try:
         result = await agent.ainvoke({"messages": filtered_messages}, config)
