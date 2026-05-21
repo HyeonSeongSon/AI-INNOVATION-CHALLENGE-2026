@@ -80,7 +80,14 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
         return records
 
     if name_lower.endswith(".csv"):
-        text_io = io.StringIO(content.decode("utf-8-sig"))
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("euc-kr")
+            except UnicodeDecodeError:
+                raise ValueError("지원하지 않는 인코딩입니다. UTF-8 또는 EUC-KR을 사용해주세요.")
+        text_io = io.StringIO(text)
         reader = csv.DictReader(text_io)
         return [_normalize_record(dict(row)) for row in reader]
 
@@ -144,7 +151,7 @@ async def register_products_from_file(file: UploadFile = File(...), request: Req
             except Exception as e:
                 result = {
                     "success": False,
-                    "product_name": record.get("product_name"),
+                    "product_name": record.get("상품명", ""),
                     "error": str(e),
                 }
             await queue.put(result)

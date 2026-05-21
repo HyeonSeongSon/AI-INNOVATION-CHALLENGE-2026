@@ -62,7 +62,14 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
     name_lower = filename.lower()
 
     if name_lower.endswith(".csv"):
-        text_io = io.StringIO(content.decode("utf-8-sig"))
+        try:
+            text = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("euc-kr")
+            except UnicodeDecodeError:
+                raise ValueError("지원하지 않는 인코딩입니다. UTF-8 또는 EUC-KR을 사용해주세요.")
+        text_io = io.StringIO(text)
         reader = csv.DictReader(text_io)
         texts = []
         for row in reader:
@@ -79,7 +86,8 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
                 obj = json.loads(line)
                 texts.append(json.dumps(obj, ensure_ascii=False))
             except json.JSONDecodeError:
-                texts.append(line)
+                logger.warning("jsonl_parse_error", preview=line[:50])
+                continue
         return texts
 
     if name_lower.endswith(".json"):

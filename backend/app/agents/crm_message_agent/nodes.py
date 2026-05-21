@@ -221,7 +221,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     try:
         decision = await ainvoke_with_timeout(
             llm.with_structured_output(RouteDecision),
-            build_supervisor_prompt(messages, summary)
+            build_supervisor_prompt(messages, summary, file_records=state.get("file_records"))
         )
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
