@@ -46,6 +46,8 @@ class A2AClient:
         )
 
         last_exc: Exception | None = None
+        attempt_errors: list[str] = []
+
         for attempt in range(settings.a2a_max_retries):
             try:
                 resp = await self.http_client.post(
@@ -58,14 +60,21 @@ class A2AClient:
                 raise
             except (httpx.RequestError, httpx.TimeoutException) as e:
                 last_exc = e
+                error_type = type(e).__name__
+                attempt_errors.append(f"attempt {attempt + 1}: {error_type}")
+                _logger.warning(
+                    "a2a_send_task_retry",
+                    url=self.base_url,
+                    attempt=attempt + 1,
+                    max_retries=settings.a2a_max_retries,
+                    error_type=error_type,
+                )
                 if attempt < settings.a2a_max_retries - 1:
-                    _logger.warning(
-                        "a2a_send_task_retry",
-                        url=self.base_url,
-                        attempt=attempt + 1,
-                        max_retries=settings.a2a_max_retries,
-                        error=str(e),
-                    )
                     await asyncio.sleep(2 ** attempt)
 
+        _logger.error(
+            "a2a_send_task_all_retries_exhausted",
+            url=self.base_url,
+            attempts=attempt_errors,
+        )
         raise last_exc

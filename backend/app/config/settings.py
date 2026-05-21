@@ -114,6 +114,29 @@ class Settings(BaseSettings):
             raise NotImplementedError(
                 "AUTH_MODE=jwt는 아직 구현되지 않았습니다. 현재는 AUTH_MODE=api_key만 지원합니다."
             )
+
+        # 설정된 모델에 필요한 API 키 검증 — 서버 시작 시점에 fail-fast
+        active_models = [self.chatgpt_model_name, self.parser_model_name]
+        openai_prefixes = ("gpt-", "o1", "o3", "o4")
+        if any(m.startswith(openai_prefixes) for m in active_models) and not self.openai_api_key:
+            raise ValueError(
+                "OpenAI 모델이 설정되어 있지만 OPENAI_API_KEY가 비어 있습니다."
+            )
+        if any(m.startswith("claude-") for m in active_models) and not self.anthropic_api_key:
+            raise ValueError(
+                "Anthropic 모델이 설정되어 있지만 ANTHROPIC_API_KEY가 비어 있습니다."
+            )
+        if any(m.startswith("gemini-") for m in active_models) and not self.google_api_key:
+            raise ValueError(
+                "Google 모델이 설정되어 있지만 GOOGLE_API_KEY가 비어 있습니다."
+            )
+
+        # LangSmith 트레이싱 활성화 시 API 키 필요
+        if self.langchain_tracing_v2 and not self.langchain_api_key:
+            raise ValueError(
+                "LANGCHAIN_TRACING_V2=true일 때 LANGCHAIN_API_KEY가 필요합니다."
+            )
+
         return self
 
 
