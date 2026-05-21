@@ -562,7 +562,7 @@ class ProductRegistrationService:
                 error=str(e),
                 exc_info=True,
             )
-            return {"success": False, "product_name": product_name, "error": str(e)}
+            return {"success": False, "product_name": product_name, "error": "상품 등록 중 오류가 발생했습니다."}
 
 
 # ──────────────────────────────────────────────────────

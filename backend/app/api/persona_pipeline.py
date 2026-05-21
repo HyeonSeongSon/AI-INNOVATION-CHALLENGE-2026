@@ -51,7 +51,7 @@ async def _process_one_text(index: int, text: str, llm, persona_client) -> Dict[
         }
     except Exception as e:
         logger.error("persona_pipeline_record_failed", index=index, error=str(e))
-        return {"index": index, "success": False, "error": str(e), "name": None}
+        return {"index": index, "success": False, "error": "페르소나 생성 중 오류가 발생했습니다.", "name": None}
 
 
 # ──────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ async def create_persona_from_text(request: CreateFromTextRequest, req: Request)
     llm = get_llm(request.model or settings.chatgpt_model_name, temperature=0.3)
     result = await _process_one_text(0, request.text, llm, persona_client)
     if not result["success"]:
-        raise HTTPException(status_code=500, detail=result.get("error", "페르소나 생성 실패"))
+        raise HTTPException(status_code=500, detail="페르소나 생성 중 오류가 발생했습니다.")
     return {
         "persona_id": result["persona_id"],
         "name": result["name"],
@@ -163,7 +163,7 @@ async def create_personas_from_file(file: UploadFile = File(...), req: Request =
                 result = {
                     "success": False,
                     "name": None,
-                    "error": str(e),
+                    "error": "페르소나 생성 중 오류가 발생했습니다.",
                 }
             await queue.put(result)
 

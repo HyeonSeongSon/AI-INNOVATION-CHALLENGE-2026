@@ -1,5 +1,4 @@
 import json
-import traceback
 from datetime import datetime, timezone
 from functools import lru_cache
 
@@ -100,7 +99,7 @@ async def data_registration_agent_node(state: DataRegistrationState, config: Run
         return {
             **base,
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": node_name, "traceback": traceback.format_exc()},
+            "error": "데이터 등록 중 오류가 발생했습니다.",
+            "error_details": {"node": node_name},
             "logs": logger.get_user_logs(),
         }

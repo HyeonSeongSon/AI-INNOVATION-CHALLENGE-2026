@@ -1,4 +1,3 @@
-import traceback
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -70,8 +69,8 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
         return {
             **base,
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": node_name, "traceback": traceback.format_exc()},
+            "error": "요청 파싱 중 오류가 발생했습니다.",
+            "error_details": {"node": node_name},
             "logs": logger.get_user_logs(),
         }
 
@@ -160,8 +159,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
         return {
             **base,
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": node_name, "traceback": traceback.format_exc()},
+            "error": "검색 쿼리 생성 중 오류가 발생했습니다.",
+            "error_details": {"node": node_name},
             "logs": logger.get_user_logs(),
         }
 
@@ -230,7 +229,7 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
         return {
             **base,
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": node_name, "traceback": traceback.format_exc()},
+            "error": "상품 추천 중 오류가 발생했습니다.",
+            "error_details": {"node": node_name},
             "logs": logger.get_user_logs(),
         }

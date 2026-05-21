@@ -10,7 +10,6 @@ from langchain_core.runnables import RunnableConfig
 from typing import Dict, Any, Union
 from langgraph.types import Command
 import json
-import traceback
 
 _MAX_RETRIES = 2
 _logger = get_logger("generate_message_agent")
@@ -101,8 +100,8 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
         logger.error("router_error", user_message=f"[router] 오류: {e}", exc_info=True)
         return {
             "status": "failed",
-            "error": str(e),
-            "error_details": {"node": "router_node", "traceback": traceback.format_exc()},
+            "error": "라우팅 중 오류가 발생했습니다.",
+            "error_details": {"node": "router_node"},
             "decisions": {"next_node": "output_node"},
             "logs": logger.get_user_logs(),
         }
@@ -136,7 +135,7 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
             update={
                 "status": "failed",
                 "error": "메시지 생성 중 오류가 발생했습니다.",
-                "error_details": {"node": "generate_message_node", "traceback": traceback.format_exc()},
+                "error_details": {"node": "generate_message_node"},
                 "logs": agent_logger.get_user_logs(),
             },
         )
@@ -290,8 +289,8 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             goto="output_node",
             update={
                 "status": "failed",
-                "error": str(e),
-                "error_details": {"node": "message_feedback_node", "traceback": traceback.format_exc()},
+                "error": "피드백 적용 중 오류가 발생했습니다.",
+                "error_details": {"node": "message_feedback_node"},
                 "logs": agent_logger.get_user_logs(),
             },
         )

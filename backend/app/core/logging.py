@@ -245,7 +245,7 @@ class AgentLogger:
                 exc_info=True,
             )
             self._user_logs.append(
-                f"[Step {self._step}] {operation} 실패: {str(e)}"
+                f"[Step {self._step}] {operation} 처리 중 오류가 발생했습니다."
             )
             raise
         else:

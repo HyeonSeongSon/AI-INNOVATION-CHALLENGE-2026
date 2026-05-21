@@ -304,19 +304,20 @@ def make_recommend_product_node(client: A2AClient):
             )
 
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0]["data"].get("error", "알 수 없는 오류")
+            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
             _logger.error("recommend_product_agent_task_failed", node_name="recommend_product_agent", error=error_detail)
             return Command(
                 goto="supervisor",
                 update={
                     "status": "error",
                     "task_plan": [],
+                    "error": error_detail,
                     "logs": state.get("logs", []) + [f"[오류] recommend_product_agent 실패: {error_detail}"],
-                    "messages": [AIMessage(content=f"상품 추천 에이전트가 실패했습니다: {error_detail}", name="recommend_product_agent")],
+                    "messages": [AIMessage(content="상품 추천 에이전트가 실패했습니다.", name="recommend_product_agent")],
                 },
             )
 
-        result = task.artifacts[0]["data"]
+        result = task.artifacts[0].get("data", {})
 
         _logger.info("recommend_product_agent_done", node_name="recommend_product_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("recommend_product_agent")
@@ -384,19 +385,20 @@ def make_generate_message_node(client: A2AClient):
             )
 
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0]["data"].get("error", "알 수 없는 오류")
+            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
             _logger.error("generate_message_agent_task_failed", node_name="generate_message_agent", error=error_detail)
             return Command(
                 goto="supervisor",
                 update={
                     "status": "error",
                     "task_plan": [],
+                    "error": error_detail,
                     "logs": state.get("logs", []) + [f"[오류] generate_message_agent 실패: {error_detail}"],
-                    "messages": [AIMessage(content=f"메시지 생성 에이전트가 실패했습니다: {error_detail}", name="generate_message_agent")],
+                    "messages": [AIMessage(content="메시지 생성 에이전트가 실패했습니다.", name="generate_message_agent")],
                 },
             )
 
-        result = task.artifacts[0]["data"]
+        result = task.artifacts[0].get("data", {})
 
         _logger.info("generate_message_agent_done", node_name="generate_message_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("generate_message_agent")
@@ -463,19 +465,20 @@ def make_data_registration_node(client: A2AClient):
             )
 
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0]["data"].get("error", "알 수 없는 오류")
+            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
             _logger.error("data_registration_agent_task_failed", node_name="data_registration_agent", error=error_detail)
             return Command(
                 goto="supervisor",
                 update={
                     "status": "error",
                     "task_plan": [],
+                    "error": error_detail,
                     "logs": state.get("logs", []) + [f"[오류] data_registration_agent 실패: {error_detail}"],
-                    "messages": [AIMessage(content=f"데이터 등록 에이전트가 실패했습니다: {error_detail}", name="data_registration_agent")],
+                    "messages": [AIMessage(content="데이터 등록 에이전트가 실패했습니다.", name="data_registration_agent")],
                 },
             )
 
-        result = task.artifacts[0]["data"]
+        result = task.artifacts[0].get("data", {})
 
         _logger.info("data_registration_agent_done", node_name="data_registration_agent", status=result.get("status"))
         ai_msg, tool_msg = create_handoff_messages("data_registration_agent")
