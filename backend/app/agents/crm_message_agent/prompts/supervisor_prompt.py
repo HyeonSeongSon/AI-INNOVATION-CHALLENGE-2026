@@ -93,10 +93,16 @@ _FINAL_ANSWER_SYSTEM_PROMPT = """당신은 CRM 마케팅 Supervisor입니다.
 """
 
 
-def build_supervisor_prompt(messages: list, summary: str = "") -> list:
+def build_supervisor_prompt(
+    messages: list,
+    summary: str = "",
+    file_records: list | None = None,
+) -> list:
     system = _ROUTING_SYSTEM_PROMPT
     if summary:
         system = f"## 이전 대화 요약\n{summary}\n\n---\n\n" + system
+    if file_records:
+        system += f"\n\n## 현재 요청에 포함된 파일 데이터\nfile_records {len(file_records)}건이 업로드되어 있습니다. data_registration_agent를 호출하세요."
     return [SystemMessage(content=system)] + messages
 
 

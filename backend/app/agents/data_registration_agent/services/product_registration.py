@@ -362,7 +362,11 @@ class ProductRegistrationService:
 
         prompt = builder(extra_category, product_document, category_list)
         try:
-            response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
+            response = await ainvoke_with_timeout(
+                self._document_llm,
+                [HumanMessage(content=prompt)],
+                timeout=settings.llm_document_timeout,
+            )
         except Exception as e:
             logger.error("build_structured_document_failed", main_category=main_category, error=str(e), exc_info=True)
             raise
