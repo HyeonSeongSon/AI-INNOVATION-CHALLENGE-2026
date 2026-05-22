@@ -43,7 +43,13 @@ services:
   recommend-agent:
     <<: *backend-common
     container_name: recommend-agent
-    command: uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001
+    command: >
+      bash -c "
+        until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
+          echo 'Waiting for fastapi-search...'; sleep 5;
+        done &&
+        uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001 --reload
+      "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
       OPENSEARCH_API_URL: http://fastapi-search:8010
@@ -59,7 +65,13 @@ services:
   generate-agent:
     <<: *backend-common
     container_name: generate-agent
-    command: uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002
+    command: >
+      bash -c "
+        until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
+          echo 'Waiting for fastapi-search...'; sleep 5;
+        done &&
+        uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002 --reload
+      "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
       OPENSEARCH_API_URL: http://fastapi-search:8010
@@ -75,7 +87,13 @@ services:
   data-registration-agent:
     <<: *backend-common
     container_name: data-registration-agent
-    command: uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003
+    command: >
+      bash -c "
+        until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
+          echo 'Waiting for fastapi-search...'; sleep 5;
+        done &&
+        uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003 --reload
+      "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
       OPENSEARCH_API_URL: http://fastapi-search:8010

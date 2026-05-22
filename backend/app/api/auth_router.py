@@ -16,6 +16,7 @@ from ..core.database import get_db
 from ..core.logging import get_logger
 from ..core.models import RefreshToken, User
 from ..core.security import (
+    DUMMY_HASH,
     create_access_token,
     generate_refresh_token,
     get_refresh_token_expiry,
@@ -173,7 +174,7 @@ async def login(
 
     # 타이밍 공격 방지: 사용자 없어도 dummy 해시 검증 수행
     if not user:
-        verify_password(body.password, "$2b$12$dummyhashtopreventtimingattack00")
+        verify_password(body.password, DUMMY_HASH)
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
     if not verify_password(body.password, user.password_hash):
@@ -226,6 +227,7 @@ async def refresh_token(
             RefreshToken.revoked == False,
             RefreshToken.expires_at > datetime.now(timezone.utc),
         )
+        .with_for_update()
         .first()
     )
     if not rt:

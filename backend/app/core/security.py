@@ -14,6 +14,9 @@ from ..config.settings import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# 로그인 타이밍 공격 방어용 — 사용자 미존재 시 bcrypt 시간 소비를 보장하기 위해 사용
+DUMMY_HASH: str = pwd_context.hash("dummy")
+
 
 # ──────────────────────────────────────────────────────
 # 비밀번호

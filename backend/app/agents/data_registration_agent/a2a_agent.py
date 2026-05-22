@@ -63,6 +63,7 @@ async def send_task(request: TaskSendRequest, req: Request):
                     "messages": serialize_messages(result.get("messages", [])),
                     "logs": result.get("logs", []),
                     "status": result.get("status"),
+                    "error": result.get("error"),
                 },
             }],
         )

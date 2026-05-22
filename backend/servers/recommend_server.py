@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"), override=True)
+load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"))
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

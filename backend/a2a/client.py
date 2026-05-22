@@ -24,7 +24,10 @@ class A2AClient:
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=settings.a2a_timeout)
+            self._http_client = httpx.AsyncClient(
+                timeout=settings.a2a_timeout,
+                headers={"X-Internal-Token": settings.internal_token or ""},
+            )
         return self._http_client
 
     async def aclose(self) -> None:

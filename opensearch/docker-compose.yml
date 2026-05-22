@@ -93,15 +93,12 @@ services:
         condition: service_healthy
 
   fastapi-search:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     container_name: fastapi-search
     working_dir: /app
-    command: >
-      bash -c "
-        pip install uv &&
-        uv pip install -r requirements.txt --system &&
-        python opensearch_api.py
-      "
+    command: python opensearch_api.py
     volumes:
       - .:/app
     expose:
@@ -112,6 +109,13 @@ services:
       - OPENSEARCH_HOST=opensearch-node1
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
+      - ENVIRONMENT=production
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8010/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - msa-net
     depends_on:

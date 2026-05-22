@@ -27,11 +27,17 @@ _http_client: Optional[httpx.AsyncClient] = None
 def _get_http_client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.http_timeout_default),
+            headers={"X-Internal-Token": settings.internal_token},
+        )
         register(_http_client)
     elif _http_client.is_closed:
         old = _http_client
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.http_timeout_default),
+            headers={"X-Internal-Token": settings.internal_token},
+        )
         replace(old, _http_client)
     return _http_client
 

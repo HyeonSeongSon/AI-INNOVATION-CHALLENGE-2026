@@ -3,6 +3,8 @@ import time
 from collections import deque
 from datetime import datetime, timezone, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
 from app.core.models import RateLimitEntry
 
 
@@ -62,9 +64,13 @@ class PostgresRateLimiter:
             now = datetime.now(tz=timezone.utc)
 
             if entry is None:
-                db.add(RateLimitEntry(key=key, count=1, window_start=now, prev_count=0))
-                db.commit()
-                return True, 0
+                try:
+                    db.add(RateLimitEntry(key=key, count=1, window_start=now, prev_count=0))
+                    db.commit()
+                    return True, 0
+                except IntegrityError:
+                    db.rollback()
+                    return self._check(key)  # 동시 INSERT 경쟁 — 행이 이미 생성됨, 재시도
 
             elapsed = (now - entry.window_start).total_seconds()
 
