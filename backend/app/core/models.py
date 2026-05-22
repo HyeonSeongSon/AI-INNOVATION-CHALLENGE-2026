@@ -286,7 +286,9 @@ class User(Base):
     email         = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     role          = Column(String(20), nullable=False, default='user')  # 'admin' | 'user'
-    is_active     = Column(Boolean, nullable=False, default=True)
+    is_active             = Column(Boolean, nullable=False, default=True)
+    failed_login_attempts = Column(Integer, nullable=False, default=0)
+    locked_until          = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at    = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at    = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

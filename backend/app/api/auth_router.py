@@ -24,7 +24,7 @@ from ..core.security import (
     hash_token,
     verify_password,
 )
-from .deps import get_current_user, get_login_limiter, get_register_limiter, require_admin
+from .deps import get_current_user, get_lockout_limiter, get_login_limiter, get_register_limiter, require_admin
 from ..core.auth import UserContext
 from ..core.ip_utils import get_client_ip
 from ..core.rate_limiter import PostgresRateLimiter
@@ -155,6 +155,7 @@ async def login(
     body: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
     limiter: PostgresRateLimiter = Depends(get_login_limiter),
+    lockout_limiter: PostgresRateLimiter = Depends(get_lockout_limiter),
 ):
     """
     로그인. 성공 시 HttpOnly Cookie에 access_token + refresh_token 세팅.
@@ -170,6 +171,8 @@ async def login(
             headers={"Retry-After": str(retry_after)},
         )
 
+    lockout_key = f"{ip}:{body.username}"
+
     user = db.query(User).filter(User.email == body.username).first()
 
     # 타이밍 공격 방지: 사용자 없어도 dummy 해시 검증 수행
@@ -177,11 +180,24 @@ async def login(
         verify_password(body.password, DUMMY_HASH)
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
+    # per-IP-email 잠금 확인 (IP를 바꿔가며 계정을 잠그는 DoS 공격 차단)
+    if not await lockout_limiter.peek(lockout_key):
+        logger.warning("account_ip_locked", client_ip=ip)
+        raise HTTPException(
+            status_code=429,
+            detail="잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(settings.lockout_per_ip_window_seconds)},
+        )
+
     if not verify_password(body.password, user.password_hash):
+        await lockout_limiter.is_allowed(lockout_key)  # 실패 카운터 증가
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다.")
+
+    # 로그인 성공 시 해당 IP-email 잠금 카운터 초기화
+    await lockout_limiter.reset(lockout_key)
 
     access_token = create_access_token(user_id=str(user.id), email=user.email, role=user.role)
     raw_refresh = generate_refresh_token()

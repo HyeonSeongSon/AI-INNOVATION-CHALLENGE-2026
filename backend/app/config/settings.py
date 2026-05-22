@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     trusted_proxy_ips: set[str] = set()
     trusted_proxy_count: int = 1  # 앞단 신뢰 프록시 수 (CDN+Nginx 체인이면 2)
 
+    # Account lockout (per IP-email 쌍 기준 — 전역 계정 잠금 대신 사용)
+    account_lockout_max_attempts: int = 10    # 하위 호환용 — 실제 잠금 로직은 lockout_per_ip_* 사용
+    account_lockout_duration_seconds: int = 900
+    lockout_per_ip_max_attempts: int = 10     # 동일 IP-이메일 쌍에서 최대 실패 횟수
+    lockout_per_ip_window_seconds: int = 900  # 잠금 지속 시간 (기본 15분)
+
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
     generate_message_agent_url: str = "http://localhost:8002"

@@ -26,3 +26,7 @@ async def get_login_limiter(request: Request) -> PostgresRateLimiter:
 
 async def get_register_limiter(request: Request) -> PostgresRateLimiter:
     return request.app.state.register_limiter
+
+
+async def get_lockout_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.lockout_limiter

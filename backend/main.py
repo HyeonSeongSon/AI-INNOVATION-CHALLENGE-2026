@@ -69,6 +69,11 @@ async def lifespan(app: FastAPI):
         max_requests=settings.rate_limit_register_max_requests,
         window_seconds=settings.rate_limit_register_window_seconds,
     )
+    app.state.lockout_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.lockout_per_ip_max_attempts,
+        window_seconds=settings.lockout_per_ip_window_seconds,
+    )
 
     async with AsyncConnectionPool(
         conninfo=settings.postgres_url,

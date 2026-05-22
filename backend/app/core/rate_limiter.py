@@ -53,6 +53,42 @@ class PostgresRateLimiter:
         """(허용 여부, Retry-After 초) 반환. 허용 시 retry_after=0."""
         return await asyncio.to_thread(self._check, key)
 
+    async def peek(self, key: str) -> bool:
+        """카운터를 증가시키지 않고 현재 상태만 확인. 한도 미만이면 True, 초과면 False."""
+        return await asyncio.to_thread(self._peek, key)
+
+    async def reset(self, key: str) -> None:
+        """해당 key의 rate_limits 엔트리 삭제."""
+        await asyncio.to_thread(self._reset, key)
+
+    def _peek(self, key: str) -> bool:
+        with self._factory() as db:
+            entry: RateLimitEntry | None = db.query(RateLimitEntry).filter_by(key=key).first()
+            if entry is None:
+                return True
+
+            now = datetime.now(tz=timezone.utc)
+            elapsed = (now - entry.window_start).total_seconds()
+
+            if elapsed >= 2 * self._window:
+                return True
+
+            prev_count = entry.prev_count
+            curr_count = entry.count
+
+            if elapsed >= self._window:
+                prev_count = curr_count
+                curr_count = 0
+                elapsed = elapsed % self._window
+
+            effective = prev_count * (1.0 - elapsed / self._window) + curr_count
+            return effective < self._max
+
+    def _reset(self, key: str) -> None:
+        with self._factory() as db:
+            db.query(RateLimitEntry).filter_by(key=key).delete()
+            db.commit()
+
     def _check(self, key: str) -> tuple[bool, int]:
         with self._factory() as db:
             entry: RateLimitEntry | None = (
