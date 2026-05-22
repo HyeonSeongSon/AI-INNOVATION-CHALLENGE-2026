@@ -1,6 +1,10 @@
+import hmac
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from typing import Dict, Optional, List, Union
 import logging
 import os
@@ -16,12 +20,29 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+_INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+_SKIP_PATHS = {"/", "/health"}
+
+
+class InternalTokenMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path in _SKIP_PATHS:
+            return await call_next(request)
+        token = request.headers.get("X-Internal-Token", "")
+        if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
 # FastAPI 앱 초기화
 app = FastAPI(
     title="OpenSearch Hybrid Search API",
     description="하이브리드 검색 (BM25 + KNN) API",
     version="1.0.0"
 )
+
+# InternalTokenMiddleware는 CORS보다 먼저 등록 (인증 먼저 체크)
+app.add_middleware(InternalTokenMiddleware)
 
 # CORS 설정
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")

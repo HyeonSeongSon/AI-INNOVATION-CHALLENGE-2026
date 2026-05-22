@@ -6,23 +6,18 @@ services:
     env_file:
       - .env
     environment:
-      # PostgreSQL 관리자 계정 설정 (.env 파일에서 로드)
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      # PostgreSQL 설정
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
       TZ: Asia/Seoul
     ports:
-      # 호스트:컨테이너 포트 매핑
       - "${POSTGRES_PORT}:5432"
     volumes:
-      # 데이터 영속성을 위한 볼륨 마운트
       - postgres_data:/var/lib/postgresql/data
-      # 초기화 SQL 스크립트 (선택사항)
       - ./init:/docker-entrypoint-initdb.d
     networks:
-      - ai-innovation-network
+      - msa-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -59,7 +54,7 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
-      - ai-innovation-network
+      - msa-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,15 +63,15 @@ services:
     build: .
     container_name: ai-innovation-db-api
     restart: always
-    ports:
-      - "8020:8020"
+    expose:
+      - "8020"
     env_file:
       - .env
     depends_on:
       postgres:
         condition: service_healthy
     networks:
-      - ai-innovation-network
+      - msa-net
 
 volumes:
   postgres_data:
@@ -85,5 +80,5 @@ volumes:
     driver: local
 
 networks:
-  ai-innovation-network:
-    driver: bridge
+  msa-net:
+    external: true

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 // API 및 Context
-import api, { pipelineApi, dbApi } from '../api';
+import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 

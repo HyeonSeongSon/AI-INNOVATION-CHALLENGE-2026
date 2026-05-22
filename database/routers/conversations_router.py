@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -78,23 +78,32 @@ def create_conversation(body: CreateConversationRequest, db: Session = Depends(g
 
 
 @router.get("", response_model=List[ConversationSummary])
-def list_conversations(user_id: str = Query(...), db: Session = Depends(get_db)):
-    """사용자의 대화 목록 조회 (최신순, messages 필드 제외)"""
-    convs = (
-        db.query(Conversation)
-        .filter(Conversation.user_id == user_id)
-        .order_by(Conversation.last_active_at.desc())
-        .all()
-    )
-    return convs
+def list_conversations(
+    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_role: str = Header(default="user", alias="X-User-Role"),
+    db: Session = Depends(get_db),
+):
+    """사용자의 대화 목록 조회 (최신순, messages 필드 제외 / admin은 전체 조회)"""
+    q = db.query(Conversation)
+    if x_user_role != "admin":
+        q = q.filter(Conversation.user_id == x_user_id)
+    return q.order_by(Conversation.last_active_at.desc()).all()
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
-def get_conversation(conv_id: str, limit: int = Query(default=200, le=500), db: Session = Depends(get_db)):
+def get_conversation(
+    conv_id: str,
+    limit: int = Query(default=200, le=500),
+    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_role: str = Header(default="user", alias="X-User-Role"),
+    db: Session = Depends(get_db),
+):
     """대화 상세 조회 (messages 포함, 최근 limit건)"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    if x_user_role != "admin" and conv.user_id != x_user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     rows = (
         db.query(ConversationMessage)
         .filter(ConversationMessage.conversation_id == conv_id)
@@ -115,11 +124,19 @@ def get_conversation(conv_id: str, limit: int = Query(default=200, le=500), db: 
 
 
 @router.put("/{conv_id}/messages")
-def update_messages(conv_id: str, body: UpdateMessagesRequest, db: Session = Depends(get_db)):
+def update_messages(
+    conv_id: str,
+    body: UpdateMessagesRequest,
+    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_role: str = Header(default="user", alias="X-User-Role"),
+    db: Session = Depends(get_db),
+):
     """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    if x_user_role != "admin" and conv.user_id != x_user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.query(ConversationMessage).filter(
         ConversationMessage.conversation_id == conv_id
@@ -136,11 +153,18 @@ def update_messages(conv_id: str, body: UpdateMessagesRequest, db: Session = Dep
 
 
 @router.delete("/{conv_id}")
-def delete_conversation(conv_id: str, db: Session = Depends(get_db)):
+def delete_conversation(
+    conv_id: str,
+    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_role: str = Header(default="user", alias="X-User-Role"),
+    db: Session = Depends(get_db),
+):
     """대화 삭제"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    if x_user_role != "admin" and conv.user_id != x_user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.delete(conv)
     db.commit()

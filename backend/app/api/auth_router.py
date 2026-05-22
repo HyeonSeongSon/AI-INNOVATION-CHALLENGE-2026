@@ -22,8 +22,9 @@ from ..core.security import (
     hash_token,
     verify_password,
 )
-from .deps import get_current_user
+from .deps import get_current_user, get_login_limiter, get_register_limiter
 from ..core.auth import UserContext
+from ..core.rate_limiter import InMemoryRateLimiter
 
 logger = get_logger("auth")
 
@@ -31,6 +32,13 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 _COOKIE_SECURE = settings.environment == "production"
 _COOKIE_SAMESITE = "lax"
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 # ──────────────────────────────────────────────────────
@@ -99,8 +107,23 @@ def _clear_auth_cookies(response: Response) -> None:
 # ──────────────────────────────────────────────────────
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-async def register(body: RegisterRequest, db: Session = Depends(get_db)):
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+    limiter: InMemoryRateLimiter = Depends(get_register_limiter),
+):
     """회원가입. 이메일 중복 체크 후 bcrypt 해싱하여 저장."""
+    ip = _get_client_ip(request)
+    allowed, retry_after = await limiter.is_allowed(ip)
+    if not allowed:
+        logger.warning("rate_limit_exceeded", endpoint="register", client_ip=ip, retry_after=retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     existing = db.query(User).filter(User.email == body.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="이미 사용 중인 이메일입니다.")
@@ -128,11 +151,22 @@ async def login(
     request: Request,
     body: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
+    limiter: InMemoryRateLimiter = Depends(get_login_limiter),
 ):
     """
     로그인. 성공 시 HttpOnly Cookie에 access_token + refresh_token 세팅.
     Content-Type: application/x-www-form-urlencoded (username=email, password=password).
     """
+    ip = _get_client_ip(request)
+    allowed, retry_after = await limiter.is_allowed(ip)
+    if not allowed:
+        logger.warning("rate_limit_exceeded", endpoint="login", client_ip=ip, retry_after=retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = db.query(User).filter(User.email == body.username).first()
 
     # 타이밍 공격 방지: 사용자 없어도 dummy 해시 검증 수행

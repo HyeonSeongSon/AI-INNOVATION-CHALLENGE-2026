@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Package, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
-import api, { pipelineApi, dbApi } from '../api';
+import api, { pipelineApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
@@ -286,14 +286,14 @@ export default function Home() {
     const msgParams = user.role === 'admin'
       ? { limit: 3 }
       : { user_id: user.id, limit: 3 };
-    dbApi.get('/generated-messages', { params: msgParams })
+    api.get('/generated-messages', { params: msgParams })
       .then(res => {
         setRecentMessages(res.data?.items || []);
         setMessageCount(res.data?.total ?? null);
       })
       .catch(() => {});
 
-    dbApi.get('/products', { params: { page_size: 1 } })
+    api.get('/products', { params: { page_size: 1 } })
       .then(res => setProductCount(res.data?.total ?? null))
       .catch(() => {});
   }, [user]);

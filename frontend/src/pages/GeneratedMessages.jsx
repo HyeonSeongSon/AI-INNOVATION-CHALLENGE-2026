@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FileText, Search, RotateCcw, ChevronLeft, ChevronRight, X, Trash2, Copy, Check } from 'lucide-react';
-import { dbApi } from '../api';
+import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const LIMIT = 20;
@@ -527,7 +527,7 @@ export default function GeneratedMessages() {
         offset: (targetPage - 1) * LIMIT,
         ...cleanParams,
       };
-      const res = await dbApi.get('/generated-messages', { params });
+      const res = await api.get('/generated-messages', { params });
       setMessages(res.data.items || []);
       setTotal(res.data.total || 0);
     } catch (err) {
@@ -540,7 +540,7 @@ export default function GeneratedMessages() {
   // 페이지 진입 시 필터 옵션 + 전체 데이터 초기 로드
   useEffect(() => {
     if (!user) return;
-    dbApi.get('/generated-messages/filter-options', { params: user.role !== 'admin' ? { user_id: user.id } : {} })
+    api.get('/generated-messages/filter-options', { params: user.role !== 'admin' ? { user_id: user.id } : {} })
       .then(res => setFilterOptions(res.data))
       .catch(err => console.error('필터 옵션 로드 실패:', err));
 
@@ -605,7 +605,7 @@ export default function GeneratedMessages() {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`선택한 ${selectedIds.size}개의 메시지를 삭제하시겠습니까?`)) return;
     try {
-      await dbApi.delete('/generated-messages', { data: { ids: [...selectedIds] } });
+      await api.delete('/generated-messages', { data: { ids: [...selectedIds] } });
       setSelectedIds(new Set());
       doFetch(committedRef.current, page);
     } catch (err) {

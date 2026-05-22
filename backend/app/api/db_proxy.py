@@ -1,0 +1,197 @@
+"""
+DB Proxy Router — BFF(Backend for Frontend) 패턴.
+프론트엔드 요청을 JWT 인증 후 내부 database:8020 서비스로 투명하게 전달한다.
+프론트엔드는 이 라우터를 통해 데이터에 접근하며, database 서비스 포트는 외부에 노출하지 않는다.
+"""
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+
+from ..config.settings import settings
+from ..core.auth import UserContext
+from .deps import get_current_user
+
+router = APIRouter(prefix="/api", tags=["DB Proxy"])
+
+_internal_client: httpx.AsyncClient | None = None
+
+
+def get_internal_client() -> httpx.AsyncClient:
+    global _internal_client
+    if _internal_client is None or _internal_client.is_closed:
+        _internal_client = httpx.AsyncClient(
+            base_url=settings.database_api_url,
+            headers={"X-Internal-Token": settings.internal_token},
+            timeout=httpx.Timeout(settings.http_timeout_long),
+        )
+    return _internal_client
+
+
+async def close_internal_client() -> None:
+    global _internal_client
+    if _internal_client is not None and not _internal_client.is_closed:
+        await _internal_client.aclose()
+
+
+async def _proxy(method: str, path: str, request: Request, extra_headers: dict | None = None) -> Response:
+    client = get_internal_client()
+    body = await request.body()
+    params = dict(request.query_params)
+    content_type = request.headers.get("Content-Type", "application/json")
+    headers = {"Content-Type": content_type, **(extra_headers or {})}
+
+    try:
+        upstream = await client.request(
+            method=method,
+            url=path,
+            content=body,
+            params=params,
+            headers=headers,
+        )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Database service timeout")
+
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/json"),
+    )
+
+
+# ── Conversations ─────────────────────────────────────────────────────────────
+
+@router.post("/conversations", status_code=201)
+async def proxy_conversations_create(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        body_data = await request.json()
+    except Exception:
+        body_data = {}
+    body_data["user_id"] = user.user_id
+    client = get_internal_client()
+    try:
+        upstream = await client.post("/api/conversations", json=body_data)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Database service timeout")
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/json"),
+    )
+
+
+@router.get("/conversations")
+async def proxy_conversations_list(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "GET", "/api/conversations", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+@router.get("/conversations/{conv_id}")
+async def proxy_conversations_get(
+    conv_id: str,
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "GET", f"/api/conversations/{conv_id}", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+@router.put("/conversations/{conv_id}/messages")
+async def proxy_conversations_update(
+    conv_id: str,
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "PUT", f"/api/conversations/{conv_id}/messages", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+@router.delete("/conversations/{conv_id}")
+async def proxy_conversations_delete(
+    conv_id: str,
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "DELETE", f"/api/conversations/{conv_id}", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+# ── Personas ──────────────────────────────────────────────────────────────────
+
+@router.post("/personas/list")
+async def proxy_personas_list(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("POST", "/api/personas/list", request)
+
+
+@router.delete("/personas")
+async def proxy_personas_bulk_delete(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("DELETE", "/api/personas", request)
+
+
+# ── Product Search Queries ─────────────────────────────────────────────────────
+
+@router.post("/product-search-queries/get")
+async def proxy_product_search_queries_get(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("POST", "/api/product-search-queries/get", request)
+
+
+# ── Generated Messages ────────────────────────────────────────────────────────
+
+@router.get("/generated-messages/filter-options")
+async def proxy_generated_messages_filter_options(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("GET", "/api/generated-messages/filter-options", request)
+
+
+@router.get("/generated-messages")
+async def proxy_generated_messages_list(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("GET", "/api/generated-messages", request)
+
+
+@router.delete("/generated-messages")
+async def proxy_generated_messages_delete(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("DELETE", "/api/generated-messages", request)
+
+
+# ── Products ──────────────────────────────────────────────────────────────────
+
+@router.get("/products")
+async def proxy_products_list(
+    request: Request,
+    _: UserContext = Depends(get_current_user),
+):
+    return await _proxy("GET", "/api/products", request)

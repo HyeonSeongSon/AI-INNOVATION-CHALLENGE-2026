@@ -2,13 +2,12 @@
 
 from fastapi import Depends, HTTPException, Request
 
-from ..core.auth import AuthProvider, UserContext, get_auth_provider
+from ..core.auth import AuthProvider, UserContext
+from ..core.rate_limiter import InMemoryRateLimiter
 
 
-async def get_current_user(
-    request: Request,
-    provider: AuthProvider = Depends(get_auth_provider),
-) -> UserContext:
+async def get_current_user(request: Request) -> UserContext:
+    provider: AuthProvider = request.app.state.auth_provider
     return await provider.authenticate(request)
 
 
@@ -19,3 +18,11 @@ async def require_admin(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
     return current_user
+
+
+async def get_login_limiter(request: Request) -> InMemoryRateLimiter:
+    return request.app.state.login_limiter
+
+
+async def get_register_limiter(request: Request) -> InMemoryRateLimiter:
+    return request.app.state.register_limiter

@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     parser_model_temperature: float = 0.0
 
     # External APIs
-    opensearch_api_url: str = "http://localhost:8010"
-    database_api_url: str = "http://localhost:8020"
+    opensearch_api_url: str = "http://fastapi-search:8010"
+    database_api_url: str = "http://ai-innovation-db-api:8020"
 
     # PostgreSQL (direct)
     postgres_host: str = "localhost"
@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # App
     app_root: str = ""
 
+    # Internal service-to-service token
+    internal_token: str = ""
+
     # Auth
     auth_mode: str = "api_key"
     service_api_key: str = ""
@@ -57,6 +60,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
+
+    # Rate limiting — auth endpoints
+    rate_limit_login_max_requests: int = 10
+    rate_limit_login_window_seconds: int = 60
+    rate_limit_register_max_requests: int = 5
+    rate_limit_register_window_seconds: int = 60
 
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
@@ -111,6 +120,10 @@ class Settings(BaseSettings):
     def validate_required_secrets(self) -> "Settings":
         if not self.postgres_url:
             raise ValueError("POSTGRES_URL 환경변수가 설정되지 않았습니다.")
+        if not self.postgres_password:
+            raise ValueError("POSTGRES_PASSWORD 환경변수가 설정되지 않았습니다.")
+        if not self.internal_token:
+            raise ValueError("INTERNAL_TOKEN 환경변수가 설정되지 않았습니다.")
         if self.auth_mode == "api_key" and not self.service_api_key:
             raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
         if self.auth_mode == "jwt":

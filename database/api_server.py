@@ -3,10 +3,13 @@ Database API Server
 DB CRUD + Pipeline API (port 8020)
 """
 
+import hmac
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 load_dotenv()
 
@@ -18,11 +21,28 @@ from routers.generated_messages_router import router as generated_messages_route
 # DB 테이블 초기화
 init_db()
 
+_INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+_SKIP_PATHS = {"/", "/health"}
+
+
+class InternalTokenMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path in _SKIP_PATHS:
+            return await call_next(request)
+        token = request.headers.get("X-Internal-Token", "")
+        if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
 app = FastAPI(
     title="Database API",
     description="DB CRUD 및 Pipeline API",
     version="1.0.0",
 )
+
+# InternalTokenMiddleware는 CORS보다 먼저 등록 (인증 먼저 체크)
+app.add_middleware(InternalTokenMiddleware)
 
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(

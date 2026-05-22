@@ -8,8 +8,8 @@ services:
     ports:
       - "3000:80"
     networks:
-      - ai-innovation-network
+      - msa-net
 
 networks:
-  ai-innovation-network:
-    driver: bridge
+  msa-net:
+    external: true

@@ -60,12 +60,7 @@ api.interceptors.response.use(
   }
 );
 
-// DB/Pipeline 서버 (port 8020) - /api/personas/*, /api/generated-messages/*
-export const dbApi = axios.create({
-  baseURL: import.meta.env.VITE_DB_API_URL ?? 'http://localhost:8020/api',
-  headers: { 'Content-Type': 'application/json' },
-});
-
-export const pipelineApi = dbApi;
+// pipelineApi — backend:8005 BFF 프록시를 통해 DB 데이터에 접근 (인증 포함)
+export const pipelineApi = api;
 
 export default api;

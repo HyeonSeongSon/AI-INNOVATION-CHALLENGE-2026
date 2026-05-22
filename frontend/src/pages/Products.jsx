@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import styled from 'styled-components';
 import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star, Upload, Sparkles } from 'lucide-react';
-import { dbApi } from '../api';
+import api from '../api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import brandsData from '../../data/brands.json';
@@ -764,7 +764,7 @@ export default function Products() {
       const cleanParams = Object.fromEntries(
         Object.entries(filterParams).filter(([, v]) => v !== '' && v != null)
       );
-      const res = await dbApi.get('/products', {
+      const res = await api.get('/products', {
         params: { ...cleanParams, page: targetPage, page_size: PAGE_SIZE },
       });
       setProducts(res.data.items || []);

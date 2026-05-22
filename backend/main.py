@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 from app.api import auth_router
-from app.api import conversations
+from app.api import db_proxy
 from app.api import generated_messages
 from app.api import products_pipeline
 from app.api import persona_pipeline
@@ -23,6 +23,7 @@ from app.core.data_loader import validate_static_configs
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
+from app.core.auth import get_auth_provider
 from app.core.http_client_registry import close_all
 
 # Load .env before anything else
@@ -51,6 +52,19 @@ async def lifespan(app: FastAPI):
 
     init_db()
     validate_static_configs()
+
+    from app.core.rate_limiter import InMemoryRateLimiter
+    app.state.auth_provider = get_auth_provider()
+
+    app.state.login_limiter = InMemoryRateLimiter(
+        max_requests=settings.rate_limit_login_max_requests,
+        window_seconds=settings.rate_limit_login_window_seconds,
+    )
+    app.state.register_limiter = InMemoryRateLimiter(
+        max_requests=settings.rate_limit_register_max_requests,
+        window_seconds=settings.rate_limit_register_window_seconds,
+    )
+
     async with AsyncConnectionPool(
         conninfo=settings.postgres_url,
         min_size=1,
@@ -65,6 +79,7 @@ async def lifespan(app: FastAPI):
         logger.info("all_services_and_graph_initialized")
         yield
         await close_all()
+        await db_proxy.close_internal_client()
 
 
 # FastAPI 앱 생성
@@ -88,7 +103,7 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(auth_router.router)
-app.include_router(conversations.router)
+app.include_router(db_proxy.router)
 app.include_router(generated_messages.router)
 app.include_router(products_pipeline.router)
 app.include_router(persona_pipeline.router)

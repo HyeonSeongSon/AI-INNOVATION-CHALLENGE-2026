@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.generate_message_agent.a2a_agent import router
 from app.agents.generate_message_agent.workflow import build_workflow
+from app.core.internal_auth import InternalTokenMiddleware
 from app.core.logging import configure_logging, get_logger
 from app.core.http_client_registry import close_all
 from app.config.settings import settings
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
 
 _allowed_origins = settings.allowed_origins
 app = FastAPI(title="Generate Message Agent", version="1.0.0", lifespan=lifespan)
+app.add_middleware(InternalTokenMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
