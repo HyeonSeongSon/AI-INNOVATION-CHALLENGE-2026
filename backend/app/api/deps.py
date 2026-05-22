@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException, Request
 
 from ..core.auth import AuthProvider, UserContext
-from ..core.rate_limiter import InMemoryRateLimiter
+from ..core.rate_limiter import PostgresRateLimiter
 
 
 async def get_current_user(request: Request) -> UserContext:
@@ -20,9 +20,9 @@ async def require_admin(
     return current_user
 
 
-async def get_login_limiter(request: Request) -> InMemoryRateLimiter:
+async def get_login_limiter(request: Request) -> PostgresRateLimiter:
     return request.app.state.login_limiter
 
 
-async def get_register_limiter(request: Request) -> InMemoryRateLimiter:
+async def get_register_limiter(request: Request) -> PostgresRateLimiter:
     return request.app.state.register_limiter

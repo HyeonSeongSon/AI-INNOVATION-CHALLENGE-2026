@@ -4,6 +4,7 @@ HttpOnly Cookie 방식 — 웹 프론트엔드 우선.
 """
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
@@ -22,23 +23,19 @@ from ..core.security import (
     hash_token,
     verify_password,
 )
-from .deps import get_current_user, get_login_limiter, get_register_limiter
+from .deps import get_current_user, get_login_limiter, get_register_limiter, require_admin
 from ..core.auth import UserContext
-from ..core.rate_limiter import InMemoryRateLimiter
+from ..core.ip_utils import get_client_ip
+from ..core.rate_limiter import PostgresRateLimiter
 
 logger = get_logger("auth")
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+UserRole = Literal["admin", "user"]
+
 _COOKIE_SECURE = settings.environment == "production"
 _COOKIE_SAMESITE = "lax"
-
-
-def _get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 # ──────────────────────────────────────────────────────
@@ -48,7 +45,6 @@ def _get_client_ip(request: Request) -> str:
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
-    role: str = "user"
 
     @field_validator("password")
     @classmethod
@@ -57,18 +53,24 @@ class RegisterRequest(BaseModel):
             raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
         return v
 
-    @field_validator("role")
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: UserRole = "user"
+
+    @field_validator("password")
     @classmethod
-    def validate_role(cls, v: str) -> str:
-        if v not in ("admin", "user"):
-            raise ValueError("role은 'admin' 또는 'user'만 허용됩니다.")
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
         return v
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
-    role: str
+    role: UserRole
     created_at: datetime
 
 
@@ -111,10 +113,10 @@ async def register(
     request: Request,
     body: RegisterRequest,
     db: Session = Depends(get_db),
-    limiter: InMemoryRateLimiter = Depends(get_register_limiter),
+    limiter: PostgresRateLimiter = Depends(get_register_limiter),
 ):
     """회원가입. 이메일 중복 체크 후 bcrypt 해싱하여 저장."""
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     allowed, retry_after = await limiter.is_allowed(ip)
     if not allowed:
         logger.warning("rate_limit_exceeded", endpoint="register", client_ip=ip, retry_after=retry_after)
@@ -131,7 +133,7 @@ async def register(
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
-        role=body.role,
+        role="user",
     )
     db.add(user)
     db.commit()
@@ -151,13 +153,13 @@ async def login(
     request: Request,
     body: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
-    limiter: InMemoryRateLimiter = Depends(get_login_limiter),
+    limiter: PostgresRateLimiter = Depends(get_login_limiter),
 ):
     """
     로그인. 성공 시 HttpOnly Cookie에 access_token + refresh_token 세팅.
     Content-Type: application/x-www-form-urlencoded (username=email, password=password).
     """
-    ip = _get_client_ip(request)
+    ip = get_client_ip(request)
     allowed, retry_after = await limiter.is_allowed(ip)
     if not allowed:
         logger.warning("rate_limit_exceeded", endpoint="login", client_ip=ip, retry_after=retry_after)
@@ -188,7 +190,7 @@ async def login(
         token_hash=hash_token(raw_refresh),
         expires_at=get_refresh_token_expiry(),
         user_agent=request.headers.get("User-Agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     db.add(rt)
     db.commit()
@@ -245,7 +247,7 @@ async def refresh_token(
         token_hash=hash_token(new_raw_refresh),
         expires_at=get_refresh_token_expiry(),
         user_agent=request.headers.get("User-Agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     db.add(new_rt)
     db.commit()
@@ -265,30 +267,22 @@ async def logout(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: UserContext = Depends(get_current_user),
 ):
-    """로그아웃. Refresh Token DB에서 폐기 + 양쪽 Cookie 삭제."""
+    """로그아웃. Refresh Token DB에서 폐기 + 양쪽 Cookie 삭제.
+    Access Token 만료 여부와 무관하게 항상 실행된다.
+    """
     raw_refresh = request.cookies.get("refresh_token")
     if raw_refresh:
-        # Primary: 현재 기기의 refresh_token만 폐기. user_id 조건으로 IDOR 방지.
         rt = db.query(RefreshToken).filter(
             RefreshToken.token_hash == hash_token(raw_refresh),
-            RefreshToken.user_id == current_user.user_id,
+            RefreshToken.revoked == False,
         ).first()
         if rt:
             rt.revoked = True
             db.commit()
-    else:
-        # Fallback: 쿠키가 없으면 해당 user의 모든 활성 refresh_token 일괄 폐기
-        # (쿠키 만료 또는 탈취 후 쿠키 삭제 시나리오 대응 — AWS Cognito GlobalSignOut 패턴)
-        db.query(RefreshToken).filter(
-            RefreshToken.user_id == current_user.user_id,
-            RefreshToken.revoked == False,
-        ).update({"revoked": True})
-        db.commit()
+            logger.info("user_logged_out", user_id=str(rt.user_id))
 
     _clear_auth_cookies(response)
-    logger.info("user_logged_out", user_id=str(current_user.user_id))
     return {"message": "로그아웃 성공"}
 
 
@@ -305,4 +299,32 @@ async def get_me(
     user = db.query(User).filter(User.id == current_user.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    return UserResponse(id=str(user.id), email=user.email, role=user.role, created_at=user.created_at)
+
+
+# ──────────────────────────────────────────────────────
+# POST /auth/admin/users  (admin 전용)
+# ──────────────────────────────────────────────────────
+
+@router.post("/admin/users", response_model=UserResponse, status_code=201)
+async def create_user_by_admin(
+    request: Request,
+    body: CreateUserRequest,
+    db: Session = Depends(get_db),
+    admin: UserContext = Depends(require_admin),
+):
+    """admin이 특정 role로 사용자를 직접 생성. admin 계정 생성은 이 경로만 허용."""
+    if db.query(User).filter(User.email == body.email).first():
+        raise HTTPException(status_code=409, detail="이미 사용 중인 이메일입니다.")
+
+    user = User(
+        email=body.email,
+        password_hash=hash_password(body.password),
+        role=body.role,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    logger.info("admin_created_user", created_by=admin.user_id, target_role=user.role)
     return UserResponse(id=str(user.id), email=user.email, role=user.role, created_at=user.created_at)

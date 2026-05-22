@@ -138,17 +138,37 @@ async def proxy_conversations_delete(
 @router.post("/personas/list")
 async def proxy_personas_list(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
 ):
-    return await _proxy("POST", "/api/personas/list", request)
+    try:
+        body_data = await request.json()
+    except Exception:
+        body_data = {}
+    body_data["user_id"] = user.user_id
+    body_data["role"] = user.role
+    client = get_internal_client()
+    try:
+        upstream = await client.post("/api/personas/list", json=body_data)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Database service timeout")
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/json"),
+    )
 
 
 @router.delete("/personas")
 async def proxy_personas_bulk_delete(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
 ):
-    return await _proxy("DELETE", "/api/personas", request)
+    return await _proxy(
+        "DELETE", "/api/personas", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
 
 
 # ── Product Search Queries ─────────────────────────────────────────────────────
@@ -174,17 +194,23 @@ async def proxy_generated_messages_filter_options(
 @router.get("/generated-messages")
 async def proxy_generated_messages_list(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
 ):
-    return await _proxy("GET", "/api/generated-messages", request)
+    return await _proxy(
+        "GET", "/api/generated-messages", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
 
 
 @router.delete("/generated-messages")
 async def proxy_generated_messages_delete(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
 ):
-    return await _proxy("DELETE", "/api/generated-messages", request)
+    return await _proxy(
+        "DELETE", "/api/generated-messages", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
 
 
 # ── Products ──────────────────────────────────────────────────────────────────

@@ -53,14 +53,19 @@ async def lifespan(app: FastAPI):
     init_db()
     validate_static_configs()
 
-    from app.core.rate_limiter import InMemoryRateLimiter
+    from app.core.rate_limiter import PostgresRateLimiter
+    from app.core.database import SessionLocal
     app.state.auth_provider = get_auth_provider()
+    _auth_log = logger.warning if settings.auth_mode == "api_key" else logger.info
+    _auth_log("auth_mode_active", auth_mode=settings.auth_mode)
 
-    app.state.login_limiter = InMemoryRateLimiter(
+    app.state.login_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
         max_requests=settings.rate_limit_login_max_requests,
         window_seconds=settings.rate_limit_login_window_seconds,
     )
-    app.state.register_limiter = InMemoryRateLimiter(
+    app.state.register_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
         max_requests=settings.rate_limit_register_max_requests,
         window_seconds=settings.rate_limit_register_window_seconds,
     )

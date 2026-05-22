@@ -7,7 +7,7 @@ import logging
 from datetime import date, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -102,6 +102,7 @@ def get_filter_options(user_id: Optional[str] = Query(None), db: Session = Depen
 
 @router.get("", response_model=GeneratedMessageFilterResponse)
 def list_generated_messages(
+    raw_request: Request,
     user_id: Optional[str] = Query(None),
     limit: int = Query(20),
     offset: int = Query(0),
@@ -113,9 +114,12 @@ def list_generated_messages(
     db: Session = Depends(get_db),
 ):
     """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)"""
+    header_user_id = raw_request.headers.get("X-User-Id")
+    header_role = raw_request.headers.get("X-User-Role", "user")
+    effective_user_id = user_id if header_role == "admin" else header_user_id
     query = db.query(GeneratedMessage)
-    if user_id:
-        query = query.filter(GeneratedMessage.user_id == user_id)
+    if effective_user_id:
+        query = query.filter(GeneratedMessage.user_id == effective_user_id)
 
     if brand:
         query = query.filter(GeneratedMessage.brand == brand)
@@ -157,15 +161,16 @@ def list_generated_messages(
 
 
 @router.delete("")
-def delete_messages(ids: List[str] = Body(..., embed=True), db: Session = Depends(get_db)):
+def delete_messages(raw_request: Request, ids: List[str] = Body(..., embed=True), db: Session = Depends(get_db)):
     """선택한 메시지 ID 목록 일괄 삭제"""
     if not ids:
         return {"deleted": 0}
-    deleted = (
-        db.query(GeneratedMessage)
-        .filter(GeneratedMessage.id.in_(ids))
-        .delete(synchronize_session=False)
-    )
+    user_id = raw_request.headers.get("X-User-Id")
+    role = raw_request.headers.get("X-User-Role", "user")
+    query = db.query(GeneratedMessage).filter(GeneratedMessage.id.in_(ids))
+    if role != "admin" and user_id:
+        query = query.filter(GeneratedMessage.user_id == user_id)
+    deleted = query.delete(synchronize_session=False)
     db.commit()
     return {"deleted": deleted}
 

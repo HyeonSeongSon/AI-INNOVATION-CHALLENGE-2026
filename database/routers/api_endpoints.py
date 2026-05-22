@@ -3,7 +3,7 @@ PostgreSQL 데이터베이스 API 엔드포인트
 새로운 테이블 스키마에 맞춰 재구성 (POST 전용)
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Dict, List, Optional
 from datetime import datetime
@@ -458,13 +458,18 @@ class PersonaBulkDeleteRequest(BaseModel):
 
 
 @router.delete("/personas", summary="페르소나 일괄 삭제")
-async def delete_personas_bulk(request: PersonaBulkDeleteRequest, db: Session = Depends(get_db)):
+async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteRequest, db: Session = Depends(get_db)):
     from core.models import Persona
 
     if not request.ids:
         return {"deleted": 0}
 
-    deleted = db.query(Persona).filter(Persona.persona_id.in_(request.ids)).delete(synchronize_session=False)
+    user_id = raw_request.headers.get("X-User-Id")
+    role = raw_request.headers.get("X-User-Role", "user")
+    query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
+    if role != "admin" and user_id:
+        query = query.filter(Persona.user_id == user_id)
+    deleted = query.delete(synchronize_session=False)
     db.commit()
 
     return {"deleted": deleted}

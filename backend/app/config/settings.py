@@ -1,3 +1,4 @@
+from typing import Literal
 from pathlib import Path
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
     internal_token: str = ""
 
     # Auth
-    auth_mode: str = "api_key"
+    auth_mode: Literal["api_key", "jwt"] = "jwt"
     service_api_key: str = ""
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
@@ -66,6 +67,8 @@ class Settings(BaseSettings):
     rate_limit_login_window_seconds: int = 60
     rate_limit_register_max_requests: int = 5
     rate_limit_register_window_seconds: int = 60
+    trusted_proxy_ips: set[str] = set()
+    trusted_proxy_count: int = 1  # 앞단 신뢰 프록시 수 (CDN+Nginx 체인이면 2)
 
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
@@ -105,6 +108,13 @@ class Settings(BaseSettings):
     def parse_allowed_origins(cls, v: object) -> object:
         if isinstance(v, str):
             return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
+    @field_validator("trusted_proxy_ips", mode="before")
+    @classmethod
+    def parse_trusted_proxy_ips(cls, v: object) -> object:
+        if isinstance(v, str):
+            return {ip.strip() for ip in v.split(",") if ip.strip()}
         return v
 
     @field_validator("chatgpt_model_name", "parser_model_name")

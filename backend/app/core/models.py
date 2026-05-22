@@ -317,3 +317,17 @@ class RefreshToken(Base):
 
     def __repr__(self):
         return f"<RefreshToken(id='{self.id}', user_id='{self.user_id}', revoked={self.revoked})>"
+
+
+# ============================================================
+# 9. RateLimitEntry Table
+# ============================================================
+
+class RateLimitEntry(Base):
+    """Rate limit 카운터 테이블. 분산 환경에서 공유 카운터 역할."""
+    __tablename__ = "rate_limits"
+
+    key          = Column(String(255), primary_key=True)
+    count        = Column(Integer, nullable=False, default=1)
+    window_start = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    prev_count   = Column(Integer, nullable=False, default=0)
