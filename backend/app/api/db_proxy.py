@@ -202,6 +202,28 @@ async def proxy_generated_messages_list(
     )
 
 
+@router.get("/generated-messages/count")
+async def proxy_generated_messages_count(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "GET", "/api/generated-messages/count", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+@router.get("/generated-messages/latest")
+async def proxy_generated_messages_latest(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy(
+        "GET", "/api/generated-messages/latest", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
 @router.delete("/generated-messages")
 async def proxy_generated_messages_delete(
     request: Request,

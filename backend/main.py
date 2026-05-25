@@ -1,6 +1,6 @@
 """
-FastAPI 메인 애플리케이션
-CRM Agent API 서버
+FastAPI API Gateway (port 8005)
+Auth + BFF proxy — 외부 노출 서버.
 """
 
 import asyncio
@@ -9,24 +9,14 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from psycopg_pool import AsyncConnectionPool
 from app.api import auth_router
 from app.api import db_proxy
-from app.api import generated_messages
-from app.api import products_pipeline
-from app.api import persona_pipeline
-from app.api import marketing_api
-from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.config.settings import settings
 from app.core.database import init_db
-from app.core.data_loader import validate_static_configs
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
-from app.core.langsmith_config import configure_langsmith
 from app.core.auth import get_auth_provider
 from app.core.cleanup import cleanup_loop
-from app.core.http_client_registry import close_all
 
 # Load .env before anything else
 load_dotenv(os.path.join(os.path.dirname(__file__), "app/.env"), override=True)
@@ -40,20 +30,10 @@ configure_logging(
 
 logger = get_logger("main")
 
-# Configure LangSmith tracing
-configure_langsmith()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.agents.shared.persona.persona_client import PersonaClient
-    from app.agents.data_registration_agent.services.product_registration import ProductRegistrationService
-
-    app.state.persona_client = PersonaClient()
-    app.state.registration = ProductRegistrationService()
-
     init_db()
-    validate_static_configs()
 
     from app.core.rate_limiter import PostgresRateLimiter
     from app.core.database import SessionLocal
@@ -79,39 +59,26 @@ async def lifespan(app: FastAPI):
 
     cleanup_task = asyncio.create_task(cleanup_loop())
     logger.info("cleanup_worker_started", interval_seconds=settings.cleanup_interval_seconds)
+    logger.info("api_gateway_initialized")
 
-    async with AsyncConnectionPool(
-        conninfo=settings.postgres_url,
-        min_size=1,
-        max_size=10,
-        kwargs={"autocommit": True, "prepare_threshold": 0},
-    ) as pool:
-        await pool.wait()
-        checkpointer = AsyncPostgresSaver(pool)
-        await checkpointer.setup()
-        app.state.pool = pool
-        app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
-        logger.info("all_services_and_graph_initialized")
-        yield
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
-        logger.info("cleanup_worker_stopped")
-        await close_all()
-        await db_proxy.close_internal_client()
+    yield
+
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    logger.info("cleanup_worker_stopped")
+    await db_proxy.close_internal_client()
 
 
-# FastAPI 앱 생성
 app = FastAPI(
-    title="CRM Agent API",
-    description="AI 기반 CRM 메시지 생성 API",
+    title="API Gateway",
+    description="Auth + BFF Proxy",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# Middleware (order matters: outermost first)
 app.add_middleware(RequestLoggingMiddleware)
 _allowed_origins = settings.allowed_origins
 app.add_middleware(
@@ -122,50 +89,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록
 app.include_router(auth_router.router)
 app.include_router(db_proxy.router)
-app.include_router(generated_messages.router)
-app.include_router(products_pipeline.router)
-app.include_router(persona_pipeline.router)
-app.include_router(marketing_api.router)
 
 
 @app.get("/")
 def read_root():
-    """헬스 체크"""
-    return {
-        "status": "ok",
-        "message": "CRM Agent API is running",
-        "version": "1.0.0"
-    }
+    return {"status": "ok", "message": "API Gateway is running", "version": "1.0.0"}
 
 
 @app.get("/health")
-async def health_check(req: Request):
-    """상세 헬스 체크"""
-    agent_ok = getattr(req.app.state, "agent_v2", None) is not None
-
-    db_ok = False
-    pool = getattr(req.app.state, "pool", None)
-    if pool is not None:
-        try:
-            async with pool.connection() as conn:
-                await conn.execute("SELECT 1")
-            db_ok = True
-        except Exception as e:
-            logger.warning("health_check_db_failed", error=str(e))
-            db_ok = False
-
-    overall = "healthy" if (agent_ok and db_ok) else "degraded"
-    return {
-        "status": overall,
-        "services": {
-            "agent": "ok" if agent_ok else "not_initialized",
-            "database": "ok" if db_ok else "unavailable",
-        },
-    }
-
+def health_check():
+    return {"status": "healthy", "port": 8005}
 
 
 if __name__ == "__main__":

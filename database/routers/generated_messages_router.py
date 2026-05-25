@@ -175,6 +175,22 @@ def delete_messages(raw_request: Request, ids: List[str] = Body(..., embed=True)
     return {"deleted": deleted}
 
 
+@router.get("/count")
+def count_generated_messages(
+    user_id: Optional[str] = Query(None),
+    raw_request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """user_id 기준 생성 메시지 총 개수 조회"""
+    header_user_id = raw_request.headers.get("X-User-Id") if raw_request else None
+    header_role = raw_request.headers.get("X-User-Role", "user") if raw_request else "user"
+    effective_user_id = user_id if header_role == "admin" else header_user_id
+    query = db.query(GeneratedMessage)
+    if effective_user_id:
+        query = query.filter(GeneratedMessage.user_id == effective_user_id)
+    return {"count": query.count()}
+
+
 @router.get("/latest", response_model=GeneratedMessageResponse)
 def get_latest(
     conversation_id: str = Query(...),

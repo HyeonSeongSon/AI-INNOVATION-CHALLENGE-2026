@@ -101,6 +101,49 @@ api.interceptors.response.use(
   }
 );
 
+// CRM 서비스 클라이언트 (port 8006) — LangGraph 에이전트 + Pipeline SSE
+export const crmApi = axios.create({
+  baseURL: `${import.meta.env.VITE_CRM_API_URL ?? 'http://localhost:8006'}/api`,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
+});
+
+crmApi.interceptors.response.use(
+  res => res,
+  async err => {
+    const { config: originalRequest, response } = err;
+
+    if (response?.status !== 401 || originalRequest._retry) {
+      return Promise.reject(err);
+    }
+
+    originalRequest._retry = true;
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        refreshSubscribers.push(error => {
+          if (error) reject(error);
+          else resolve(crmApi(originalRequest));
+        });
+      });
+    }
+
+    isRefreshing = true;
+
+    try {
+      await authApi.post('/auth/refresh', null, { timeout: 10_000 });
+      onRefreshed(null);
+      return crmApi(originalRequest);
+    } catch (refreshErr) {
+      onRefreshed(refreshErr);
+      window.location.href = '/login';
+      return Promise.reject(refreshErr);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+);
+
 // pipelineApi — backend:8005 BFF 프록시를 통해 DB 데이터에 접근 (인증 포함)
 export const pipelineApi = api;
 

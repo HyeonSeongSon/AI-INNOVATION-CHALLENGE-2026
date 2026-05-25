@@ -24,6 +24,24 @@ services:
       PORT: 8005
       APP_ROOT: /app/app
       DATA_ROOT: /data
+      DATABASE_API_URL: http://ai-innovation-db-api:8020
+      AUTH_MODE: jwt
+    ports:
+      - "8005:8005"
+
+  crm-service:
+    <<: *backend-common
+    container_name: crm-service
+    command: >
+      bash -c "
+        until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
+          echo 'Waiting for fastapi-search...'; sleep 5;
+        done &&
+        uvicorn servers.crm_server:app --host 0.0.0.0 --port 8006 --reload
+      "
+    environment:
+      APP_ROOT: /app/app
+      DATA_ROOT: /data
       RECOMMEND_AGENT_URL: http://recommend-agent:8001
       GENERATE_MESSAGE_AGENT_URL: http://generate-agent:8002
       DATA_REGISTRATION_AGENT_URL: http://data-registration-agent:8003
@@ -31,7 +49,7 @@ services:
       OPENSEARCH_API_URL: http://fastapi-search:8010
       AUTH_MODE: jwt
     ports:
-      - "8005:8005"
+      - "8006:8006"
     depends_on:
       recommend-agent:
         condition: service_healthy
@@ -39,6 +57,12 @@ services:
         condition: service_healthy
       data-registration-agent:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8006/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   recommend-agent:
     <<: *backend-common

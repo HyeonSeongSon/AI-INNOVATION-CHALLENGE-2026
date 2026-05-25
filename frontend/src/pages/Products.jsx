@@ -820,8 +820,9 @@ export default function Products() {
     formData.append('file', uploadFile);
 
     try {
-      const response = await fetch('http://localhost:8005/api/pipeline/products/register', {
+      const response = await fetch(`${import.meta.env.VITE_CRM_API_URL ?? 'http://localhost:8006'}/api/pipeline/products/register`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
 
