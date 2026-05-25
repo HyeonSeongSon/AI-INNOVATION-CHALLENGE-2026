@@ -7,6 +7,47 @@ export const authApi = axios.create({
   withCredentials: true,
 });
 
+// authApi 401 인터셉터: access token 만료 시 refresh 후 재시도
+// /auth/refresh, /auth/login은 skip — 무한루프 및 로그인 실패 오진단 방지
+authApi.interceptors.response.use(
+  res => res,
+  async err => {
+    const { config: originalRequest, response } = err;
+
+    const url = originalRequest?.url ?? '';
+    const isAuthMutation =
+      url.includes('/auth/refresh') || url.includes('/auth/login');
+
+    if (response?.status !== 401 || originalRequest._retry || isAuthMutation) {
+      return Promise.reject(err);
+    }
+
+    originalRequest._retry = true;
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        refreshSubscribers.push(error => {
+          if (error) reject(error);
+          else resolve(authApi(originalRequest));
+        });
+      });
+    }
+
+    isRefreshing = true;
+
+    try {
+      await authApi.post('/auth/refresh', null, { timeout: 10_000 });
+      onRefreshed(null);
+      return authApi(originalRequest);
+    } catch (refreshErr) {
+      onRefreshed(refreshErr);
+      return Promise.reject(refreshErr);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+);
+
 // CRM Agent 서버 (port 8005) - /api/*
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8005/api',
@@ -47,7 +88,7 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      await authApi.post('/auth/refresh');
+      await authApi.post('/auth/refresh', null, { timeout: 10_000 });
       onRefreshed(null);
       return api(originalRequest);
     } catch (refreshErr) {

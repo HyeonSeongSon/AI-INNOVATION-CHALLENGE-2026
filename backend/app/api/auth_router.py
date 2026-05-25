@@ -3,6 +3,7 @@
 HttpOnly Cookie 방식 — 웹 프론트엔드 우선.
 """
 
+import re
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -43,6 +44,18 @@ _COOKIE_SAMESITE = "lax"
 # Pydantic 모델
 # ──────────────────────────────────────────────────────
 
+def _check_password_complexity(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("비밀번호에 대문자가 하나 이상 포함되어야 합니다.")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("비밀번호에 소문자가 하나 이상 포함되어야 합니다.")
+    if not re.search(r"\d", v):
+        raise ValueError("비밀번호에 숫자가 하나 이상 포함되어야 합니다.")
+    return v
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
@@ -50,9 +63,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
-        return v
+        return _check_password_complexity(v)
 
 
 class CreateUserRequest(BaseModel):
@@ -63,9 +74,7 @@ class CreateUserRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
-        return v
+        return _check_password_complexity(v)
 
 
 class UserResponse(BaseModel):
@@ -101,8 +110,20 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/auth")
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path="/auth",
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+    )
 
 
 # ──────────────────────────────────────────────────────
@@ -182,7 +203,7 @@ async def login(
 
     # per-IP-email 잠금 확인 (IP를 바꿔가며 계정을 잠그는 DoS 공격 차단)
     if not await lockout_limiter.peek(lockout_key):
-        logger.warning("account_ip_locked", client_ip=ip)
+        logger.warning("account_ip_locked", client_ip=ip, user_id=str(user.id))
         raise HTTPException(
             status_code=429,
             detail="잠시 후 다시 시도해 주세요.",

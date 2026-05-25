@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     lockout_per_ip_max_attempts: int = 10     # 동일 IP-이메일 쌍에서 최대 실패 횟수
     lockout_per_ip_window_seconds: int = 900  # 잠금 지속 시간 (기본 15분)
 
+    # DB cleanup background worker
+    cleanup_interval_seconds: int = 3600
+    cleanup_token_grace_days: int = 1
+
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
     generate_message_agent_url: str = "http://localhost:8002"

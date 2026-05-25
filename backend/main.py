@@ -3,6 +3,7 @@ FastAPI 메인 애플리케이션
 CRM Agent API 서버
 """
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -24,6 +25,7 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.langsmith_config import configure_langsmith
 from app.core.auth import get_auth_provider
+from app.core.cleanup import cleanup_loop
 from app.core.http_client_registry import close_all
 
 # Load .env before anything else
@@ -75,6 +77,9 @@ async def lifespan(app: FastAPI):
         window_seconds=settings.lockout_per_ip_window_seconds,
     )
 
+    cleanup_task = asyncio.create_task(cleanup_loop())
+    logger.info("cleanup_worker_started", interval_seconds=settings.cleanup_interval_seconds)
+
     async with AsyncConnectionPool(
         conninfo=settings.postgres_url,
         min_size=1,
@@ -88,6 +93,12 @@ async def lifespan(app: FastAPI):
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("all_services_and_graph_initialized")
         yield
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("cleanup_worker_stopped")
         await close_all()
         await db_proxy.close_internal_client()
 
