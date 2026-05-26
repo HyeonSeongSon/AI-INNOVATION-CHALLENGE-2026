@@ -777,6 +777,7 @@ async def list_products(
     search: Optional[str] = None,
     brand: Optional[str] = None,
     category: Optional[str] = None,
+    tag: Optional[str] = None,
     sub_tag: Optional[str] = None,
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
@@ -797,6 +798,8 @@ async def list_products(
         query = query.filter(Product.brand.ilike(f"%{brand}%"))
     if category:
         query = query.filter(Product.category.ilike(f"%{category}%"))
+    if tag:
+        query = query.filter(Product.tag.ilike(f"%{tag}%"))
     if sub_tag:
         query = query.filter(Product.sub_tag.ilike(f"%{sub_tag}%"))
     if min_price is not None:

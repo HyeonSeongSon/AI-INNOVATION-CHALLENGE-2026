@@ -725,14 +725,22 @@ const ALL_BRANDS = brandsData.brands;
 const ALL_CATEGORIES = Object.keys(categoryData.categories);
 const ALL_SUB_TAGS = categoryData.sub_tags;
 
-function getSubTagsForCategory(category) {
+function getTagsForCategory(category) {
+  if (!category) return [];
+  const subs = categoryData.categories[category];
+  if (!subs) return [];
+  return Object.keys(subs);
+}
+
+function getSubTagsForCategoryAndTag(category, tag) {
   if (!category) return ALL_SUB_TAGS;
   const subs = categoryData.categories[category];
   if (!subs) return ALL_SUB_TAGS;
-  return Object.values(subs).flat();
+  if (!tag) return Object.values(subs).flat();
+  return subs[tag] ?? ALL_SUB_TAGS;
 }
 
-const EMPTY_FILTERS = { search: '', brand: '', category: '', sub_tag: '', min_price: '', max_price: '', min_discount: '' };
+const EMPTY_FILTERS = { search: '', brand: '', category: '', tag: '', sub_tag: '', min_price: '', max_price: '', min_discount: '' };
 
 export default function Products() {
   const { user } = useAuth();
@@ -756,7 +764,8 @@ export default function Products() {
 
   const committedRef = useRef({});
 
-  const availableSubTags = useMemo(() => getSubTagsForCategory(filters.category), [filters.category]);
+  const availableTags    = useMemo(() => getTagsForCategory(filters.category), [filters.category]);
+  const availableSubTags = useMemo(() => getSubTagsForCategoryAndTag(filters.category, filters.tag), [filters.category, filters.tag]);
 
   const doFetch = useCallback(async (filterParams, targetPage) => {
     setLoading(true);
@@ -801,7 +810,9 @@ export default function Products() {
 
   const handleFilterChange = (key, value) => {
     if (key === 'category') {
-      setFilters(prev => ({ ...prev, category: value, sub_tag: '' }));
+      setFilters(prev => ({ ...prev, category: value, tag: '', sub_tag: '' }));
+    } else if (key === 'tag') {
+      setFilters(prev => ({ ...prev, tag: value, sub_tag: '' }));
     } else {
       setFilters(prev => ({ ...prev, [key]: value }));
     }
@@ -976,6 +987,18 @@ export default function Products() {
           </FilterSelect>
         </FilterGroup>
 
+        <FilterGroup>
+          <label>태그</label>
+          <FilterSelect
+            value={filters.tag}
+            onChange={e => handleFilterChange('tag', e.target.value)}
+            disabled={!filters.category}
+          >
+            <option value="">전체</option>
+            {availableTags.map(t => <option key={t} value={t}>{t}</option>)}
+          </FilterSelect>
+        </FilterGroup>
+
         <FilterGroup style={{ width: 160, minWidth: 160, maxWidth: 160 }}>
           <label>서브태그</label>
           <FilterSelect
@@ -1046,6 +1069,8 @@ export default function Products() {
                 <Th>상품 ID</Th>
                 <Th>상품명</Th>
                 <Th>브랜드</Th>
+                <Th>카테고리</Th>
+                <Th>태그</Th>
                 <Th>서브태그</Th>
                 <Th>판매가</Th>
                 <Th>할인율</Th>
@@ -1055,15 +1080,17 @@ export default function Products() {
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={8}>조회 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={10}>조회 중...</td></EmptyRow>
               ) : products.length === 0 ? (
-                <EmptyRow><td colSpan={8}>조건에 맞는 상품이 없습니다.</td></EmptyRow>
+                <EmptyRow><td colSpan={10}>조건에 맞는 상품이 없습니다.</td></EmptyRow>
               ) : (
                 products.map(p => (
                   <Tr key={p.product_id} onDoubleClick={() => setSelectedProduct(p)}>
                     <Td><IdText>{p.product_id}</IdText></Td>
                     <TruncatedTd style={{ maxWidth: 220, fontWeight: 600 }}>{p.product_name}</TruncatedTd>
                     <Td>{p.brand ? <TagBadge>{p.brand}</TagBadge> : '-'}</Td>
+                    <Td>{p.category ? <TagBadge style={{ background: '#F0FFF4', color: '#276749' }}>{p.category}</TagBadge> : '-'}</Td>
+                    <Td>{p.tag ? <TagBadge style={{ background: '#FFF5F5', color: '#9B2C2C' }}>{p.tag}</TagBadge> : '-'}</Td>
                     <Td>
                       {p.sub_tag
                         ? <TagBadge style={{ background: '#F0F7FF', color: '#2B6CB0' }}>{p.sub_tag}</TagBadge>
