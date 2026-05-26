@@ -13,13 +13,9 @@ from starlette.responses import JSONResponse
 
 load_dotenv()
 
-from core.database import init_db
 from routers.api_endpoints import router as db_router
 from routers.conversations_router import router as conversations_router
 from routers.generated_messages_router import router as generated_messages_router
-
-# DB 테이블 초기화
-init_db()
 
 _INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
 _SKIP_PATHS = {"/", "/health"}

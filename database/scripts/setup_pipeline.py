@@ -7,7 +7,7 @@ import sys
 import json
 from pathlib import Path
 from typing import Dict, Any, List
-from sqlalchemy import text
+from sqlalchemy import text, inspect as sa_inspect
 
 # backend/ 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
@@ -15,11 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 from app.core.database import (
     engine,
     get_db,
-    init_db,
     drop_all_tables,
     check_connection,
     db_config
 )
+
+_ALEMBIC_INI = Path(__file__).parent.parent / "alembic.ini"
 from app.core.models import Product, Persona
 
 
@@ -86,19 +87,34 @@ class DatabaseSetupPipeline:
 
     def step_2_create_tables(self) -> bool:
         """Step 2: 테이블 생성 (reset=True인 경우 기존 테이블 삭제)"""
-        print("\n[STEP 2] Creating database tables...")
+        print("\n[STEP 2] Running Alembic migrations...")
         print("-" * 80)
 
         try:
+            from alembic.config import Config as AlembicConfig
+            from alembic import command as alembic_command
+
             if self.reset:
                 print("⚠️  Dropping existing tables...")
                 drop_all_tables()
 
-            print("Creating tables...")
-            init_db()
+            alembic_cfg = AlembicConfig(str(_ALEMBIC_INI))
+            alembic_cfg.set_main_option("sqlalchemy.url", db_config.database_url)
 
-            print("Applying migrations...")
-            self._apply_migrations()
+            inspector = sa_inspect(engine)
+            existing_tables = inspector.get_table_names()
+            has_schema = any(t != "alembic_version" for t in existing_tables)
+            has_version = "alembic_version" in existing_tables
+
+            if has_schema and not has_version:
+                # 테이블은 있지만 alembic_version이 없으면 현재 HEAD로 baseline 처리
+                print("Stamping existing schema as Alembic baseline...")
+                alembic_command.stamp(alembic_cfg, "head")
+                print("✅ Baseline stamped")
+            else:
+                print("Applying migrations...")
+                alembic_command.upgrade(alembic_cfg, "head")
+                print("✅ Migrations applied")
 
             # 생성된 테이블 확인
             with engine.connect() as conn:
@@ -106,70 +122,21 @@ class DatabaseSetupPipeline:
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
+                      AND table_name != 'alembic_version'
                     ORDER BY table_name
                 """))
                 tables = [row[0] for row in result]
 
-            print(f"\nCreated tables ({len(tables)}):")
+            print(f"\nSchema tables ({len(tables)}):")
             for table in tables:
                 print(f"  - {table}")
 
-            print("✅ Tables created successfully")
+            print("✅ Tables ready")
             return True
 
         except Exception as e:
-            print(f"❌ Failed to create tables: {e}")
+            print(f"❌ Failed to apply migrations: {e}")
             return False
-
-    def _apply_migrations(self) -> None:
-        """기존 DB 스키마에 누락된 제약/컬럼을 멱등으로 적용한다."""
-        # generated_messages.product_id → products.product_id FK (SET NULL)
-        stmts = [
-            """
-            UPDATE generated_messages
-            SET product_id = NULL
-            WHERE product_id IS NOT NULL
-              AND product_id NOT IN (SELECT product_id FROM products)
-            """,
-            """
-            ALTER TABLE generated_messages
-                ALTER COLUMN product_id DROP NOT NULL
-            """,
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints
-                    WHERE constraint_name = 'fk_generated_messages_product_id'
-                      AND table_name = 'generated_messages'
-                ) THEN
-                    ALTER TABLE generated_messages
-                        ADD CONSTRAINT fk_generated_messages_product_id
-                        FOREIGN KEY (product_id)
-                        REFERENCES products(product_id)
-                        ON DELETE SET NULL;
-                END IF;
-            END $$
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS conversation_messages (
-                id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                conversation_id VARCHAR(36) NOT NULL
-                                    REFERENCES conversations(id) ON DELETE CASCADE,
-                message_data    JSONB NOT NULL,
-                created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_conv_messages_conv_id
-                ON conversation_messages(conversation_id, id)
-            """,
-        ]
-        with engine.connect() as conn:
-            for stmt in stmts:
-                conn.execute(text(stmt))
-            conn.commit()
-        print("Migrations applied")
 
     def step_3_insert_products(self) -> bool:
         """Step 3: 상품 데이터 삽입"""

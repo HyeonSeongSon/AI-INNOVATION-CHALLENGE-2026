@@ -7,13 +7,13 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth_router
 from app.api import db_proxy
 from app.api import crm_proxy
 from app.config.settings import settings
-from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.auth import get_auth_provider
@@ -34,8 +34,6 @@ logger = get_logger("main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-
     from app.core.rate_limiter import PostgresRateLimiter
     from app.core.database import SessionLocal
     app.state.auth_provider = get_auth_provider()
@@ -58,6 +56,17 @@ async def lifespan(app: FastAPI):
         window_seconds=settings.lockout_per_ip_window_seconds,
     )
 
+    app.state.crm_client = httpx.AsyncClient(
+        base_url=settings.crm_service_url,
+        headers={"X-Internal-Token": settings.internal_token},
+        timeout=httpx.Timeout(settings.http_timeout_long),
+    )
+    app.state.internal_client = httpx.AsyncClient(
+        base_url=settings.database_api_url,
+        headers={"X-Internal-Token": settings.internal_token},
+        timeout=httpx.Timeout(settings.http_timeout_long),
+    )
+
     cleanup_task = asyncio.create_task(cleanup_loop())
     logger.info("cleanup_worker_started", interval_seconds=settings.cleanup_interval_seconds)
     logger.info("api_gateway_initialized")
@@ -70,8 +79,8 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     logger.info("cleanup_worker_stopped")
-    await db_proxy.close_internal_client()
-    await crm_proxy.close_crm_client()
+    await app.state.crm_client.aclose()
+    await app.state.internal_client.aclose()
 
 
 app = FastAPI(

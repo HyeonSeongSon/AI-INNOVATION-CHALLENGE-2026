@@ -72,6 +72,8 @@ services:
         condition: service_healthy
     networks:
       - msa-net
+    command: >
+      sh -c "alembic upgrade head && uvicorn api_server:app --host 0.0.0.0 --port 8020"
 
 volumes:
   postgres_data:

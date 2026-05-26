@@ -81,15 +81,6 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    """
-    데이터베이스 초기화
-    모든 테이블 생성
-    """
-    Base.metadata.create_all(bind=engine)
-    print(f"✅ Database initialized: {db_config.database}")
-
-
 def drop_all_tables():
     """
     모든 테이블 삭제 (주의: 개발 환경에서만 사용)
