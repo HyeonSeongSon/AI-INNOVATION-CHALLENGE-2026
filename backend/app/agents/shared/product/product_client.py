@@ -59,7 +59,7 @@ class ProductClient:
             return products
 
         except Exception as e:
-            logger.error("products_filter_failed", error=str(e), exc_info=True)
+            logger.error("products_filter_failed", error_type=type(e).__name__, exc_info=True)
             raise
         
     @traced(name="search_combined_vector", run_type="retriever")
@@ -105,7 +105,7 @@ class ProductClient:
             return api_response
 
         except Exception as e:
-            logger.error("search_by_combined_vector.failed", error=str(e), exc_info=True)
+            logger.error("search_by_combined_vector.failed", error_type=type(e).__name__, exc_info=True)
             raise
 
     @traced(name="search_opensearch", run_type="retriever")
@@ -161,7 +161,7 @@ class ProductClient:
             logger.error(
                 "search_by_field.failed",
                 bm25_fields=bm25_fields,
-                error=str(e),
+                error_type=type(e).__name__,
                 exc_info=True,
             )
             raise
@@ -268,7 +268,7 @@ class ProductClient:
             logger.error(
                 "search_multivector.failed",
                 index_name=index_name,
-                error=str(e),
+                error_type=type(e).__name__,
                 exc_info=True,
             )
             raise
@@ -421,7 +421,7 @@ class ProductClient:
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                logger.error("get_products_detail_from_db.failed", product_id=product_id, error=str(e))
+                logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__)
                 return None
 
         results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])

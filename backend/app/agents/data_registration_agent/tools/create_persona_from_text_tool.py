@@ -46,8 +46,8 @@ async def create_persona_from_text_tool(
         )
         logger.info("create_persona_from_text_done", persona_id=persona_id, name=structured_persona.get("name"))
     except Exception as e:
-        logger.error("create_persona_from_text_failed", error=str(e))
-        summary = f"**페르소나 등록 실패**\n\n{e}"
+        logger.error("create_persona_from_text_failed", error_type=type(e).__name__, exc_info=True)
+        summary = "**페르소나 등록 실패**\n\n페르소나 등록 처리 중 오류가 발생했습니다."
 
     return Command(
         update={

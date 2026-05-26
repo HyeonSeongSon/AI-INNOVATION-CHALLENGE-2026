@@ -75,7 +75,7 @@ class PersonaClient:
             return persona_info
 
         except Exception as e:
-            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            logger.error("persona_fetch_failed", persona_id=persona_id, error_type=type(e).__name__, exc_info=True)
             raise
 
     @traced(name="get_existing_product_search_query", run_type="tool")
@@ -98,10 +98,10 @@ class PersonaClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
-            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error_type=type(e).__name__)
             raise
         
     @traced(name="save_persona", run_type="tool")
@@ -122,10 +122,10 @@ class PersonaClient:
             return persona_id
 
         except httpx.HTTPStatusError as e:
-            logger.error("persona_save_failed", status_code=e.response.status_code, error=str(e))
+            logger.error("persona_save_failed", status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("persona_save_failed", error=str(e))
+            logger.error("persona_save_failed", error_type=type(e).__name__)
             raise
 
     @traced(name="save_product_search_query", run_type="tool")
@@ -153,8 +153,8 @@ class PersonaClient:
             return query_ids
 
         except httpx.HTTPStatusError as e:
-            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error=str(e))
+            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("product_search_query_save_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_query_save_failed", persona_id=persona_id, error_type=type(e).__name__)
             raise
