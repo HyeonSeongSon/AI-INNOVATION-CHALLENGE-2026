@@ -279,7 +279,7 @@ def make_recommend_product_node(client: A2AClient):
                 "active_persona_id": state.get("active_persona_id"),
             })
         except Exception as e:
-            _logger.error("recommend_product_agent_failed", node_name="recommend_product_agent", error=str(e))
+            _logger.error("recommend_product_agent_failed", node_name="recommend_product_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={
@@ -360,7 +360,7 @@ def make_generate_message_node(client: A2AClient):
                 "active_persona_id": state.get("active_persona_id"),
             })
         except Exception as e:
-            _logger.error("generate_message_agent_failed", node_name="generate_message_agent", error=str(e))
+            _logger.error("generate_message_agent_failed", node_name="generate_message_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={
@@ -442,7 +442,7 @@ def make_data_registration_node(client: A2AClient):
                 "file_records": file_records,
             }, timeout=a2a_timeout)
         except Exception as e:
-            _logger.error("data_registration_agent_failed", node_name="data_registration_agent", error=str(e))
+            _logger.error("data_registration_agent_failed", node_name="data_registration_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={

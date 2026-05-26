@@ -38,7 +38,7 @@ async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
             "persona_name": structured_persona.get("name"),
         }
     except Exception as e:
-        logger.error("persona_record_failed", index=index, error=str(e))
+        logger.error("persona_record_failed", index=index, error_type=type(e).__name__)
         return {"index": index, "success": False, "error": "페르소나 생성 중 오류가 발생했습니다."}
 
 

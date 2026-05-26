@@ -267,7 +267,7 @@ export default function Message() {
         try {
           const wb = XLSX.read(e.target.result, { type: 'array' });
           resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
-        } catch (err) { reject(new Error(`Excel 파싱 실패: ${err.message}`)); }
+        } catch (err) { reject(new Error('Excel 파일을 읽을 수 없습니다.')); }
       };
       reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
       reader.readAsArrayBuffer(file);
@@ -300,7 +300,7 @@ export default function Message() {
       if (records.length === 0) { alert('파일에 데이터가 없습니다.'); return; }
       if (records.length > 50) { alert(`최대 50개까지 업로드 가능합니다. 현재: ${records.length}개`); return; }
       setUploadedFile({ name: file.name, records });
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert('파일을 처리할 수 없습니다. 지원 형식(CSV, XLSX, JSONL)을 확인해주세요.'); }
   };
 
   const [personas, setPersonas] = useState([]);
@@ -483,7 +483,7 @@ export default function Message() {
 
     } catch (error) {
       console.error("채팅 전송 실패:", error);
-      const errMsg = error.response?.data?.detail || error.message;
+      const errMsg = error.response?.data?.detail || '서버와의 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
       const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `오류가 발생했습니다: ${errMsg}` };
       if (targetConvId) {
         const errMessages = [...messagesWithUser, errAiMsg];
@@ -550,7 +550,7 @@ export default function Message() {
       setPendingConv(targetConvId, finalMessages, false);
 
     } catch (error) {
-      const errMsg = error.response?.data?.detail || error.message;
+      const errMsg = error.response?.data?.detail || '서버와의 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
       const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `파일 처리 오류: ${errMsg}` };
       const errMessages = [...messagesWithUser.filter(m => !m.isLoading), errAiMsg];
       if (targetConvId) {

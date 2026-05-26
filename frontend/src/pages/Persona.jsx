@@ -477,9 +477,9 @@ export default function PersonaManager() {
       setShowTextModal(false);
       setPersonaText('');
     } catch (error) {
-      const errMsg = error.response?.data?.detail
-        ? (typeof error.response.data.detail === 'string' ? error.response.data.detail : JSON.stringify(error.response.data.detail))
-        : error.message;
+      const errMsg = typeof error.response?.data?.detail === 'string'
+        ? error.response.data.detail
+        : '페르소나 생성 중 오류가 발생했습니다.';
       addToast(`생성 실패: ${errMsg}`, 'error');
     } finally {
       setIsCreating(false);
@@ -503,8 +503,8 @@ export default function PersonaManager() {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: response.statusText }));
-        addToast(`생성 실패: ${err.detail || response.statusText}`, 'error');
+        const err = await response.json().catch(() => ({}));
+        addToast(`생성 실패: ${typeof err.detail === 'string' ? err.detail : '서버 오류가 발생했습니다.'}`, 'error');
         return;
       }
 
@@ -557,7 +557,7 @@ export default function PersonaManager() {
         }
       }
     } catch (error) {
-      addToast(`생성 실패: ${error.message}`, 'error');
+      addToast('파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'error');
     } finally {
       setIsFileCreating(false);
     }

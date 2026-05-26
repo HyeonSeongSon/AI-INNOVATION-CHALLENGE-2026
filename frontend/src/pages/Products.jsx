@@ -827,8 +827,8 @@ export default function Products() {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: response.statusText }));
-        addToast(`등록 실패: ${err.detail || response.statusText}`, 'error');
+        const err = await response.json().catch(() => ({}));
+        addToast(`등록 실패: ${typeof err.detail === 'string' ? err.detail : '서버 오류가 발생했습니다.'}`, 'error');
         return;
       }
 
@@ -882,7 +882,7 @@ export default function Products() {
         }
       }
     } catch (error) {
-      addToast(`등록 실패: ${error.message}`, 'error');
+      addToast('파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'error');
     } finally {
       setIsRegistering(false);
     }
