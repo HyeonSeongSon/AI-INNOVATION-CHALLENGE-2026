@@ -434,11 +434,13 @@ def make_data_registration_node(client: A2AClient):
         thread_id = (config or {}).get("configurable", {}).get("thread_id", "")
         session_id = f"{thread_id}:data_registration" if thread_id else str(uuid.uuid4())
 
+        file_records = state.get("file_records")
+        a2a_timeout = httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0) if file_records else None
         try:
             task = await client.send_task(session_id, {
                 "messages": _filter_handoff_messages(state.get("messages", [])),
-                "file_records": state.get("file_records"),
-            })
+                "file_records": file_records,
+            }, timeout=a2a_timeout)
         except Exception as e:
             _logger.error("data_registration_agent_failed", node_name="data_registration_agent", error=str(e))
             return Command(

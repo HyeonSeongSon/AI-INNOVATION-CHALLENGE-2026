@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"))
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 
@@ -20,6 +19,7 @@ from app.api import marketing_api, products_pipeline, persona_pipeline
 from app.api import db_proxy
 from app.config.settings import settings
 from app.core.data_loader import validate_static_configs
+from app.core.internal_auth import InternalTokenMiddleware
 from app.core.logging import configure_logging, get_logger
 from app.core.langsmith_config import configure_langsmith
 from app.core.middleware import RequestLoggingMiddleware
@@ -71,14 +71,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestLoggingMiddleware)
-_allowed_origins = settings.allowed_origins
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(InternalTokenMiddleware)
 
 app.include_router(marketing_api.router)
 app.include_router(products_pipeline.router)

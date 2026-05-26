@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 // API 및 Context
-import api, { pipelineApi, crmApi } from '../api';
+import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -433,7 +433,7 @@ export default function Message() {
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await crmApi.post('/marketing/chat/v2', {
+      const response = await api.post('/marketing/chat/v2', {
         user_input: text,
         session_id: currentSessionId,
         conversation_id: targetConvId,
@@ -534,7 +534,7 @@ export default function Message() {
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await crmApi.post('/marketing/chat/v2', {
+      const response = await api.post('/marketing/chat/v2', {
         user_input: typedText || fileLabel,
         session_id: currentSessionId,
         conversation_id: targetConvId,

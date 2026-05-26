@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth_router
 from app.api import db_proxy
+from app.api import crm_proxy
 from app.config.settings import settings
 from app.core.database import init_db
 from app.core.logging import configure_logging, get_logger
@@ -70,6 +71,7 @@ async def lifespan(app: FastAPI):
         pass
     logger.info("cleanup_worker_stopped")
     await db_proxy.close_internal_client()
+    await crm_proxy.close_crm_client()
 
 
 app = FastAPI(
@@ -91,6 +93,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(db_proxy.router)
+app.include_router(crm_proxy.router)
 
 
 @app.get("/")

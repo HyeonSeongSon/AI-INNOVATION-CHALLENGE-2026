@@ -25,9 +25,11 @@ _semaphore = asyncio.Semaphore(5)
 async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
     try:
         messages = [HumanMessage(content=json.dumps(record, ensure_ascii=False, indent=2))]
-        structured_persona = await generate_structured_persona_info(messages, llm)
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(messages, llm),
+            generate_search_query(messages, llm),
+        )
         persona_id = await persona_client.save_persona(structured_persona)
-        raw_queries = await generate_search_query(messages, llm)
         await persona_client.save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,

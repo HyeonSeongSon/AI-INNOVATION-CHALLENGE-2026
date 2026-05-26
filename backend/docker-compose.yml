@@ -25,6 +25,7 @@ services:
       APP_ROOT: /app/app
       DATA_ROOT: /data
       DATABASE_API_URL: http://ai-innovation-db-api:8020
+      CRM_SERVICE_URL: http://crm-service:8006
       AUTH_MODE: jwt
     ports:
       - "8005:8005"
@@ -48,8 +49,8 @@ services:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
       OPENSEARCH_API_URL: http://fastapi-search:8010
       AUTH_MODE: jwt
-    ports:
-      - "8006:8006"
+    expose:
+      - "8006"
     depends_on:
       recommend-agent:
         condition: service_healthy
@@ -84,7 +85,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 240s
 
   generate-agent:
     <<: *backend-common
@@ -106,7 +107,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 240s
 
   data-registration-agent:
     <<: *backend-common
@@ -128,7 +129,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 240s
 
 networks:
   msa-net:

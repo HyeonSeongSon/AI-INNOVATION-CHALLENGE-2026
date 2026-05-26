@@ -20,6 +20,23 @@ async def require_admin(
     return current_user
 
 
+async def get_user_from_headers(request: Request) -> UserContext:
+    """내부 서비스용: 8005 프록시가 설정한 X-User-Id / X-User-Role 헤더로 사용자 컨텍스트 복원."""
+    user_id = request.headers.get("X-User-Id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User context missing")
+    role = request.headers.get("X-User-Role", "user")
+    return UserContext(user_id=user_id, auth_method="jwt", role=role)
+
+
+async def require_admin_from_headers(
+    user: UserContext = Depends(get_user_from_headers),
+) -> UserContext:
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+    return user
+
+
 async def get_login_limiter(request: Request) -> PostgresRateLimiter:
     return request.app.state.login_limiter
 

@@ -34,7 +34,12 @@ class A2AClient:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
 
-    async def send_task(self, session_id: str, data: dict) -> Task:
+    async def send_task(
+        self,
+        session_id: str,
+        data: dict,
+        timeout: httpx.Timeout | None = None,
+    ) -> Task:
         serialized = {
             k: serialize_messages(v)
                if isinstance(v, list) and v and isinstance(v[0], BaseMessage)
@@ -56,6 +61,7 @@ class A2AClient:
                 resp = await self.http_client.post(
                     f"{self.base_url}/tasks/send",
                     json=req.model_dump(),
+                    timeout=timeout,
                 )
                 resp.raise_for_status()
                 return Task(**resp.json())

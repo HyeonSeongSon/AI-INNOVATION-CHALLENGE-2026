@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import { useToast } from '../components/Toast';
-import api, { pipelineApi, crmApi } from '../api';
+import api, { pipelineApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 20;
@@ -471,7 +471,7 @@ export default function PersonaManager() {
     if (!personaText.trim()) return addToast('페르소나 설명을 입력해주세요.', 'error');
     setIsCreating(true);
     try {
-      await crmApi.post('/pipeline/personas/create-from-text', { text: personaText });
+      await api.post('/pipeline/personas/create-from-text', { text: personaText });
       await fetchPersonas();
       addToast('페르소나 생성 완료!', 'success');
       setShowTextModal(false);
@@ -496,7 +496,7 @@ export default function PersonaManager() {
     formData.append('file', uploadFile);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_CRM_API_URL ?? 'http://localhost:8006'}/api/pipeline/personas/create-from-file`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8005/api'}/pipeline/personas/create-from-file`, {
         method: 'POST',
         credentials: 'include',
         body: formData,

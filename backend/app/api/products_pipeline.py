@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from ..core.auth import UserContext
 from ..core.logging import get_logger
-from .deps import require_admin
+from .deps import require_admin_from_headers
 
 logger = get_logger("products_pipeline")
 
@@ -118,7 +118,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
 async def register_products_from_file(
     file: UploadFile = File(...),
     request: Request = None,
-    current_user: UserContext = Depends(require_admin),
+    current_user: UserContext = Depends(require_admin_from_headers),
 ):
     """
     JSONL / CSV / XLSX 파일 업로드로 상품 일괄 등록 (SSE 스트리밍)

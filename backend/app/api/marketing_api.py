@@ -15,7 +15,7 @@ from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
 from ..core.models import Conversation, GeneratedMessage, ConversationMessage
-from .deps import get_current_user
+from .deps import get_user_from_headers
 
 logger = get_logger("marketing_api")
 
@@ -219,7 +219,7 @@ class ChatRequest(BaseModel):
 async def chat_v2(
     request: ChatRequest,
     req: Request,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(get_user_from_headers),
 ):
     """
     대화 처리 v2 (interrupt 없는 새 추천 방식)

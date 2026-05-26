@@ -14,7 +14,7 @@ import Products from './pages/Products';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
-import { crmApi } from './api';
+import api from './api';
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -31,7 +31,7 @@ const GlobalStyle = createGlobalStyle`
 
 const ServerStatusCheck = () => {
   useEffect(() => {
-    crmApi.get('/marketing/health')
+    api.get('/marketing/health')
       .then(() => console.log('✅ 백엔드 서버 연결 성공!'))
       .catch(() => console.warn('⚠️ 백엔드 연결 실패 (Docker 실행 여부를 확인하세요)'));
   }, []);

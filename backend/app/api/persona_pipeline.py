@@ -24,7 +24,7 @@ from ..core.llm_factory import get_llm
 from ..config.settings import settings, ALLOWED_MODEL_PREFIXES
 from ..core.logging import get_logger
 from ..core.auth import UserContext
-from .deps import get_current_user
+from .deps import get_user_from_headers
 
 logger = get_logger("persona_pipeline")
 
@@ -121,7 +121,7 @@ class CreateFromTextRequest(BaseModel):
 async def create_persona_from_text(
     request: CreateFromTextRequest,
     req: Request,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(get_user_from_headers),
 ):
     """자유 텍스트 입력으로 페르소나 1개 생성"""
     persona_client = req.app.state.persona_client
@@ -139,7 +139,7 @@ async def create_persona_from_text(
 async def create_personas_from_file(
     file: UploadFile = File(...),
     req: Request = None,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(get_user_from_headers),
 ):
     """
     CSV / JSONL / JSON 파일 업로드로 페르소나 일괄 생성 (SSE 스트리밍)

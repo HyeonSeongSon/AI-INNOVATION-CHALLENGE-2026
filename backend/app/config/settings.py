@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     a2a_timeout: float = 120.0
     a2a_max_retries: int = 3
 
+    # CRM Service (내부 전용)
+    crm_service_url: str = "http://localhost:8006"
+
     # CORS — 환경변수에서 콤마 구분 문자열로 받아 list[str]로 파싱
     allowed_origins: list[str] = ["http://localhost:3000"]
 
