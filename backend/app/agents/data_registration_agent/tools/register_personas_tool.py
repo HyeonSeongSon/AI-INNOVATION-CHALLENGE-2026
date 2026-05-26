@@ -22,14 +22,14 @@ logger = get_logger("register_personas_tool")
 _semaphore = asyncio.Semaphore(5)
 
 
-async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
+async def _process_one(index: int, record: dict, llm, persona_client, user_id: str | None = None) -> dict:
     try:
         messages = [HumanMessage(content=json.dumps(record, ensure_ascii=False, indent=2))]
         structured_persona, raw_queries = await asyncio.gather(
             generate_structured_persona_info(messages, llm),
             generate_search_query(messages, llm),
         )
-        persona_id = await persona_client.save_persona(structured_persona)
+        persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         await persona_client.save_product_search_query(persona_id, raw_queries)
         return {
             "index": index,
@@ -50,12 +50,13 @@ async def register_personas_tool(
 ) -> Command:
     """페르소나 파일을 일괄 등록합니다. 페르소나 레코드(이름, 나이, 피부타입 등)가 포함된 파일일 때 호출하세요."""
     persona_client = config["configurable"]["services"].persona_client
+    user_id = config.get("configurable", {}).get("user_id")
     records = state.get("file_records") or []
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
 
     async def _bounded(i: int, rec: dict):
         async with _semaphore:
-            return await _process_one(i, rec, llm, persona_client)
+            return await _process_one(i, rec, llm, persona_client, user_id=user_id)
 
     results = await asyncio.gather(*[_bounded(i, r) for i, r in enumerate(records)])
 

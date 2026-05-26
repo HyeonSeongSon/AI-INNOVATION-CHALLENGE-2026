@@ -28,13 +28,14 @@ async def create_persona_from_text_tool(
     """자연어로 설명된 페르소나를 구조화하여 DB에 등록합니다.
     사용자가 페르소나 특성(나이, 성별, 직업, 피부타입, 고민 등)을 텍스트로 설명했을 때 호출하세요."""
     persona_client = config["configurable"]["services"].persona_client
+    user_id = config.get("configurable", {}).get("user_id")
     # HumanMessage만 추출 — AIMessage(tool_calls)가 섞이면 OpenAI API 400 에러 발생
     human_messages = [m for m in state.get("messages", []) if isinstance(m, HumanMessage)]
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
 
     try:
         structured_persona = await generate_structured_persona_info(human_messages, llm)
-        persona_id = await persona_client.save_persona(structured_persona)
+        persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         raw_queries = await generate_search_query(human_messages, llm)
         await persona_client.save_product_search_query(persona_id, raw_queries)
 

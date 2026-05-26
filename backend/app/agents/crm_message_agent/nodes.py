@@ -440,6 +440,7 @@ def make_data_registration_node(client: A2AClient):
             task = await client.send_task(session_id, {
                 "messages": _filter_handoff_messages(state.get("messages", [])),
                 "file_records": file_records,
+                "user_id": (config or {}).get("configurable", {}).get("user_id"),
             }, timeout=a2a_timeout)
         except Exception as e:
             _logger.error("data_registration_agent_failed", node_name="data_registration_agent", error_type=type(e).__name__)

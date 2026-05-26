@@ -483,7 +483,10 @@ async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteR
     role = raw_request.headers.get("X-User-Role", "user")
     query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
     if role != "admin" and user_id:
-        query = query.filter(Persona.user_id == user_id)
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(Persona.user_id == user_id, Persona.user_id.is_(None))
+        )
     deleted = query.delete(synchronize_session=False)
     db.commit()
 

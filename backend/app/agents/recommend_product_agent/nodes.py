@@ -130,7 +130,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
                 generate_search_query(messages[-1:], query_llm)
             )
 
-            resolved_persona_id = await recommender.persona_client.save_persona(structured_persona)
+            user_id = config.get("configurable", {}).get("user_id")
+            resolved_persona_id = await recommender.persona_client.save_persona(structured_persona, user_id=user_id)
             await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries)
 
             search_queries = {
