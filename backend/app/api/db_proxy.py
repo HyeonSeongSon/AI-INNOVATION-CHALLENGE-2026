@@ -13,28 +13,12 @@ from .deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["DB Proxy"])
 
-_internal_client: httpx.AsyncClient | None = None
+
+def get_internal_client(request: Request) -> httpx.AsyncClient:
+    return request.app.state.internal_client
 
 
-def get_internal_client() -> httpx.AsyncClient:
-    global _internal_client
-    if _internal_client is None or _internal_client.is_closed:
-        _internal_client = httpx.AsyncClient(
-            base_url=settings.database_api_url,
-            headers={"X-Internal-Token": settings.internal_token},
-            timeout=httpx.Timeout(settings.http_timeout_long),
-        )
-    return _internal_client
-
-
-async def close_internal_client() -> None:
-    global _internal_client
-    if _internal_client is not None and not _internal_client.is_closed:
-        await _internal_client.aclose()
-
-
-async def _proxy(method: str, path: str, request: Request, extra_headers: dict | None = None) -> Response:
-    client = get_internal_client()
+async def _proxy(client: httpx.AsyncClient, method: str, path: str, request: Request, extra_headers: dict | None = None) -> Response:
     body = await request.body()
     params = dict(request.query_params)
     content_type = request.headers.get("Content-Type", "application/json")
@@ -66,13 +50,13 @@ async def _proxy(method: str, path: str, request: Request, extra_headers: dict |
 async def proxy_conversations_create(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     try:
         body_data = await request.json()
     except Exception:
         body_data = {}
     body_data["user_id"] = user.user_id
-    client = get_internal_client()
     try:
         upstream = await client.post("/api/conversations", json=body_data)
     except httpx.ConnectError:
@@ -90,9 +74,10 @@ async def proxy_conversations_create(
 async def proxy_conversations_list(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "GET", "/api/conversations", request,
+        client, "GET", "/api/conversations", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -102,9 +87,10 @@ async def proxy_conversations_get(
     conv_id: str,
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "GET", f"/api/conversations/{conv_id}", request,
+        client, "GET", f"/api/conversations/{conv_id}", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -114,9 +100,10 @@ async def proxy_conversations_update(
     conv_id: str,
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "PUT", f"/api/conversations/{conv_id}/messages", request,
+        client, "PUT", f"/api/conversations/{conv_id}/messages", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -126,9 +113,10 @@ async def proxy_conversations_delete(
     conv_id: str,
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "DELETE", f"/api/conversations/{conv_id}", request,
+        client, "DELETE", f"/api/conversations/{conv_id}", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -139,6 +127,7 @@ async def proxy_conversations_delete(
 async def proxy_personas_list(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     try:
         body_data = await request.json()
@@ -146,7 +135,6 @@ async def proxy_personas_list(
         body_data = {}
     body_data["user_id"] = user.user_id
     body_data["role"] = user.role
-    client = get_internal_client()
     try:
         upstream = await client.post("/api/personas/list", json=body_data)
     except httpx.ConnectError:
@@ -164,9 +152,10 @@ async def proxy_personas_list(
 async def proxy_personas_bulk_delete(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "DELETE", "/api/personas", request,
+        client, "DELETE", "/api/personas", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -177,8 +166,9 @@ async def proxy_personas_bulk_delete(
 async def proxy_product_search_queries_get(
     request: Request,
     _: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy("POST", "/api/product-search-queries/get", request)
+    return await _proxy(client, "POST", "/api/product-search-queries/get", request)
 
 
 # ── Generated Messages ────────────────────────────────────────────────────────
@@ -187,17 +177,19 @@ async def proxy_product_search_queries_get(
 async def proxy_generated_messages_filter_options(
     request: Request,
     _: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy("GET", "/api/generated-messages/filter-options", request)
+    return await _proxy(client, "GET", "/api/generated-messages/filter-options", request)
 
 
 @router.get("/generated-messages")
 async def proxy_generated_messages_list(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "GET", "/api/generated-messages", request,
+        client, "GET", "/api/generated-messages", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -206,9 +198,10 @@ async def proxy_generated_messages_list(
 async def proxy_generated_messages_count(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "GET", "/api/generated-messages/count", request,
+        client, "GET", "/api/generated-messages/count", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -217,9 +210,10 @@ async def proxy_generated_messages_count(
 async def proxy_generated_messages_latest(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "GET", "/api/generated-messages/latest", request,
+        client, "GET", "/api/generated-messages/latest", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -228,9 +222,10 @@ async def proxy_generated_messages_latest(
 async def proxy_generated_messages_delete(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        "DELETE", "/api/generated-messages", request,
+        client, "DELETE", "/api/generated-messages", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -241,5 +236,6 @@ async def proxy_generated_messages_delete(
 async def proxy_products_list(
     request: Request,
     _: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy("GET", "/api/products", request)
+    return await _proxy(client, "GET", "/api/products", request)

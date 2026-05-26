@@ -16,7 +16,6 @@ from psycopg_pool import AsyncConnectionPool
 
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.api import marketing_api, products_pipeline, persona_pipeline
-from app.api import db_proxy
 from app.api.upload_jobs import cleanup_expired_jobs
 from app.config.settings import settings
 from app.core.data_loader import validate_static_configs
@@ -81,7 +80,6 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         await close_all()
-        await db_proxy.close_internal_client()
 
 
 app = FastAPI(

@@ -14,34 +14,19 @@ from .deps import get_current_user, require_admin
 
 router = APIRouter(prefix="/api", tags=["CRM Proxy"])
 
-_crm_client: httpx.AsyncClient | None = None
 
-
-def get_crm_client() -> httpx.AsyncClient:
-    global _crm_client
-    if _crm_client is None or _crm_client.is_closed:
-        _crm_client = httpx.AsyncClient(
-            base_url=settings.crm_service_url,
-            headers={"X-Internal-Token": settings.internal_token},
-            timeout=httpx.Timeout(settings.http_timeout_long),
-        )
-    return _crm_client
-
-
-async def close_crm_client() -> None:
-    global _crm_client
-    if _crm_client is not None and not _crm_client.is_closed:
-        await _crm_client.aclose()
+def get_crm_client(request: Request) -> httpx.AsyncClient:
+    return request.app.state.crm_client
 
 
 async def _proxy(
+    client: httpx.AsyncClient,
     method: str,
     path: str,
     request: Request,
     extra_headers: dict | None = None,
     timeout: httpx.Timeout | float | None = None,
 ) -> Response:
-    client = get_crm_client()
     body = await request.body()
     params = dict(request.query_params)
     content_type = request.headers.get("Content-Type", "application/json")
@@ -73,13 +58,13 @@ async def _proxy(
 
 
 async def _proxy_stream(
+    client: httpx.AsyncClient,
     method: str,
     path: str,
     request: Request,
     extra_headers: dict | None = None,
 ) -> StreamingResponse:
     """SSE 스트리밍 프록시. read timeout=None으로 처리 완료까지 연결 유지."""
-    client = get_crm_client()
     body = await request.body()
     params = dict(request.query_params)
     content_type = request.headers.get("Content-Type", "")
@@ -113,17 +98,21 @@ async def _proxy_stream(
 async def proxy_chat_v2(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy(
-        "POST", "/api/marketing/chat/v2", request,
+        client, "POST", "/api/marketing/chat/v2", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
         timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
     )
 
 
 @router.get("/marketing/health")
-async def proxy_marketing_health(request: Request):
-    return await _proxy("GET", "/api/marketing/health", request)
+async def proxy_marketing_health(
+    request: Request,
+    client: httpx.AsyncClient = Depends(get_crm_client),
+):
+    return await _proxy(client, "GET", "/api/marketing/health", request)
 
 
 # ──────────────────────────────────────────────────────
@@ -134,9 +123,10 @@ async def proxy_marketing_health(request: Request):
 async def proxy_products_register(
     request: Request,
     user: UserContext = Depends(require_admin),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy_stream(
-        "POST", "/api/pipeline/products/register", request,
+        client, "POST", "/api/pipeline/products/register", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -149,9 +139,10 @@ async def proxy_products_register(
 async def proxy_personas_create_from_text(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy(
-        "POST", "/api/pipeline/personas/create-from-text", request,
+        client, "POST", "/api/pipeline/personas/create-from-text", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -160,9 +151,10 @@ async def proxy_personas_create_from_text(
 async def proxy_personas_create_from_file(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy_stream(
-        "POST", "/api/pipeline/personas/create-from-file", request,
+        client, "POST", "/api/pipeline/personas/create-from-file", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -171,6 +163,7 @@ async def proxy_personas_create_from_file(
 async def proxy_personas_upload(
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     timeout = httpx.Timeout(
         connect=10.0,
@@ -179,7 +172,7 @@ async def proxy_personas_upload(
         pool=5.0,
     )
     return await _proxy(
-        "POST", "/api/pipeline/personas/create-from-file/upload", request,
+        client, "POST", "/api/pipeline/personas/create-from-file/upload", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
         timeout,
     )
@@ -190,9 +183,10 @@ async def proxy_personas_stream(
     job_id: str,
     request: Request,
     user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy_stream(
-        "GET", f"/api/pipeline/personas/jobs/{job_id}/stream", request,
+        client, "GET", f"/api/pipeline/personas/jobs/{job_id}/stream", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
@@ -201,6 +195,7 @@ async def proxy_personas_stream(
 async def proxy_products_upload(
     request: Request,
     user: UserContext = Depends(require_admin),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     timeout = httpx.Timeout(
         connect=10.0,
@@ -209,7 +204,7 @@ async def proxy_products_upload(
         pool=5.0,
     )
     return await _proxy(
-        "POST", "/api/pipeline/products/register/upload", request,
+        client, "POST", "/api/pipeline/products/register/upload", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
         timeout,
     )
@@ -220,8 +215,9 @@ async def proxy_products_stream(
     job_id: str,
     request: Request,
     user: UserContext = Depends(require_admin),
+    client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     return await _proxy_stream(
-        "GET", f"/api/pipeline/products/jobs/{job_id}/stream", request,
+        client, "GET", f"/api/pipeline/products/jobs/{job_id}/stream", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )

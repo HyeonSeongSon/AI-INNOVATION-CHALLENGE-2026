@@ -31,29 +31,6 @@ def get_agent_v2(request: Request):
 # 대화 이력 헬퍼
 # ============================================================
 
-_CONTEXT_LIMIT = 50  # LLM 컨텍스트용 최근 메시지 수
-
-
-def _load_conversation_messages(conversation_id: Optional[str]) -> list:
-    """conversation_messages 테이블에서 최근 N건을 시간순으로 반환."""
-    if not conversation_id:
-        return []
-    db = SessionLocal()
-    try:
-        rows = (
-            db.query(ConversationMessage)
-            .filter(ConversationMessage.conversation_id == conversation_id)
-            .order_by(ConversationMessage.id.desc())
-            .limit(_CONTEXT_LIMIT)
-            .all()
-        )
-        return [row.message_data for row in reversed(rows)]
-    except Exception as e:
-        logger.warning("load_conversation_messages_failed", conversation_id=conversation_id, error=str(e))
-        return []
-    finally:
-        db.close()
-
 
 def _save_conversation_messages_best_effort(conversation_id: str, new_entries: list) -> None:
     """새 메시지를 conversation_messages 테이블에 INSERT한다. 실패해도 대화 흐름에 영향 없음."""
