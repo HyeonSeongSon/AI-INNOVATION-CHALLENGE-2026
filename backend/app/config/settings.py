@@ -159,6 +159,11 @@ class Settings(BaseSettings):
                 raise ValueError("AUTH_MODE=jwt일 때 JWT_SECRET이 필요합니다.")
             if len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET은 최소 32자 이상이어야 합니다.")
+            if self.jwt_secret == self.internal_token:
+                raise ValueError(
+                    "JWT_SECRET과 INTERNAL_TOKEN은 반드시 다른 값이어야 합니다. "
+                    "각각 'openssl rand -hex 32'로 별도 생성하세요."
+                )
 
         # 설정된 모델에 필요한 API 키 검증 — 서버 시작 시점에 fail-fast
         active_models = [self.chatgpt_model_name, self.parser_model_name]
