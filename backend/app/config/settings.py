@@ -103,6 +103,11 @@ class Settings(BaseSettings):
     http_timeout_long: float = 30.0
     http_timeout_upload: float = 60.0
 
+    # File upload background job
+    upload_job_ttl_seconds: int = 3600
+    upload_file_read_timeout: float = 30.0
+    upload_file_parse_timeout: float = 15.0
+
     # LLM call timeouts (seconds)
     llm_timeout: float = 60.0
     llm_call_timeout: float = 70.0

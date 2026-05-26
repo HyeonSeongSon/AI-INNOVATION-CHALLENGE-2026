@@ -165,3 +165,63 @@ async def proxy_personas_create_from_file(
         "POST", "/api/pipeline/personas/create-from-file", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
+
+
+@router.post("/pipeline/personas/create-from-file/upload")
+async def proxy_personas_upload(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,
+        write=settings.http_timeout_upload,
+        pool=5.0,
+    )
+    return await _proxy(
+        "POST", "/api/pipeline/personas/create-from-file/upload", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        timeout,
+    )
+
+
+@router.get("/pipeline/personas/jobs/{job_id}/stream")
+async def proxy_personas_stream(
+    job_id: str,
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
+    return await _proxy_stream(
+        "GET", f"/api/pipeline/personas/jobs/{job_id}/stream", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )
+
+
+@router.post("/pipeline/products/register/upload")
+async def proxy_products_upload(
+    request: Request,
+    user: UserContext = Depends(require_admin),
+):
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,
+        write=settings.http_timeout_upload,
+        pool=5.0,
+    )
+    return await _proxy(
+        "POST", "/api/pipeline/products/register/upload", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        timeout,
+    )
+
+
+@router.get("/pipeline/products/jobs/{job_id}/stream")
+async def proxy_products_stream(
+    job_id: str,
+    request: Request,
+    user: UserContext = Depends(require_admin),
+):
+    return await _proxy_stream(
+        "GET", f"/api/pipeline/products/jobs/{job_id}/stream", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+    )

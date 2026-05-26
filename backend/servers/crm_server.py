@@ -17,6 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.api import marketing_api, products_pipeline, persona_pipeline
 from app.api import db_proxy
+from app.api.upload_jobs import cleanup_expired_jobs
 from app.config.settings import settings
 from app.core.data_loader import validate_static_configs
 from app.core.internal_auth import InternalTokenMiddleware
@@ -58,7 +59,27 @@ async def lifespan(app: FastAPI):
         app.state.pool = pool
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("crm_services_initialized")
+
+        async def _upload_cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(settings.cleanup_interval_seconds)
+                try:
+                    removed = await cleanup_expired_jobs(settings.upload_job_ttl_seconds)
+                    if removed:
+                        logger.info("upload_jobs_cleaned", removed=removed)
+                except Exception:
+                    logger.error("upload_cleanup_failed", exc_info=True)
+
+        upload_cleanup_task = asyncio.create_task(_upload_cleanup_loop())
+        logger.info("upload_cleanup_worker_started")
+
         yield
+
+        upload_cleanup_task.cancel()
+        try:
+            await upload_cleanup_task
+        except asyncio.CancelledError:
+            pass
         await close_all()
         await db_proxy.close_internal_client()
 

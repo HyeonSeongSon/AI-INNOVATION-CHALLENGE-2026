@@ -63,6 +63,7 @@ class GeneratedMessageFilterItem(BaseModel):
     llm_score_overall: Optional[float] = None
     llm_feedback: Optional[str] = None
     created_at: Optional[Any] = None
+    created_by_email: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -141,6 +142,19 @@ def list_generated_messages(
         .all()
     )
 
+    email_map: dict[str, str] = {}
+    if header_role == "admin":
+        user_ids = list({msg.user_id for msg in rows if msg.user_id})
+        if user_ids:
+            from sqlalchemy import text
+            placeholders = ", ".join(f":uid_{i}" for i in range(len(user_ids)))
+            params = {f"uid_{i}": uid for i, uid in enumerate(user_ids)}
+            email_rows = db.execute(
+                text(f"SELECT id::text, email FROM users WHERE id::text IN ({placeholders})"),
+                params
+            ).fetchall()
+            email_map = {r[0]: r[1] for r in email_rows}
+
     items = [
         GeneratedMessageFilterItem(
             id=msg.id,
@@ -154,6 +168,7 @@ def list_generated_messages(
             llm_score_overall=float(msg.llm_score_overall) if msg.llm_score_overall is not None else None,
             llm_feedback=msg.llm_feedback,
             created_at=msg.created_at,
+            created_by_email=email_map.get(msg.user_id) or msg.user_id or None,
         )
         for msg in rows
     ]

@@ -1,14 +1,15 @@
 """
-Persona Pipeline API (port 8005)
+Persona Pipeline API (port 8006)
 텍스트/파일 기반 페르소나 생성 엔드포인트.
-bulk_persona_node의 _process_one 로직을 HTTP API로 노출한다.
+파일 업로드는 두 단계로 처리된다:
+  1. POST /personas/create-from-file/upload  → job_id 즉시 반환
+  2. GET  /personas/jobs/{job_id}/stream     → SSE 진행상황 스트리밍 (재연결 지원)
 """
 
 import asyncio
 import csv
 import io
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
@@ -25,6 +26,7 @@ from ..config.settings import settings, ALLOWED_MODEL_PREFIXES
 from ..core.logging import get_logger
 from ..core.auth import UserContext
 from .deps import get_user_from_headers
+from .upload_jobs import JobStatus, UploadJob, append_event, create_job, get_job
 
 logger = get_logger("persona_pipeline")
 
@@ -57,7 +59,7 @@ async def _process_one_text(index: int, text: str, llm, persona_client, user_id:
 
 
 # ──────────────────────────────────────────────────────
-# 파일 파싱 (database pipeline_router의 _parse_file_to_texts와 동일)
+# 파일 파싱
 # ──────────────────────────────────────────────────────
 
 def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
@@ -102,6 +104,116 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
 
 
 # ──────────────────────────────────────────────────────
+# 백그라운드 워커
+# ──────────────────────────────────────────────────────
+
+async def _run_persona_job(
+    job: UploadJob,
+    texts: List[str],
+    llm: Any,
+    persona_client: Any,
+    creator_user_id: str,
+) -> None:
+    """파일 내 모든 텍스트를 처리하고 결과를 job 이벤트 버퍼에 기록한다."""
+    queue: asyncio.Queue = asyncio.Queue()
+    semaphore = asyncio.Semaphore(5)
+
+    async def process_and_enqueue(i: int, text: str) -> None:
+        try:
+            async with semaphore:
+                result = await _process_one_text(i, text, llm, persona_client, user_id=creator_user_id)
+        except Exception:
+            result = {"success": False, "name": None, "error": "페르소나 생성 중 오류가 발생했습니다."}
+        await queue.put(result)
+
+    tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
+
+    try:
+        succeeded = 0
+        failed = 0
+        for _ in range(job.total):
+            result = await queue.get()
+            if result["success"]:
+                succeeded += 1
+            else:
+                failed += 1
+            await append_event(job, {
+                "type": "progress",
+                "current": succeeded + failed,
+                "total": job.total,
+                "name": result.get("name"),
+                "success": result["success"],
+                "persona_id": result.get("persona_id"),
+                "error": result.get("error"),
+            })
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info(
+            "create_personas_job_completed",
+            job_id=job.job_id,
+            total=job.total,
+            succeeded=succeeded,
+            failed=failed,
+        )
+        await append_event(job, {
+            "type": "done",
+            "total": job.total,
+            "succeeded": succeeded,
+            "failed": failed,
+        })
+    except Exception:
+        logger.error("create_personas_job_failed", job_id=job.job_id, exc_info=True)
+        await append_event(job, {
+            "type": "error",
+            "detail": "페르소나 생성 중 오류가 발생했습니다.",
+        })
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# ──────────────────────────────────────────────────────
+# SSE 스트림 제너레이터
+# ──────────────────────────────────────────────────────
+
+async def _stream_job_events(job: UploadJob):
+    """
+    재연결을 지원하는 SSE 이벤트 스트림.
+    Phase A: 기존 이벤트 replay → Phase B: asyncio.Condition으로 새 이벤트 대기.
+    25초마다 keepalive 코멘트를 전송해 프록시 타임아웃을 방지한다.
+    """
+    KEEPALIVE = 25.0
+    cursor = 0
+
+    # Phase A: 이미 쌓인 이벤트 전송 (재연결 시 replay)
+    async with job.condition:
+        snapshot = list(job.events)
+    for event in snapshot:
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    cursor = len(snapshot)
+
+    # Phase B: 새 이벤트 대기
+    while True:
+        async with job.condition:
+            while len(job.events) <= cursor:
+                if job.status in (JobStatus.DONE, JobStatus.ERROR):
+                    return
+                try:
+                    await asyncio.wait_for(job.condition.wait(), timeout=KEEPALIVE)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+            new_events = job.events[cursor:]
+            cursor += len(new_events)
+
+        for event in new_events:
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            if event.get("type") in ("done", "error"):
+                return
+
+
+# ──────────────────────────────────────────────────────
 # 엔드포인트
 # ──────────────────────────────────────────────────────
 
@@ -135,95 +247,66 @@ async def create_persona_from_text(
     }
 
 
-@router.post("/personas/create-from-file")
-async def create_personas_from_file(
+@router.post("/personas/create-from-file/upload")
+async def upload_personas_file(
     file: UploadFile = File(...),
     req: Request = None,
     current_user: UserContext = Depends(get_user_from_headers),
-):
+) -> Dict[str, Any]:
     """
-    CSV / JSONL / JSON 파일 업로드로 페르소나 일괄 생성 (SSE 스트리밍)
+    CSV / JSONL / JSON 파일을 업로드하고 백그라운드 처리를 시작한다.
+    즉시 job_id를 반환하며, 진행상황은 /personas/jobs/{job_id}/stream 으로 수신한다.
+    """
+    try:
+        content = await asyncio.wait_for(
+            file.read(MAX_UPLOAD_BYTES + 1),
+            timeout=settings.upload_file_read_timeout,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="파일 읽기 시간이 초과되었습니다.")
 
-    진행 이벤트: {"type":"progress","current":N,"total":N,"name":"...","success":bool,"persona_id":"...","error":"..."}
-    완료 이벤트: {"type":"done","total":N,"succeeded":N,"failed":N}
-    오류 이벤트: {"type":"error","detail":"..."}
-    """
-    content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="파일 크기는 50MB를 초과할 수 없습니다.")
 
     try:
-        texts = _parse_file_to_texts(file.filename or "", content)
-    except ValueError as e:
-        logger.warning("file_parse_failed", filename=file.filename, error=str(e))
-        async def error_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': '파일 형식이 올바르지 않습니다.'}, ensure_ascii=False)}\n\n"
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+        texts = await asyncio.wait_for(
+            asyncio.to_thread(_parse_file_to_texts, file.filename or "", content),
+            timeout=settings.upload_file_parse_timeout,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="파일 파싱 시간이 초과되었습니다.")
+    except ValueError:
+        logger.warning("file_parse_failed", filename=file.filename)
+        raise HTTPException(status_code=422, detail="파일 형식이 올바르지 않습니다.")
 
     if not texts:
-        async def empty_stream():
-            yield f"data: {json.dumps({'type': 'error', 'detail': '파일에서 유효한 레코드를 찾을 수 없습니다.'}, ensure_ascii=False)}\n\n"
-        return StreamingResponse(empty_stream(), media_type="text/event-stream")
+        raise HTTPException(status_code=422, detail="파일에서 유효한 레코드를 찾을 수 없습니다.")
 
-    total = len(texts)
     llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
     persona_client = req.app.state.persona_client
-    creator_user_id = current_user.user_id
+    job = create_job("persona", len(texts))
 
-    async def generate():
-        queue: asyncio.Queue = asyncio.Queue()
-        semaphore = asyncio.Semaphore(5)
+    asyncio.create_task(
+        _run_persona_job(job, texts, llm, persona_client, current_user.user_id)
+    )
 
-        async def process_and_enqueue(i: int, text: str):
-            try:
-                async with semaphore:
-                    result = await _process_one_text(i, text, llm, persona_client, user_id=creator_user_id)
-            except Exception as e:
-                result = {
-                    "success": False,
-                    "name": None,
-                    "error": "페르소나 생성 중 오류가 발생했습니다.",
-                }
-            await queue.put(result)
+    return {"job_id": job.job_id, "total": job.total}
 
-        tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
 
-        try:
-            succeeded = 0
-            failed = 0
-            for _ in range(total):
-                result = await queue.get()
-                if result["success"]:
-                    succeeded += 1
-                else:
-                    failed += 1
-                event = {
-                    "type": "progress",
-                    "current": succeeded + failed,
-                    "total": total,
-                    "name": result.get("name"),
-                    "success": result["success"],
-                    "persona_id": result.get("persona_id"),
-                    "error": result.get("error"),
-                }
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-            logger.info(
-                "create_personas_from_file_completed",
-                filename=file.filename,
-                total=total,
-                succeeded=succeeded,
-                failed=failed,
-            )
-            yield f"data: {json.dumps({'type': 'done', 'total': total, 'succeeded': succeeded, 'failed': failed}, ensure_ascii=False)}\n\n"
-        finally:
-            for task in tasks:
-                task.cancel()
-            try:
-                await asyncio.gather(*tasks, return_exceptions=True)
-            except asyncio.CancelledError:
-                pass
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
+@router.get("/personas/jobs/{job_id}/stream")
+async def stream_persona_job(
+    job_id: str,
+    req: Request = None,
+    current_user: UserContext = Depends(get_user_from_headers),
+) -> StreamingResponse:
+    """job_id에 해당하는 파일 처리 진행상황을 SSE로 스트리밍한다. 재연결 시 처음부터 replay된다."""
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+    if job.job_type != "persona":
+        raise HTTPException(status_code=400, detail="잘못된 작업 유형입니다.")
+    return StreamingResponse(
+        _stream_job_events(job),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

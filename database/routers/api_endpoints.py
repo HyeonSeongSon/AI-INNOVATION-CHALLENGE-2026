@@ -181,6 +181,7 @@ class PersonaDetailResponse(BaseModel):
     avoided_brands: Optional[List[str]] = None
     persona_created_at: Optional[datetime] = None
     ai_analysis: Optional[dict] = None
+    created_by_email: Optional[str] = None
 
 
 class AnalysisResultResponse(BaseModel):
@@ -401,6 +402,19 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
 
     personas = query.order_by(Persona.persona_created_at.desc()).all()
 
+    email_map: dict[str, str] = {}
+    if request.role == "admin":
+        user_ids = [p.user_id for p in personas if p.user_id]
+        if user_ids:
+            from sqlalchemy import text
+            placeholders = ", ".join(f":uid_{i}" for i in range(len(user_ids)))
+            params = {f"uid_{i}": uid for i, uid in enumerate(user_ids)}
+            email_rows = db.execute(
+                text(f"SELECT id::text, email FROM users WHERE id::text IN ({placeholders})"),
+                params
+            ).fetchall()
+            email_map = {r[0]: r[1] for r in email_rows}
+
     return [
         PersonaDetailResponse(
             persona_id=p.persona_id,
@@ -433,6 +447,7 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
             avoided_brands=p.avoided_brands,
             persona_created_at=p.persona_created_at,
             ai_analysis=_build_ai_analysis(p.persona_summary),
+            created_by_email=email_map.get(p.user_id) or p.user_id or None,
         )
         for p in personas
     ]

@@ -356,6 +356,7 @@ function formatDate(dt) {
 export default function PersonaManager() {
   const location = useLocation();
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -486,81 +487,116 @@ export default function PersonaManager() {
     }
   };
 
-  /* 파일로 페르소나 생성 (SSE 스트리밍) */
+  /* 파일로 페르소나 생성 — 2단계: Phase 1 즉시 job_id 반환, Phase 2 SSE 스트리밍 */
   const handleCreateFromFile = async () => {
     if (!uploadFile) return addToast('파일을 선택해주세요.', 'error');
     setIsFileCreating(true);
     setFileProgress(null);
 
+    const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8005/api';
     const formData = new FormData();
     formData.append('file', uploadFile);
 
+    // Phase 1: 파일 업로드 → job_id 즉시 수신
+    let jobId;
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8005/api'}/pipeline/personas/create-from-file`, {
+      const res = await fetch(`${BASE}/pipeline/personas/create-from-file/upload`, {
         method: 'POST',
         credentials: 'include',
         body: formData,
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
         addToast(`생성 실패: ${typeof err.detail === 'string' ? err.detail : '서버 오류가 발생했습니다.'}`, 'error');
+        setIsFileCreating(false);
         return;
       }
+      const data = await res.json();
+      jobId = data.job_id;
+      setFileProgress({ total: data.total, current: 0, done: false, succeeded: 0, failed: 0, results: [] });
+    } catch {
+      addToast('파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'error');
+      setIsFileCreating(false);
+      return;
+    }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+    // Phase 2: SSE 스트리밍 (재연결 시 skipCount로 replay 이벤트 중복 처리 방지)
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+    let skipCount = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const response = await fetch(`${BASE}/pipeline/personas/jobs/${jobId}/stream`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          addToast('스트리밍 연결에 실패했습니다.', 'error');
+          break;
+        }
 
-        const chunks = buffer.split('\n\n');
-        buffer = chunks.pop();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let seenCount = 0; // 이번 연결에서 읽은 이벤트 수 (replay 포함)
 
-        for (const chunk of chunks) {
-          const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
-          if (!dataLine) continue;
-          let event;
-          try {
-            event = JSON.parse(dataLine.slice(6));
-          } catch {
-            continue;
-          }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
 
-          if (event.type === 'error') {
-            addToast(`생성 실패: ${event.detail}`, 'error');
-            return;
-          }
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop();
 
-          if (event.type === 'progress') {
-            setFileProgress(prev => ({
-              total: event.total,
-              current: event.current,
-              done: false,
-              succeeded: (prev?.succeeded ?? 0) + (event.success ? 1 : 0),
-              failed: (prev?.failed ?? 0) + (event.success ? 0 : 1),
-              results: [...(prev?.results ?? []), {
-                name: event.name,
-                success: event.success,
-                error: event.error,
-              }],
-            }));
-          }
+          for (const chunk of chunks) {
+            if (chunk.startsWith(':')) continue; // keepalive 스킵
+            const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+            let event;
+            try { event = JSON.parse(dataLine.slice(6)); } catch { continue; }
 
-          if (event.type === 'done') {
-            setFileProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
-            await fetchPersonas();
+            // 재연결 시 서버가 replay한 이미 처리한 이벤트 스킵
+            if (seenCount < skipCount) { seenCount++; continue; }
+            seenCount++;
+            skipCount = seenCount; // 다음 재연결 시 이 지점부터 재개
+
+            if (event.type === 'error') {
+              addToast(`생성 실패: ${event.detail}`, 'error');
+              setIsFileCreating(false);
+              return;
+            }
+            if (event.type === 'progress') {
+              setFileProgress(prev => ({
+                total: event.total,
+                current: event.current,
+                done: false,
+                succeeded: (prev?.succeeded ?? 0) + (event.success ? 1 : 0),
+                failed: (prev?.failed ?? 0) + (event.success ? 0 : 1),
+                results: [...(prev?.results ?? []), { name: event.name, success: event.success, error: event.error }],
+              }));
+            }
+            if (event.type === 'done') {
+              setFileProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
+              await fetchPersonas();
+              setIsFileCreating(false);
+              return;
+            }
           }
         }
+        break; // 스트림 정상 종료
+      } catch {
+        // skipCount는 이미 마지막으로 처리한 이벤트 이후 값으로 유지됨
+        attempt++;
+        if (attempt > MAX_RETRIES) break;
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
       }
-    } catch (error) {
-      addToast('파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'error');
-    } finally {
-      setIsFileCreating(false);
     }
+
+    if (attempt > MAX_RETRIES) {
+      addToast('연결이 끊겼습니다. 작업은 백그라운드에서 계속됩니다.', 'error');
+    }
+    setIsFileCreating(false);
   };
 
   return (
@@ -609,14 +645,15 @@ export default function PersonaManager() {
                 <Th style={{ width: 120, minWidth: 120 }}>페르소나 ID</Th>
                 <Th style={{ width: 500, minWidth: 400 }}>고민</Th>
                 <Th>요약</Th>
-                <Th style={{ width: 120, minWidth: 120 }}>등록일</Th>
+                {isAdmin && <Th style={{ width: 140, minWidth: 140 }}>등록자</Th>}
+                <Th style={{ width: 100, minWidth: 100 }}>등록일</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={7}>불러오는 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>불러오는 중...</td></EmptyRow>
               ) : pagedPersonas.length === 0 ? (
-                <EmptyRow><td colSpan={7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
               ) : (
                 pagedPersonas.map(p => (
                   <Tr
@@ -646,6 +683,11 @@ export default function PersonaManager() {
                     <TruncatedTd>
                       <ClampedText>{p.aiAnalysis?.reasoning || '-'}</ClampedText>
                     </TruncatedTd>
+                    {isAdmin && (
+                      <Td style={{ color: '#6b7280', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.created_by_email || '-'}
+                      </Td>
+                    )}
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDate(p.persona_created_at)}
                     </Td>

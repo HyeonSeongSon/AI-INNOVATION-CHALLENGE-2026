@@ -498,6 +498,7 @@ function formatDateTime(dt) {
 export default function GeneratedMessages() {
   const location = useLocation();
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const [filterOptions, setFilterOptions] = useState({ brands: [], product_tags: [], purposes: [] });
   const [filters, setFilters] = useState({ brand: '', sub_tag: '', purpose: '', start_date: '', end_date: '' });
@@ -707,21 +708,22 @@ export default function GeneratedMessages() {
                     onClick={e => e.stopPropagation()}
                   />
                 </CheckTh>
-                <Th>생성일시</Th>
-                <Th>상품명</Th>
-                <Th>브랜드</Th>
-                <Th>카테고리</Th>
-                <Th>목적</Th>
-                <Th>제목</Th>
+                <Th style={{ width: 160, minWidth: 160 }}>생성일시</Th>
+                {isAdmin && <Th style={{ width: 140, minWidth: 140 }}>등록자</Th>}
+                <Th style={{ width: 300, minWidth: 200 }}>상품명</Th>
+                <Th style={{ width: 100, minWidth: 100 }}>브랜드</Th>
+                <Th style={{ width: 100, minWidth: 100 }}>카테고리</Th>
+                <Th style={{ width: 160, minWidth: 160 }}>목적</Th>
+                <Th style={{ width: 300, minWidth: 300 }}>제목</Th>
                 <Th>내용</Th>
-                <Th>품질점수</Th>
+                <Th style={{ width: 80, minWidth: 80 }}>품질점수</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={9}>조회 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조회 중...</td></EmptyRow>
               ) : messages.length === 0 ? (
-                <EmptyRow><td colSpan={9}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
               ) : (
                 messages.map(msg => (
                   <Tr
@@ -739,6 +741,11 @@ export default function GeneratedMessages() {
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDateTime(msg.created_at)}
                     </Td>
+                    {isAdmin && (
+                      <Td style={{ color: '#6b7280', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {msg.created_by_email || '-'}
+                      </Td>
+                    )}
                     <TruncatedTd style={{ maxWidth: 160 }}>{msg.product_name || '-'}</TruncatedTd>
                     <Td>{msg.brand ? <TagBadge>{msg.brand}</TagBadge> : '-'}</Td>
                     <Td>
