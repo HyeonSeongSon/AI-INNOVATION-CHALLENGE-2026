@@ -562,7 +562,6 @@ class ProductRegistrationService:
                 "register_product_error",
                 product_name=product_name,
                 error_type=type(e).__name__,
-                error=str(e),
                 exc_info=True,
             )
             return {"success": False, "product_name": product_name, "error": "상품 등록 중 오류가 발생했습니다."}

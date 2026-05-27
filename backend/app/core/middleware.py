@@ -75,7 +75,5 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 path=path,
                 duration_ms=round(duration_ms, 1),
                 error_type=type(e).__name__,
-                error_type=type(e).__name__,
-                traceback=traceback.format_exc(),
             )
             raise

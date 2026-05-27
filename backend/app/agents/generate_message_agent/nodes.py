@@ -39,7 +39,7 @@ def _parse_message(raw) -> Dict[str, Any]:
         if isinstance(parsed, dict) and "title" in parsed:
             return parsed
     except Exception as e:
-        _logger.debug("message_json_parse_failed", error=str(e))
+        _logger.debug("message_json_parse_failed", error_type=type(e).__name__)
     return {"title": "", "message": content}
 
 
@@ -177,7 +177,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     try:
         persona_info = await generator.get_persona_info(persona_id) if persona_id else None
     except Exception as e:
-        agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None
 
     agent_logger.info(
@@ -254,7 +254,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     try:
         persona_info = await generator.get_persona_info(persona_id) if persona_id else None
     except Exception as e:
-        agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None
 
     try:

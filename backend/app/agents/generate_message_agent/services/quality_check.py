@@ -498,7 +498,7 @@ class QualityChecker:
                     sentence=sentence,
                     attempt=attempt,
                     max_retries=self._SEMANTIC_MAX_RETRIES,
-                    error=str(e),
+                    error_type=type(e).__name__,
                 )
                 if attempt < self._SEMANTIC_MAX_RETRIES:
                     await asyncio.sleep(0.5 * (2 ** (attempt - 1)))

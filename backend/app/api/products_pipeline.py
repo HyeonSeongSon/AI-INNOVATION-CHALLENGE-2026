@@ -87,7 +87,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
                     filename=filename,
                     line_no=line_no,
                     preview=line[:50],
-                    error=str(exc),
+                    error_type=type(exc).__name__,
                 )
         if skipped:
             logger.warning(

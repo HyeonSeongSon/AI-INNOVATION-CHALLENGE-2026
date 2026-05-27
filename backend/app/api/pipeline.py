@@ -116,7 +116,7 @@ async def _run_pre_analysis_bg(persona_id: str, persona_data: dict, model: Optio
 
     except Exception as e:
         db.rollback()
-        logger.error("pre_analysis_bg_failed", persona_id=persona_id, error_type=type(e).__name__, error_message=str(e), exc_info=True)
+        logger.error("pre_analysis_bg_failed", persona_id=persona_id, error_type=type(e).__name__, exc_info=True)
     finally:
         db.close()
 

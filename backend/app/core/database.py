@@ -104,7 +104,7 @@ def check_connection() -> bool:
         print(f"[OK] Database connection successful: {db_config.host}:{db_config.port}/{db_config.database}")
         return True
     except Exception as e:
-        print(f"[ERROR] Database connection failed: {e}")
+        print(f"[ERROR] Database connection failed: {type(e).__name__}")
         return False
 
 

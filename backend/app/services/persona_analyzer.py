@@ -75,7 +75,7 @@ async def generate_persona_summary(persona_data: Dict[str, Any], model: str = No
         )
     except Exception as e:
         duration_ms = round((time.perf_counter() - start) * 1000, 1)
-        logger.error("persona_summary_llm_failed", persona_name=persona_name, model=model_name, duration_ms=duration_ms, error_type=type(e).__name__, error_message=str(e), exc_info=True)
+        logger.error("persona_summary_llm_failed", persona_name=persona_name, model=model_name, duration_ms=duration_ms, error_type=type(e).__name__, exc_info=True)
         raise
 
     summary = response.choices[0].message.content.strip()

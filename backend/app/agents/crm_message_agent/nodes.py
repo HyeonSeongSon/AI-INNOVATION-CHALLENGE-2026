@@ -324,7 +324,7 @@ def make_recommend_product_node(client: A2AClient):
         try:
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
-            _logger.error("deserialize_messages_failed", node_name="recommend_product_agent", error=str(e))
+            _logger.error("deserialize_messages_failed", node_name="recommend_product_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={
@@ -405,7 +405,7 @@ def make_generate_message_node(client: A2AClient):
         try:
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
-            _logger.error("deserialize_messages_failed", node_name="generate_message_agent", error=str(e))
+            _logger.error("deserialize_messages_failed", node_name="generate_message_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={
@@ -488,7 +488,7 @@ def make_data_registration_node(client: A2AClient):
         try:
             messages = deserialize_messages(result.get("messages", []))
         except Exception as e:
-            _logger.error("deserialize_messages_failed", node_name="data_registration_agent", error=str(e))
+            _logger.error("deserialize_messages_failed", node_name="data_registration_agent", error_type=type(e).__name__)
             return Command(
                 goto="supervisor",
                 update={

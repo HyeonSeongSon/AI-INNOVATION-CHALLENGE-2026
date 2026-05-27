@@ -31,7 +31,7 @@ class CrmMessageGenerator:
         try:
             return await self._persona_client.get_persona_info(persona_id)
         except Exception as e:
-            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            logger.error("persona_fetch_failed", persona_id=persona_id, error_type=type(e).__name__, exc_info=True)
             raise
 
     async def _get_product_info(self, product_id: str) -> dict:

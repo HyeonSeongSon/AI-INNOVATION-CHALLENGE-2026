@@ -241,7 +241,6 @@ class AgentLogger:
                 operation=operation,
                 duration_ms=round(duration_ms, 1),
                 error_type=type(e).__name__,
-                error_message=str(e),
                 exc_info=True,
             )
             self._user_logs.append(
