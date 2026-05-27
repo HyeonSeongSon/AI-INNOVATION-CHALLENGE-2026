@@ -21,7 +21,7 @@ class MessageOutput(BaseModel):
 
 class ApplyFeedback:
     def __init__(self):
-        self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=0.5)
+        self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=settings.llm_temperature_creative)
         self._product_client = ProductClient()
 
     def _extract_feedback(self, quality_check: Dict[str, Any]) -> str:

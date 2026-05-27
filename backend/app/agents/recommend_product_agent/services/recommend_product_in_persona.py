@@ -12,7 +12,7 @@ class ProductRecommender:
     def __init__(self):
         self.vector_db_api_url = settings.opensearch_api_url
         self.db_api_url = settings.database_api_url
-        self.llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+        self.llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
         self.persona_client = PersonaClient()
         self.product_client = ProductClient()
     
@@ -126,7 +126,7 @@ class ProductRecommender:
                 sub_tags=sub_tags if sub_tags else None,
             )
 
-        retrieval_result = await self.product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=100)
+        retrieval_result = await self.product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=settings.product_retrieval_top_k)
         retrieval_result_ids = [p['product_id'] for p in retrieval_result]
         
         return retrieval_result_ids
@@ -256,7 +256,7 @@ class ProductRecommender:
         self,
         queries: Dict,
         retrieval_result_ids: List[str],
-        top_n: int = 3,
+        top_n: int | None = None,
         product_tags: Optional[List[str]] = None,
     ) -> List[Dict]:
         """
@@ -271,6 +271,8 @@ class ProductRecommender:
         Returns:
             List[Dict]: RRF 순위 기준 상위 top_n개 상품 전체 정보
         """
+        top_n = top_n if top_n is not None else settings.product_recommendation_top_n
+
         # 3차원 병렬 하이브리드 검색
         dimension_results = await self.get_product_documents(queries, retrieval_result_ids)
 

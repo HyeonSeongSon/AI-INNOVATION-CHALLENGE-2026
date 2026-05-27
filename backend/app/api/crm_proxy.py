@@ -78,7 +78,7 @@ async def _proxy_stream(
                 content=body,
                 params=params,
                 headers=headers,
-                timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
+                timeout=httpx.Timeout(connect=settings.http_timeout_stream_connect, read=None, write=None, pool=settings.http_timeout_stream_pool),
             ) as response:
                 async for chunk in response.aiter_bytes():
                     yield chunk
@@ -103,7 +103,7 @@ async def proxy_chat_v2(
     return await _proxy(
         client, "POST", "/api/marketing/chat/v2", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
-        timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
+        timeout=httpx.Timeout(connect=settings.http_timeout_stream_connect, read=None, write=None, pool=settings.http_timeout_stream_pool),
     )
 
 
@@ -166,10 +166,10 @@ async def proxy_personas_upload(
     client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     timeout = httpx.Timeout(
-        connect=10.0,
+        connect=settings.http_timeout_stream_connect,
         read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,
         write=settings.http_timeout_upload,
-        pool=5.0,
+        pool=settings.http_timeout_stream_pool,
     )
     return await _proxy(
         client, "POST", "/api/pipeline/personas/create-from-file/upload", request,
@@ -198,10 +198,10 @@ async def proxy_products_upload(
     client: httpx.AsyncClient = Depends(get_crm_client),
 ):
     timeout = httpx.Timeout(
-        connect=10.0,
+        connect=settings.http_timeout_stream_connect,
         read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,
         write=settings.http_timeout_upload,
-        pool=5.0,
+        pool=settings.http_timeout_stream_pool,
     )
     return await _proxy(
         client, "POST", "/api/pipeline/products/register/upload", request,

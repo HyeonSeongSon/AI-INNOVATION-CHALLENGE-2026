@@ -253,12 +253,12 @@ class QualityChecker:
         # 길이 검증
         if title and len(title) < 5:
             issues.append(f"제목이 너무 짧습니다 ({len(title)}자, 최소 5자)")
-        if title and len(title) > 40:
-            issues.append(f"제목이 너무 깁니다 ({len(title)}자, 최대 40자)")
-        if message and len(message) < 20:
-            issues.append(f"메시지가 너무 짧습니다 ({len(message)}자, 최소 20자)")
-        if message and len(message) > 350:
-            issues.append(f"메시지가 너무 깁니다 ({len(message)}자, 최대 350자)")
+        if title and len(title) > settings.message_title_max_length:
+            issues.append(f"제목이 너무 깁니다 ({len(title)}자, 최대 {settings.message_title_max_length}자)")
+        if message and len(message) < settings.message_body_min_length:
+            issues.append(f"메시지가 너무 짧습니다 ({len(message)}자, 최소 {settings.message_body_min_length}자)")
+        if message and len(message) > settings.message_body_max_length:
+            issues.append(f"메시지가 너무 깁니다 ({len(message)}자, 최대 {settings.message_body_max_length}자)")
 
         # 금지 표현 검사 (3단계 매칭)
         detected = self._detect_forbidden_expressions(full_text)
@@ -367,10 +367,6 @@ class QualityChecker:
 # Stage 2: Semantic Similarity Check
 # ============================================================
 
-    _SEMANTIC_THRESHOLD = 0.85
-    _SEMANTIC_INDEX = "forbidden_sentences"
-    _SEMANTIC_TOP_K = 3
-    _SEMANTIC_MAX_RETRIES = 2
 
     @traced(name="semantic_similarity_check", run_type="chain")
     async def _run_semantic_similarity_check(
@@ -441,12 +437,12 @@ class QualityChecker:
         )
 
         # 임계값 초과 결과 필터
-        triggered = [r for r in all_results if r["score"] > self._SEMANTIC_THRESHOLD]
+        triggered = [r for r in all_results if r["score"] > settings.quality_check_semantic_threshold]
 
         if triggered:
             logger.info(
                 "semantic_check_triggered",
-                threshold=self._SEMANTIC_THRESHOLD,
+                threshold=settings.quality_check_semantic_threshold,
                 triggered_count=len(triggered),
             )
             return False, triggered
@@ -460,7 +456,7 @@ class QualityChecker:
         endpoint: str,
     ) -> Optional[List[Dict[str, Any]]]:
         """
-        단일 문장의 유사도 검색 요청을 보냅니다 (최대 ``_SEMANTIC_MAX_RETRIES``회 재시도).
+        단일 문장의 유사도 검색 요청을 보냅니다 (최대 ``quality_check_semantic_max_retries``회 재시도).
 
         Args:
             client:   재사용할 httpx 비동기 클라이언트.
@@ -471,14 +467,14 @@ class QualityChecker:
             검색 결과 리스트 (각 항목은 ``query_sentence``, ``matched_sentence``,
             ``score``, ``source`` 키를 포함). 모든 재시도 실패 시 ``None``.
         """
-        for attempt in range(1, self._SEMANTIC_MAX_RETRIES + 1):
+        for attempt in range(1, settings.quality_check_semantic_max_retries + 1):
             try:
                 response = await client.post(
                     endpoint,
                     json={
-                        "index_name": self._SEMANTIC_INDEX,
+                        "index_name": settings.opensearch_forbidden_sentences_index,
                         "query": sentence,
-                        "top_k": self._SEMANTIC_TOP_K,
+                        "top_k": settings.quality_check_semantic_top_k,
                     },
                 )
                 response.raise_for_status()
@@ -497,11 +493,11 @@ class QualityChecker:
                     "semantic_search_request_failed",
                     sentence=sentence,
                     attempt=attempt,
-                    max_retries=self._SEMANTIC_MAX_RETRIES,
+                    max_retries=settings.quality_check_semantic_max_retries,
                     error_type=type(e).__name__,
                 )
-                if attempt < self._SEMANTIC_MAX_RETRIES:
-                    await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
+                if attempt < settings.quality_check_semantic_max_retries:
+                    await asyncio.sleep(settings.quality_check_retry_backoff_base * (2 ** (attempt - 1)))
         return None  # 재시도 소진: 빈 결과(정상)와 구분
 
 # ============================================================
@@ -581,8 +577,8 @@ class QualityChecker:
             # 코드가 직접 판정: 모든 항목 3점 이상 AND 평균 4점 이상
             score_keys = ("accuracy", "tone", "personalization", "naturalness", "cta_clarity")
             passed = (
-                all(scores[k] >= 3 for k in score_keys)
-                and scores["overall"] >= 4
+                all(scores[k] >= settings.quality_check_llm_min_score for k in score_keys)
+                and scores["overall"] >= settings.quality_check_llm_min_overall_score
             )
             return passed, scores
 

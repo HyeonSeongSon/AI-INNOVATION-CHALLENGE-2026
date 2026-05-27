@@ -31,8 +31,6 @@ from ..tools.search_tools import (
 
 _logger = get_logger("crm_message_agent")
 
-_SUMMARIZE_THRESHOLD = 30
-_KEEP_MESSAGES = 10
 
 
 _SUMMARY_BASE_INSTRUCTION = """\
@@ -93,11 +91,11 @@ def _build_summary_prompt(messages: list, existing_summary: str) -> list:
 
 async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     messages = state.get("messages", [])
-    if len(messages) <= _SUMMARIZE_THRESHOLD:
+    if len(messages) <= settings.conversation_summarize_threshold:
         return {}
 
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    llm = get_llm(model, temperature=0)
+    llm = get_llm(model, temperature=settings.llm_temperature_classifier)
     existing_summary = state.get("summary", "")
 
     try:
@@ -106,13 +104,13 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
         _logger.warning("summarize_skipped", error=str(e))
         return {}
 
-    messages_to_delete = messages[:-_KEEP_MESSAGES]
+    messages_to_delete = messages[:-settings.conversation_keep_messages]
     delete_ops = [RemoveMessage(id=m.id) for m in messages_to_delete]
 
     _logger.info(
         "conversation_summarized",
         deleted=len(messages_to_delete),
-        kept=_KEEP_MESSAGES,
+        kept=settings.conversation_keep_messages,
     )
     return {"summary": response.content, "messages": delete_ops}
 
@@ -179,7 +177,7 @@ _SEARCH_TOOLS = [
 
 @lru_cache(maxsize=4)
 def _get_search_agent(model_name: str):
-    llm = get_llm(model_name, temperature=0.7)
+    llm = get_llm(model_name, temperature=settings.llm_temperature_generator)
     return create_agent(model=llm, tools=_SEARCH_TOOLS, system_prompt="")
 
 
@@ -194,7 +192,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         }
 
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    llm = get_llm(model, temperature=0)
+    llm = get_llm(model, temperature=settings.llm_temperature_classifier)
     messages = state.get("messages", [])
     task_plan = state.get("task_plan", [])
     summary = state.get("summary", "")
@@ -435,7 +433,7 @@ def make_data_registration_node(client: A2AClient):
         session_id = f"{thread_id}:data_registration" if thread_id else str(uuid.uuid4())
 
         file_records = state.get("file_records")
-        a2a_timeout = httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0) if file_records else None
+        a2a_timeout = httpx.Timeout(connect=settings.http_timeout_stream_connect, read=None, write=None, pool=settings.http_timeout_stream_pool) if file_records else None
         try:
             task = await client.send_task(session_id, {
                 "messages": _filter_handoff_messages(state.get("messages", [])),

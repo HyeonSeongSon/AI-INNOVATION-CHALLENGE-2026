@@ -91,7 +91,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
         messages = state.get("messages")
         parsed_data = state.get("parsed_data")
         model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-        query_llm = get_llm(model, temperature=0.3)
+        query_llm = get_llm(model, temperature=settings.llm_temperature_persona)
 
         persona_id = parsed_data.get("persona_id")
         has_persona_info = parsed_data.get("has_persona_info", True)
@@ -197,6 +197,22 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
             {k: v for k, v in p.items() if not k.endswith("_vector")}
             for p in recommended_products
         ]
+
+        if not recommended_products:
+            logger.info(
+                "recommend_products_empty",
+                user_message=f"[{node_name}] 조건에 맞는 추천 상품이 없습니다.",
+            )
+            return {
+                **base,
+                "messages": [AIMessage(content="조건에 맞는 추천 상품을 찾지 못했습니다.", name="recommend_product_agent")],
+                "recommended_products": [],
+                "status": "completed",
+                "end_time": _now_iso(),
+                "duration_ms": None,
+                "intermediate": {**state.get("intermediate", {}), "recommended_products": []},
+                "logs": logger.get_user_logs(),
+            }
 
         product_summary = "\n".join(
             f"- [TOP{i+1}] [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('sub_tag')}): {p.get('product_comment')}"

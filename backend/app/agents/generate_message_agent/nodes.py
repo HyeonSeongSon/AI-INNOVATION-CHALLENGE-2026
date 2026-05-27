@@ -111,7 +111,7 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
     generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    message_llm = get_llm(model, temperature=0.7)
+    message_llm = get_llm(model, temperature=settings.llm_temperature_generator)
 
     tasks = state.get("tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
@@ -170,7 +170,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     checker = services.checker
     agent_logger = AgentLogger(state, node_name="quality_check_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    judge_llm = get_llm(model, temperature=0)
+    judge_llm = get_llm(model, temperature=settings.llm_temperature_classifier)
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
@@ -226,7 +226,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
 async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
     agent_logger = AgentLogger(state, node_name="message_feedback_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    feedback_llm = get_llm(model, temperature=0.5)
+    feedback_llm = get_llm(model, temperature=settings.llm_temperature_creative)
 
     generated_tasks = state.get("generated_tasks") or []
     failed_task_ids = set(state.get("failed_task_ids") or [])

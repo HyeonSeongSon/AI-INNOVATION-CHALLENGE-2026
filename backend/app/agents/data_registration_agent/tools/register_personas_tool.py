@@ -19,7 +19,7 @@ from ....core.logging import get_logger
 from ..state import DataRegistrationState
 
 logger = get_logger("register_personas_tool")
-_semaphore = asyncio.Semaphore(5)
+_semaphore = asyncio.Semaphore(settings.upload_persona_concurrency)
 
 
 async def _process_one(index: int, record: dict, llm, persona_client, user_id: str | None = None) -> dict:
@@ -52,7 +52,7 @@ async def register_personas_tool(
     persona_client = config["configurable"]["services"].persona_client
     user_id = config.get("configurable", {}).get("user_id")
     records = state.get("file_records") or []
-    llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
 
     async def _bounded(i: int, rec: dict):
         async with _semaphore:

@@ -83,7 +83,7 @@ class A2AClient:
                     error_type=error_type,
                 )
                 if attempt < settings.a2a_max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(settings.a2a_retry_backoff_base ** attempt)
 
         _logger.error(
             "a2a_send_task_all_retries_exhausted",

@@ -25,7 +25,6 @@ logger = get_logger("products_pipeline")
 
 router = APIRouter(prefix="/api/pipeline", tags=["Products Pipeline"])
 
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
 
 # ──────────────────────────────────────────────────────
@@ -79,7 +78,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
             if not line:
                 continue
             try:
-                records.append(json.loads(line))
+                records.append(_normalize_record(json.loads(line)))
             except json.JSONDecodeError as exc:
                 skipped += 1
                 logger.warning(
@@ -138,7 +137,7 @@ async def _run_product_job(
 ) -> None:
     """파일 내 모든 레코드를 처리하고 결과를 job 이벤트 버퍼에 기록한다."""
     queue: asyncio.Queue = asyncio.Queue()
-    semaphore = asyncio.Semaphore(3)
+    semaphore = asyncio.Semaphore(settings.upload_product_concurrency)
 
     async def process_and_enqueue(record: dict) -> None:
         try:
@@ -225,7 +224,6 @@ async def _stream_job_events(job: UploadJob):
     Phase A: 기존 이벤트 replay → Phase B: asyncio.Condition으로 새 이벤트 대기.
     25초마다 keepalive 코멘트를 전송해 프록시 타임아웃을 방지한다.
     """
-    KEEPALIVE = 25.0
     cursor = 0
 
     # Phase A: 이미 쌓인 이벤트 전송 (재연결 시 replay)
@@ -242,7 +240,7 @@ async def _stream_job_events(job: UploadJob):
                 if job.status in (JobStatus.DONE, JobStatus.ERROR):
                     return
                 try:
-                    await asyncio.wait_for(job.condition.wait(), timeout=KEEPALIVE)
+                    await asyncio.wait_for(job.condition.wait(), timeout=settings.sse_keepalive_timeout)
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
@@ -271,13 +269,13 @@ async def upload_products_file(
     """
     try:
         content = await asyncio.wait_for(
-            file.read(MAX_UPLOAD_BYTES + 1),
+            file.read(settings.max_upload_bytes + 1),
             timeout=settings.upload_file_read_timeout,
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=408, detail="파일 읽기 시간이 초과되었습니다.")
 
-    if len(content) > MAX_UPLOAD_BYTES:
+    if len(content) > settings.max_upload_bytes:
         raise HTTPException(status_code=413, detail="파일 크기는 50MB를 초과할 수 없습니다.")
 
     try:

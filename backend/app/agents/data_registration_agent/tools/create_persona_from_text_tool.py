@@ -31,7 +31,7 @@ async def create_persona_from_text_tool(
     user_id = config.get("configurable", {}).get("user_id")
     # HumanMessage만 추출 — AIMessage(tool_calls)가 섞이면 OpenAI API 400 에러 발생
     human_messages = [m for m in state.get("messages", []) if isinstance(m, HumanMessage)]
-    llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
 
     try:
         structured_persona = await generate_structured_persona_info(human_messages, llm)

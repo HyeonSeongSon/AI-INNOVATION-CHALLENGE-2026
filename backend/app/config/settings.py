@@ -121,6 +121,76 @@ class Settings(BaseSettings):
     min_rrf_score_threshold: float = 0.01
     min_filtered_products: int = 3
 
+    # OpenSearch index names
+    opensearch_product_index: str = "product_index_v3"
+    opensearch_hybrid_pipeline: str = "hybrid-minmax-pipeline"
+    opensearch_v4_combined_index: str = "product_v4_combined"
+    opensearch_v4_function_desc_index: str = "product_v4_function_desc"
+    opensearch_v4_attribute_desc_index: str = "product_v4_attribute_desc"
+    opensearch_v4_target_user_index: str = "product_v4_target_user"
+    opensearch_v4_spec_feature_index: str = "product_v4_spec_feature"
+    opensearch_forbidden_sentences_index: str = "forbidden_sentences"
+
+    # Quality check — rule-based message length
+    message_title_max_length: int = 40
+    message_body_min_length: int = 20
+    message_body_max_length: int = 350
+
+    # Quality check — semantic similarity
+    quality_check_semantic_threshold: float = 0.85
+    quality_check_semantic_top_k: int = 3
+    quality_check_semantic_max_retries: int = 2
+    quality_check_retry_backoff_base: float = 0.5
+
+    # Quality check — LLM judge scoring
+    quality_check_llm_min_score: int = 3
+    quality_check_llm_min_overall_score: int = 4
+
+    # HTTP streaming timeouts (SSE proxy)
+    http_timeout_stream_connect: float = 10.0
+    http_timeout_stream_pool: float = 5.0
+
+    # SSE keepalive & file upload
+    sse_keepalive_timeout: float = 25.0
+    max_upload_bytes: int = 52428800  # 50 * 1024 * 1024
+
+    # Upload concurrency
+    upload_persona_concurrency: int = 5
+    upload_product_concurrency: int = 3
+
+    # Conversation management
+    conversation_summarize_threshold: int = 30
+    conversation_keep_messages: int = 10
+
+    # Database pool (SQLAlchemy sync)
+    db_pool_size: int = 10
+    db_pool_max_overflow: int = 20
+    db_pool_recycle_seconds: int = 3600
+
+    # Database pool (psycopg async — LangGraph checkpointer)
+    postgres_async_pool_min_size: int = 1
+    postgres_async_pool_max_size: int = 10
+
+    # Product retrieval
+    product_retrieval_top_k: int = 100
+    product_recommendation_top_n: int = 3
+
+    # Image chunk processing
+    image_chunk_height_max: int = 4000
+    image_chunk_overlap: int = 100
+    image_max_chunks: int = 10
+
+    # A2A retry backoff
+    a2a_retry_backoff_base: int = 2
+
+    # LLM temperatures (역할별)
+    llm_temperature_classifier: float = 0.0
+    llm_temperature_generator: float = 0.7
+    llm_temperature_creative: float = 0.5
+    llm_temperature_persona: float = 0.3
+    llm_temperature_vision: float = 0.0
+    llm_temperature_document: float = 0.7
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_allowed_origins(cls, v: object) -> object:

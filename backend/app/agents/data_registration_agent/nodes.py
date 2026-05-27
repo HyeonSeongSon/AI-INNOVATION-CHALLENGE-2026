@@ -18,7 +18,7 @@ _TOOLS = [register_personas_tool, register_products_tool, create_persona_from_te
 
 @lru_cache(maxsize=8)
 def _get_data_agent(model_name: str, has_records: bool):
-    llm = get_llm(model_name, temperature=0)
+    llm = get_llm(model_name, temperature=settings.llm_temperature_classifier)
     return create_agent(
         model=llm,
         tools=_TOOLS,

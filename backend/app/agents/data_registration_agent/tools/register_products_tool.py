@@ -9,9 +9,10 @@ from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 
 from ....core.logging import AgentLogger
+from ....config.settings import settings
 from ..state import DataRegistrationState
 
-_semaphore = asyncio.Semaphore(3)
+_semaphore = asyncio.Semaphore(settings.upload_product_concurrency)
 
 
 @tool

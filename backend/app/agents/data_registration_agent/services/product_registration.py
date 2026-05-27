@@ -30,29 +30,22 @@ from ....core.logging import get_logger
 logger = get_logger("product_registration")
 
 # ──────────────────────────────────────────────────────
-# 이미지 처리 상수
-# ──────────────────────────────────────────────────────
-MAX_CHUNK_HEIGHT = 4000
-CHUNK_OVERLAP    = 100
-MAX_CHUNKS       = 10
-
 # ──────────────────────────────────────────────────────
 # 이미지 유틸
 # ──────────────────────────────────────────────────────
 
 
-
 def _split_image(image: Image.Image) -> list[Image.Image]:
-    """세로 길이가 MAX_CHUNK_HEIGHT를 넘으면 청크로 분할, 아니면 그대로 반환."""
+    """세로 길이가 image_chunk_height_max를 넘으면 청크로 분할, 아니면 그대로 반환."""
     width, height = image.size
-    if height <= MAX_CHUNK_HEIGHT:
+    if height <= settings.image_chunk_height_max:
         return [image]
 
     chunks = []
-    step = MAX_CHUNK_HEIGHT - CHUNK_OVERLAP
+    step = settings.image_chunk_height_max - settings.image_chunk_overlap
     top = 0
-    while top < height and len(chunks) < MAX_CHUNKS:
-        bottom = min(top + MAX_CHUNK_HEIGHT, height)
+    while top < height and len(chunks) < settings.image_max_chunks:
+        bottom = min(top + settings.image_chunk_height_max, height)
         chunks.append(image.crop((0, top, width, bottom)))
         if bottom == height:
             break
@@ -197,8 +190,8 @@ class ProductRegistrationService:
         self._http_client: httpx.AsyncClient | None = None
         register(self)
         model = settings.chatgpt_model_name
-        self._vision_llm   = get_llm(vision_model or model,   temperature=0)
-        self._document_llm = get_llm(document_model or model, temperature=0.7)
+        self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision)
+        self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document)
 
     @property
     def http_client(self) -> httpx.AsyncClient:
