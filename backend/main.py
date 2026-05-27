@@ -111,8 +111,23 @@ def read_root():
 
 
 @app.get("/health")
-def health_check():
-    return {"status": "healthy", "port": 8005}
+async def health_check(req: Request):
+    from app.core.database import check_connection
+
+    db_ok = await asyncio.to_thread(check_connection)
+    crm_ok = getattr(req.app.state, "crm_client", None) is not None
+    internal_ok = getattr(req.app.state, "internal_client", None) is not None
+
+    overall = "healthy" if (db_ok and crm_ok and internal_ok) else "degraded"
+    return {
+        "status": overall,
+        "port": 8005,
+        "services": {
+            "database": "ok" if db_ok else "unavailable",
+            "crm_client": "ok" if crm_ok else "not_initialized",
+            "internal_client": "ok" if internal_ok else "not_initialized",
+        },
+    }
 
 
 if __name__ == "__main__":
