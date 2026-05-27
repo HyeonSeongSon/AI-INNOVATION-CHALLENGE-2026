@@ -9,18 +9,23 @@ LLM 팩토리
 - Google  : gemini-*
 """
 
+from functools import lru_cache
+
 from langchain_core.language_models import BaseChatModel
 from ..config.settings import settings
 
-# (model_name, temperature) 키로 LLM 인스턴스를 캐싱한다.
-_cache: dict[tuple, BaseChatModel] = {}
+
+@lru_cache(maxsize=32)
+def _get_cached_llm(model_name: str, temperature: float) -> BaseChatModel:
+    return create_llm(model_name, temperature)
 
 
 def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
     """
     캐시된 LLM 인스턴스 반환 (없으면 생성 후 캐싱)
 
-    동일한 (model_name, temperature, kwargs) 조합은 항상 같은 인스턴스를 반환한다.
+    동일한 (model_name, temperature) 조합은 항상 같은 인스턴스를 반환한다.
+    kwargs가 있는 경우 캐시를 우회하고 매번 새 인스턴스를 생성한다.
 
     Args:
         model_name: 모델명. 접두사로 제공자를 자동 판별한다.
@@ -28,7 +33,7 @@ def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
                     - "claude-opus-4-6", "claude-sonnet-4-6"    → Anthropic
                     - "gemini-2.0-flash", "gemini-1.5-pro"      → Google
         temperature: 생성 온도. 제공자별로 허용 범위가 다를 수 있으니 주의.
-        **kwargs   : 제공자별 추가 파라미터 (timeout, max_tokens 등)
+        **kwargs   : 제공자별 추가 파라미터 (timeout, max_tokens 등) — 캐시 우회
 
     Returns:
         BaseChatModel: LangChain 공통 인터페이스 LLM 인스턴스
@@ -41,10 +46,9 @@ def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
             "model_name이 비어있습니다. "
             "config['configurable']['model'] 또는 환경변수 CHATGPT_MODEL_NAME을 설정하세요."
         )
-    key = (model_name, temperature, tuple(sorted(kwargs.items())))
-    if key not in _cache:
-        _cache[key] = create_llm(model_name, temperature, **kwargs)
-    return _cache[key]
+    if kwargs:
+        return create_llm(model_name, temperature, **kwargs)
+    return _get_cached_llm(model_name, temperature)
 
 
 def create_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
