@@ -72,7 +72,7 @@ async def send_task(request: TaskSendRequest, req: Request):
         )
 
     except Exception as e:
-        _logger.error("a2a_task_failed", task_id=request.id, error=str(e), exc_info=True)
+        _logger.error("a2a_task_failed", task_id=request.id, error_type=type(e).__name__, exc_info=True)
         return Task(
             id=request.id,
             sessionId=request.sessionId,

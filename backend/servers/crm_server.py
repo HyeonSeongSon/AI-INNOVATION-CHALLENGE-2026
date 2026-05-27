@@ -108,7 +108,7 @@ async def health(req: Request):
                 await conn.execute("SELECT 1")
             db_ok = True
         except Exception as e:
-            logger.warning("health_check_db_failed", error=str(e))
+            logger.warning("health_check_db_failed", error_type=type(e).__name__)
 
     overall = "healthy" if (agent_ok and db_ok) else "degraded"
     return {

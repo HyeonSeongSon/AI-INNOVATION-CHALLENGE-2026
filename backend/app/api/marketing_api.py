@@ -48,7 +48,7 @@ def _save_conversation_messages_best_effort(conversation_id: str, new_entries: l
         ).update({"last_active_at": datetime.now(timezone.utc)})
         db.commit()
     except Exception as e:
-        logger.warning("save_messages_best_effort_failed", error=str(e), conversation_id=conversation_id, exc_info=True)
+        logger.warning("save_messages_best_effort_failed", error_type=type(e).__name__, conversation_id=conversation_id, exc_info=True)
         db.rollback()
         # 의도적으로 raise하지 않음 — 대화 이력 저장은 부가 데이터
     finally:
@@ -69,7 +69,7 @@ def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error("create_conversation_failed", conv_id=conv_id, user_id=user_id, error=str(e))
+        logger.error("create_conversation_failed", conv_id=conv_id, user_id=user_id, error_type=type(e).__name__)
         raise
     finally:
         db.close()
@@ -304,7 +304,7 @@ async def chat_v2(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("chat_v2_failed", error=str(e), exc_info=True)
+        logger.error("chat_v2_failed", error_type=type(e).__name__, exc_info=True)
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
 
