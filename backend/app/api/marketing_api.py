@@ -75,6 +75,19 @@ def _create_conversation(conv_id: str, user_id: str, session_id: str) -> None:
         db.close()
 
 
+def _verify_conversation_ownership(conv_id: str, user_id: str, role: str = "user") -> None:
+    """conversation_id 소유자 검증. 미존재 → 404, 타인 소유 → 403."""
+    db = SessionLocal()
+    try:
+        conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+        if conv is None:
+            raise HTTPException(status_code=404, detail="대화를 찾을 수 없습니다.")
+        if role != "admin" and conv.user_id != user_id:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+    finally:
+        db.close()
+
+
 def _save_generated_messages_best_effort(
     conv_id: str,
     user_id: str,
@@ -213,6 +226,11 @@ async def chat_v2(
         if not conv_id:
             conv_id = str(uuid.uuid4())
             await asyncio.to_thread(_create_conversation, conv_id, user_id, request.session_id)
+        else:
+            # IDOR 방어: 클라이언트가 전달한 conversation_id가 현재 사용자 소유인지 검증
+            await asyncio.to_thread(
+                _verify_conversation_ownership, conv_id, user_id, current_user.role
+            )
 
         # 2. 에이전트 호출 — conversation_id 전달, history 제거
         result = await agent.chat(
@@ -283,6 +301,8 @@ async def chat_v2(
 
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("chat_v2_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")

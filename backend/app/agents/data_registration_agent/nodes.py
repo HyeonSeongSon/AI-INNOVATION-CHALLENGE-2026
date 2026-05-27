@@ -81,6 +81,22 @@ async def data_registration_agent_node(state: DataRegistrationState, config: Run
         if start_time:
             duration_ms = (datetime.fromisoformat(end_time) - datetime.fromisoformat(start_time)).total_seconds() * 1000
 
+        final_status = result.get("status", "completed")
+        if final_status in ("failed", "error", "partial_failure"):
+            logger.error(
+                "data_registration_inner_failed",
+                user_message=f"[{node_name}] 데이터 등록 중 내부 오류가 발생했습니다.",
+                inner_status=final_status,
+            )
+            return {
+                **result,
+                **base,
+                "status": final_status,
+                "end_time": end_time,
+                "duration_ms": duration_ms,
+                "logs": logger.get_user_logs(),
+            }
+
         logger.info(
             "data_registration_done",
             user_message=f"[{node_name}] 데이터 등록 완료 ({duration_ms:.0f}ms)" if duration_ms is not None else f"[{node_name}] 데이터 등록 완료",
@@ -95,7 +111,7 @@ async def data_registration_agent_node(state: DataRegistrationState, config: Run
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("data_registration_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("data_registration_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",

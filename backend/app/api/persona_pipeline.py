@@ -174,6 +174,23 @@ async def _run_persona_job(
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+async def _guarded_run_persona_job(
+    job: UploadJob,
+    texts: list[str],
+    llm: Any,
+    persona_client: Any,
+    creator_user_id: str,
+) -> None:
+    try:
+        await _run_persona_job(job, texts, llm, persona_client, creator_user_id)
+    except Exception:
+        logger.error("persona_job_outer_crashed", job_id=job.job_id, exc_info=True)
+        try:
+            await append_event(job, {"type": "error", "detail": "페르소나 생성 중 오류가 발생했습니다."})
+        except Exception:
+            logger.error("persona_job_status_update_failed", job_id=job.job_id)
+
+
 # ──────────────────────────────────────────────────────
 # SSE 스트림 제너레이터
 # ──────────────────────────────────────────────────────
@@ -288,7 +305,7 @@ async def upload_personas_file(
     job = create_job("persona", len(texts))
 
     asyncio.create_task(
-        _run_persona_job(job, texts, llm, persona_client, current_user.user_id)
+        _guarded_run_persona_job(job, texts, llm, persona_client, current_user.user_id)
     )
 
     return {"job_id": job.job_id, "total": job.total}

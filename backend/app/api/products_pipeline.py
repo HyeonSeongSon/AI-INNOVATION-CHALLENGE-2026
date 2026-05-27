@@ -187,6 +187,21 @@ async def _run_product_job(
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+async def _guarded_run_product_job(
+    job: UploadJob,
+    records: list[dict],
+    service: Any,
+) -> None:
+    try:
+        await _run_product_job(job, records, service)
+    except Exception:
+        logger.error("product_job_outer_crashed", job_id=job.job_id, exc_info=True)
+        try:
+            await append_event(job, {"type": "error", "detail": "상품 등록 중 오류가 발생했습니다."})
+        except Exception:
+            logger.error("product_job_status_update_failed", job_id=job.job_id)
+
+
 # ──────────────────────────────────────────────────────
 # SSE 스트림 제너레이터
 # ──────────────────────────────────────────────────────
@@ -270,7 +285,7 @@ async def upload_products_file(
     job = create_job("product", len(records))
 
     asyncio.create_task(
-        _run_product_job(job, records, service)
+        _guarded_run_product_job(job, records, service)
     )
 
     return {"job_id": job.job_id, "total": job.total}

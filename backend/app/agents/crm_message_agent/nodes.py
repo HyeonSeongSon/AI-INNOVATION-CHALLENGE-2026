@@ -186,7 +186,7 @@ def _get_search_agent(model_name: str):
 async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     _logger.info("supervisor_started", node_name="supervisor_agent")
 
-    if state.get("status") == "error":
+    if state.get("status") == "failed":
         _logger.warning("supervisor_aborted_on_error", node_name="supervisor_agent")
         return {
             "messages": [AIMessage(content="처리 중 오류가 발생하여 작업을 중단합니다. 다시 시도해주세요.", name="supervisor")],
@@ -210,7 +210,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
                 final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
             except Exception as e:
                 _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
-                return {"status": "error", "error_message": "최종 응답 생성 실패"}
+                return {"status": "failed", "error": "최종 응답 생성 실패"}
             return {"messages": [final_answer], "task_plan": []}
 
         next_agent = remaining[0]
@@ -230,7 +230,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
             final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e2:
             _logger.error("supervisor_final_answer_failed", error=str(e2), node_name="supervisor_agent")
-            return {"status": "error", "error_message": "최종 응답 생성 실패"}
+            return {"status": "failed", "error": "최종 응답 생성 실패"}
         return {"messages": [final_answer]}
 
     _logger.info("supervisor_plan_decided", node_name="supervisor_agent",
@@ -241,7 +241,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
             final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e:
             _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
-            return {"status": "error", "error_message": "최종 응답 생성 실패"}
+            return {"status": "failed", "error": "최종 응답 생성 실패"}
         return {"messages": [final_answer]}
 
     return Command(
@@ -258,7 +258,7 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
         result = await agent.ainvoke({"messages": filtered_messages}, config)
     except Exception as e:
         _logger.error("search_agent_failed", error=str(e), exc_info=True)
-        return Command(goto="supervisor", update={"status": "error", "error_message": "에이전트 실행 실패"})
+        return Command(goto="supervisor", update={"status": "failed", "error": "에이전트 실행 실패"})
     ai_msg, tool_msg = create_handoff_messages("search_agent")
     _logger.info("search_agent_done", node_name="search_agent")
     return Command(
@@ -309,7 +309,7 @@ def make_recommend_product_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
+                    "status": "failed",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] recommend_product_agent 실패"],
@@ -328,8 +328,8 @@ def make_recommend_product_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
-                    "error_message": "메시지 역직렬화 실패",
+                    "status": "failed",
+                    "error": "메시지 역직렬화 실패",
                     "task_plan": [],
                     "logs": ["[에러] recommend_product_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="상품 추천 에이전트 응답 처리에 실패했습니다.", name="recommend_product_agent")],
@@ -390,7 +390,7 @@ def make_generate_message_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
+                    "status": "failed",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] generate_message_agent 실패"],
@@ -409,8 +409,8 @@ def make_generate_message_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
-                    "error_message": "메시지 역직렬화 실패",
+                    "status": "failed",
+                    "error": "메시지 역직렬화 실패",
                     "task_plan": [],
                     "logs": ["[에러] generate_message_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="메시지 생성 에이전트 응답 처리에 실패했습니다.", name="generate_message_agent")],
@@ -473,7 +473,7 @@ def make_data_registration_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
+                    "status": "failed",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] data_registration_agent 실패"],
@@ -492,8 +492,8 @@ def make_data_registration_node(client: A2AClient):
             return Command(
                 goto="supervisor",
                 update={
-                    "status": "error",
-                    "error_message": "메시지 역직렬화 실패",
+                    "status": "failed",
+                    "error": "메시지 역직렬화 실패",
                     "task_plan": [],
                     "logs": ["[에러] data_registration_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="데이터 등록 에이전트 응답 처리에 실패했습니다.", name="data_registration_agent")],
