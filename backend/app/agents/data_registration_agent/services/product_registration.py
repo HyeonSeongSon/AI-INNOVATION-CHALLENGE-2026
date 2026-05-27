@@ -95,7 +95,11 @@ def _parse_llm_json(raw: str) -> dict:
         if raw.startswith("json"):
             raw = raw[4:]
         raw = raw.rsplit("```", 1)[0]
-    return json.loads(raw.strip())
+    try:
+        return json.loads(raw.strip())
+    except json.JSONDecodeError as e:
+        logger.error("llm_json_parse_failed", error_type=type(e).__name__, exc_info=True)
+        raise ValueError("LLM JSON 파싱 실패") from None
 
 
 async def _extract_text_from_chunks(

@@ -86,7 +86,7 @@ class CrmMessageGenerator:
         result = [
             {**item, "brand_tone": brand_tone}
             for item in tasks
-            if (brand_tone := get_brand_tone(item["product_info"]["brand"]))
+            if (brand_tone := get_brand_tone(item["product_info"].get("brand", "")))
         ]
 
         skipped = len(tasks) - len(result)

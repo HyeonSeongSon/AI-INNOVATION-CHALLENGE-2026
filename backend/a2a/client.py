@@ -64,7 +64,11 @@ class A2AClient:
                     timeout=timeout,
                 )
                 resp.raise_for_status()
-                return Task(**resp.json())
+                try:
+                    return Task(**resp.json())
+                except Exception as e:
+                    _logger.error("a2a_response_parse_failed", error_type=type(e).__name__, exc_info=True)
+                    raise ValueError("A2A 응답 파싱 실패") from None
             except httpx.HTTPStatusError:
                 raise
             except (httpx.RequestError, httpx.TimeoutException) as e:

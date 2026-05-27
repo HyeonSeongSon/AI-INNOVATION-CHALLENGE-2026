@@ -33,11 +33,6 @@ async def send_task(request: TaskSendRequest, req: Request):
         {},
     )
 
-    messages = deserialize_messages(data.get("messages", []))
-    subgraph_input = {
-        "messages": messages,
-        "active_persona_id": data.get("active_persona_id"),
-    }
     config = {
         "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
         "recursion_limit": settings.langgraph_recursion_limit,
@@ -46,6 +41,11 @@ async def send_task(request: TaskSendRequest, req: Request):
     _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
 
     try:
+        messages = deserialize_messages(data.get("messages", []))
+        subgraph_input = {
+            "messages": messages,
+            "active_persona_id": data.get("active_persona_id"),
+        }
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 

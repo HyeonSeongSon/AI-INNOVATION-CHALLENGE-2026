@@ -95,7 +95,10 @@ def _parse_file_to_texts(filename: str, content: bytes) -> List[str]:
         return texts
 
     if name_lower.endswith(".json"):
-        data = json.loads(content.decode("utf-8"))
+        try:
+            data = json.loads(content.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise ValueError("JSON 파일 파싱 실패")
         if isinstance(data, list):
             return [json.dumps(item, ensure_ascii=False) for item in data]
         return [json.dumps(data, ensure_ascii=False)]
