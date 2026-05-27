@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     auth_mode: Literal["api_key", "jwt"] = "jwt"
     service_api_key: str = ""
     jwt_secret: str = ""
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256", "HS384", "HS512", "RS256"] = "HS256"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
