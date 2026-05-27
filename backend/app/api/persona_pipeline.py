@@ -190,14 +190,14 @@ async def _stream_job_events(job: UploadJob):
     # Phase A: 이미 쌓인 이벤트 전송 (재연결 시 replay)
     async with job.condition:
         snapshot = list(job.events)
+        cursor = job.evicted_count + len(snapshot)
     for event in snapshot:
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    cursor = len(snapshot)
 
     # Phase B: 새 이벤트 대기
     while True:
         async with job.condition:
-            while len(job.events) <= cursor:
+            while len(job.events) + job.evicted_count <= cursor:
                 if job.status in (JobStatus.DONE, JobStatus.ERROR):
                     return
                 try:
@@ -205,7 +205,7 @@ async def _stream_job_events(job: UploadJob):
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
-            new_events = job.events[cursor:]
+            new_events = list(job.events)[cursor - job.evicted_count:]
             cursor += len(new_events)
 
         for event in new_events:

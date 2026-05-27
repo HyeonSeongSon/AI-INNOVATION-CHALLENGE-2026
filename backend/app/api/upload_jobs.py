@@ -5,10 +5,13 @@ Job은 생성 후 upload_job_ttl_seconds(기본 1시간) 경과 시 cleanup_expi
 
 import asyncio
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+EVENT_BUFFER_SIZE = 200
 
 
 class JobStatus(str, Enum):
@@ -24,7 +27,8 @@ class UploadJob:
     job_type: str  # "persona" | "product"
     status: JobStatus
     total: int
-    events: list[dict[str, Any]]
+    events: deque[dict[str, Any]]
+    evicted_count: int
     condition: asyncio.Condition
     created_at: datetime
     updated_at: datetime
@@ -39,7 +43,8 @@ def create_job(job_type: str, total: int) -> UploadJob:
         job_type=job_type,
         status=JobStatus.PENDING,
         total=total,
-        events=[],
+        events=deque(maxlen=EVENT_BUFFER_SIZE),
+        evicted_count=0,
         condition=asyncio.Condition(),
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -55,6 +60,8 @@ def get_job(job_id: str) -> UploadJob | None:
 async def append_event(job: UploadJob, event: dict[str, Any]) -> None:
     """이벤트를 replay 버퍼에 추가하고 대기 중인 SSE 연결을 모두 깨운다."""
     async with job.condition:
+        if len(job.events) == job.events.maxlen:
+            job.evicted_count += 1
         job.events.append(event)
         job.updated_at = datetime.now(timezone.utc)
         if event.get("type") in ("done", "error"):
