@@ -32,6 +32,15 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 # 파일 파싱
 # ──────────────────────────────────────────────────────
 
+_FORMULA_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_formula(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(_FORMULA_CHARS):
+        return "'" + value
+    return value
+
+
 def _parse_image_field(value: Any) -> list:
     if isinstance(value, list):
         return value
@@ -49,10 +58,14 @@ def _parse_image_field(value: Any) -> list:
 
 
 def _normalize_record(record: Dict[str, Any]) -> Dict[str, Any]:
-    for key in ("상품상세_이미지", "상품이미지", "image_urls"):
-        if key in record:
-            record[key] = _parse_image_field(record[key])
-    return record
+    IMAGE_KEYS = {"상품상세_이미지", "상품이미지", "image_urls"}
+    result = {}
+    for k, v in record.items():
+        if k in IMAGE_KEYS:
+            result[k] = _parse_image_field(v)
+        else:
+            result[k] = _sanitize_formula(v)
+    return result
 
 
 def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]]:
@@ -102,7 +115,7 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
             import openpyxl
         except ImportError as e:
             raise ValueError("XLSX 파일 처리를 지원하지 않습니다. 관리자에게 문의해주세요.") from e
-        wb = openpyxl.load_workbook(io.BytesIO(content))
+        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
         records = []

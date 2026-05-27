@@ -91,7 +91,7 @@ class AnalysisResult(Base):
 
     analysis_id = Column(Integer, primary_key=True, autoincrement=True)
     persona_id = Column(String(20), ForeignKey('personas.persona_id', ondelete='CASCADE'), nullable=False, index=True)
-    analysis_result = Column(Text)
+    analysis_result = Column(Text, nullable=False)
     analysis_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -116,7 +116,7 @@ class SearchQuery(Base):
 
     query_id = Column(Integer, primary_key=True, autoincrement=True)
     analysis_id = Column(Integer, ForeignKey('analysis_results.analysis_id', ondelete='CASCADE'), nullable=False, index=True)
-    search_query = Column(Text)
+    search_query = Column(Text, nullable=False)
     query_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     # Relationships
@@ -192,7 +192,7 @@ class Conversation(Base):
     user_id        = Column(String(100), nullable=False, index=True)
     thread_id      = Column(String(36), nullable=False, unique=True)
     session_id     = Column(String(100))
-    title          = Column(String(500), default="새 대화")
+    title          = Column(String(500), nullable=False, default="새 대화")
     messages       = Column(JSON, default=list)  # 프론트 UI 메시지 전체 (제품 그리드 포함)
     created_at     = Column(TIMESTAMP(timezone=True), server_default=func.now())
     last_active_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
@@ -244,7 +244,7 @@ class GeneratedMessage(Base):
     user_input      = Column(Text)
 
     # 메시지 내용
-    title           = Column(Text)
+    title           = Column(Text, nullable=False)
     content         = Column(Text, nullable=False)
 
     # 품질 평가 요약
