@@ -268,6 +268,7 @@ async def health_check():
         else:
             return {"status": "unhealthy", "opensearch": "disconnected"}
     except Exception:
+        logging.error("health_check_failed", exc_info=True)
         return {"status": "unhealthy"}
 
 
@@ -328,7 +329,7 @@ async def get_product_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Product ID 조회 중 오류 발생: {e}")
+        logging.error("product_id_lookup_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="조회 중 오류가 발생했습니다."
@@ -461,7 +462,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"검색 중 오류 발생: {e}")
+        logging.error("search_by_product_ids_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -527,7 +528,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         )
 
     except Exception as e:
-        logging.error(f"유사 문장 검색 중 오류 발생: {e}")
+        logging.error("search_similar_sentences_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -575,7 +576,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"combined_vector 검색 중 오류 발생: {e}")
+        logging.error("search_by_combined_vector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -629,7 +630,7 @@ async def search_by_field(request: FieldSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"by-field 검색 중 오류 발생: {e}")
+        logging.error("search_by_field_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -677,7 +678,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"multivector 검색 중 오류 발생: {e}")
+        logging.error("search_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -738,7 +739,7 @@ async def index_multivector(request: IndexMultivectorRequest):
         )
 
     except Exception as e:
-        logging.error(f"멀티벡터 색인 중 오류: {e}")
+        logging.error("index_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="색인 중 오류가 발생했습니다.")
 
 

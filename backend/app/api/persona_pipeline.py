@@ -123,6 +123,7 @@ async def _run_persona_job(
             async with semaphore:
                 result = await _process_one_text(i, text, llm, persona_client, user_id=creator_user_id)
         except Exception:
+            logger.error("process_persona_text_failed", index=i, exc_info=True)
             result = {"success": False, "name": None, "error": "페르소나 생성 중 오류가 발생했습니다."}
         await queue.put(result)
 

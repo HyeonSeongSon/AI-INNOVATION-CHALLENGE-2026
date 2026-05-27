@@ -421,7 +421,7 @@ class ProductClient:
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__)
+                logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__, exc_info=True)
                 return None
 
         results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
