@@ -285,7 +285,7 @@ def make_recommend_product_node(client: A2AClient):
                 update={
                     "status": "failed",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] recommend_product_agent: 호출 실패"],
+                    "logs": ["[에러] recommend_product_agent: 호출 실패"],
                     "messages": [AIMessage(content="상품 추천 에이전트 호출에 실패했습니다.", name="recommend_product_agent")],
                 },
             )
@@ -298,7 +298,7 @@ def make_recommend_product_node(client: A2AClient):
                     "status": "failed",
                     "task_plan": [],
                     "error": "빈 artifacts 응답",
-                    "logs": state.get("logs", []) + ["[에러] recommend_product_agent: 응답에 artifacts가 없습니다"],
+                    "logs": ["[에러] recommend_product_agent: 응답에 artifacts가 없습니다"],
                     "messages": [AIMessage(content="상품 추천 에이전트가 빈 응답을 반환했습니다.", name="recommend_product_agent")],
                 },
             )
@@ -312,7 +312,7 @@ def make_recommend_product_node(client: A2AClient):
                     "status": "error",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
-                    "logs": state.get("logs", []) + ["[오류] recommend_product_agent 실패"],
+                    "logs": ["[오류] recommend_product_agent 실패"],
                     "messages": [AIMessage(content="상품 추천 에이전트가 실패했습니다.", name="recommend_product_agent")],
                 },
             )
@@ -331,7 +331,7 @@ def make_recommend_product_node(client: A2AClient):
                     "status": "error",
                     "error_message": "메시지 역직렬화 실패",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] recommend_product_agent: 메시지 역직렬화 실패"],
+                    "logs": ["[에러] recommend_product_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="상품 추천 에이전트 응답 처리에 실패했습니다.", name="recommend_product_agent")],
                 },
             )
@@ -342,7 +342,7 @@ def make_recommend_product_node(client: A2AClient):
                 "recommended_products": result.get("recommended_products", []),
                 "active_persona_id": result.get("active_persona_id"),
                 "status": result.get("status"),
-                "logs": state.get("logs", []) + result.get("logs", []),
+                "logs": result.get("logs", []),
             },
         )
     return recommend_product_agent
@@ -366,7 +366,7 @@ def make_generate_message_node(client: A2AClient):
                 update={
                     "status": "failed",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] generate_message_agent: 호출 실패"],
+                    "logs": ["[에러] generate_message_agent: 호출 실패"],
                     "messages": [AIMessage(content="메시지 생성 에이전트 호출에 실패했습니다.", name="generate_message_agent")],
                 },
             )
@@ -379,7 +379,7 @@ def make_generate_message_node(client: A2AClient):
                     "status": "failed",
                     "task_plan": [],
                     "error": "빈 artifacts 응답",
-                    "logs": state.get("logs", []) + ["[에러] generate_message_agent: 응답에 artifacts가 없습니다"],
+                    "logs": ["[에러] generate_message_agent: 응답에 artifacts가 없습니다"],
                     "messages": [AIMessage(content="메시지 생성 에이전트가 빈 응답을 반환했습니다.", name="generate_message_agent")],
                 },
             )
@@ -393,7 +393,7 @@ def make_generate_message_node(client: A2AClient):
                     "status": "error",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
-                    "logs": state.get("logs", []) + ["[오류] generate_message_agent 실패"],
+                    "logs": ["[오류] generate_message_agent 실패"],
                     "messages": [AIMessage(content="메시지 생성 에이전트가 실패했습니다.", name="generate_message_agent")],
                 },
             )
@@ -412,7 +412,7 @@ def make_generate_message_node(client: A2AClient):
                     "status": "error",
                     "error_message": "메시지 역직렬화 실패",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] generate_message_agent: 메시지 역직렬화 실패"],
+                    "logs": ["[에러] generate_message_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="메시지 생성 에이전트 응답 처리에 실패했습니다.", name="generate_message_agent")],
                 },
             )
@@ -422,7 +422,7 @@ def make_generate_message_node(client: A2AClient):
                 "messages": messages + [ai_msg, tool_msg],
                 "generated_tasks": result.get("generated_tasks", []),
                 "status": result.get("status"),
-                "logs": state.get("logs", []) + result.get("logs", []),
+                "logs": result.get("logs", []),
             },
         )
     return generate_message_agent
@@ -449,7 +449,7 @@ def make_data_registration_node(client: A2AClient):
                 update={
                     "status": "failed",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] data_registration_agent: 호출 실패"],
+                    "logs": ["[에러] data_registration_agent: 호출 실패"],
                     "messages": [AIMessage(content="데이터 등록 에이전트 호출에 실패했습니다.", name="data_registration_agent")],
                 },
             )
@@ -462,7 +462,7 @@ def make_data_registration_node(client: A2AClient):
                     "status": "failed",
                     "task_plan": [],
                     "error": "빈 artifacts 응답",
-                    "logs": state.get("logs", []) + ["[에러] data_registration_agent: 응답에 artifacts가 없습니다"],
+                    "logs": ["[에러] data_registration_agent: 응답에 artifacts가 없습니다"],
                     "messages": [AIMessage(content="데이터 등록 에이전트가 빈 응답을 반환했습니다.", name="data_registration_agent")],
                 },
             )
@@ -476,7 +476,7 @@ def make_data_registration_node(client: A2AClient):
                     "status": "error",
                     "task_plan": [],
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
-                    "logs": state.get("logs", []) + ["[오류] data_registration_agent 실패"],
+                    "logs": ["[오류] data_registration_agent 실패"],
                     "messages": [AIMessage(content="데이터 등록 에이전트가 실패했습니다.", name="data_registration_agent")],
                 },
             )
@@ -495,7 +495,7 @@ def make_data_registration_node(client: A2AClient):
                     "status": "error",
                     "error_message": "메시지 역직렬화 실패",
                     "task_plan": [],
-                    "logs": state.get("logs", []) + ["[에러] data_registration_agent: 메시지 역직렬화 실패"],
+                    "logs": ["[에러] data_registration_agent: 메시지 역직렬화 실패"],
                     "messages": [AIMessage(content="데이터 등록 에이전트 응답 처리에 실패했습니다.", name="data_registration_agent")],
                 },
             )
@@ -505,7 +505,7 @@ def make_data_registration_node(client: A2AClient):
                 "messages": messages + [ai_msg, tool_msg],
                 "file_records": None,
                 "status": result.get("status"),
-                "logs": state.get("logs", []) + result.get("logs", []),
+                "logs": result.get("logs", []),
             },
         )
     return data_registration_agent
