@@ -5,6 +5,7 @@ DB Proxy Router — BFF(Backend for Frontend) 패턴.
 """
 
 import json
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -90,39 +91,39 @@ async def proxy_conversations_list(
 
 @router.get("/conversations/{conv_id}")
 async def proxy_conversations_get(
-    conv_id: str,
+    conv_id: UUID,
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        client, "GET", f"/api/conversations/{conv_id}", request,
+        client, "GET", f"/api/conversations/{str(conv_id)}", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
 
 @router.put("/conversations/{conv_id}/messages")
 async def proxy_conversations_update(
-    conv_id: str,
+    conv_id: UUID,
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        client, "PUT", f"/api/conversations/{conv_id}/messages", request,
+        client, "PUT", f"/api/conversations/{str(conv_id)}/messages", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
 
 @router.delete("/conversations/{conv_id}")
 async def proxy_conversations_delete(
-    conv_id: str,
+    conv_id: UUID,
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
     return await _proxy(
-        client, "DELETE", f"/api/conversations/{conv_id}", request,
+        client, "DELETE", f"/api/conversations/{str(conv_id)}", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
