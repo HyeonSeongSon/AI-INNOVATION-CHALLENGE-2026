@@ -132,6 +132,7 @@ async def _run_product_job(
             async with semaphore:
                 result = await service.register_product(record)
         except Exception:
+            logger.error("register_product_failed", product_name=record.get("상품명", ""), exc_info=True)
             result = {
                 "success": False,
                 "product_name": record.get("상품명", ""),

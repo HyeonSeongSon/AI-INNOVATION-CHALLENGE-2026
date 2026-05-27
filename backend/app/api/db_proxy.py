@@ -4,6 +4,8 @@ DB Proxy Router — BFF(Backend for Frontend) 패턴.
 프론트엔드는 이 라우터를 통해 데이터에 접근하며, database 서비스 포트는 외부에 노출하지 않는다.
 """
 
+import json
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -52,9 +54,13 @@ async def proxy_conversations_create(
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    try:
-        body_data = await request.json()
-    except Exception:
+    raw_body = await request.body()
+    if raw_body:
+        try:
+            body_data = json.loads(raw_body)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+    else:
         body_data = {}
     body_data["user_id"] = user.user_id
     try:
@@ -129,9 +135,13 @@ async def proxy_personas_list(
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    try:
-        body_data = await request.json()
-    except Exception:
+    raw_body = await request.body()
+    if raw_body:
+        try:
+            body_data = json.loads(raw_body)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+    else:
         body_data = {}
     body_data["user_id"] = user.user_id
     body_data["role"] = user.role

@@ -356,11 +356,8 @@ async def run_persona_analysis(persona_data: Dict[str, Any], model: Optional[str
         result = json.loads(content)
     except json.JSONDecodeError as e:
         duration_ms = round((time.perf_counter() - start) * 1000, 1)
-        logger.warning("persona_analysis_json_parse_failed", persona_name=persona_name, duration_ms=duration_ms, error_message=str(e))
-        result = {
-            "multi_level_analysis": {},
-            "multi_dimensional_analysis": {},
-        }
+        logger.error("persona_analysis_json_parse_failed", persona_name=persona_name, duration_ms=duration_ms, error_type=type(e).__name__, exc_info=True)
+        raise
 
     duration_ms = round((time.perf_counter() - start) * 1000, 1)
     logger.info("persona_analysis_completed", persona_name=persona_name, model=model_name, duration_ms=duration_ms)
