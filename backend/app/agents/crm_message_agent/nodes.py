@@ -288,21 +288,12 @@ def make_recommend_product_node(client: A2AClient):
                 },
             )
 
-        if not task.artifacts:
-            _logger.error("recommend_product_agent_empty_artifacts", node_name="recommend_product_agent")
-            return Command(
-                goto="supervisor",
-                update={
-                    "status": "failed",
-                    "task_plan": [],
-                    "error": "빈 artifacts 응답",
-                    "logs": ["[에러] recommend_product_agent: 응답에 artifacts가 없습니다"],
-                    "messages": [AIMessage(content="상품 추천 에이전트가 빈 응답을 반환했습니다.", name="recommend_product_agent")],
-                },
-            )
-
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+            error_detail = (
+                task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+                if task.artifacts
+                else "알 수 없는 오류"
+            )
             _logger.error("recommend_product_agent_task_failed", node_name="recommend_product_agent", error=error_detail)
             return Command(
                 goto="supervisor",
@@ -312,6 +303,20 @@ def make_recommend_product_node(client: A2AClient):
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] recommend_product_agent 실패"],
                     "messages": [AIMessage(content="상품 추천 에이전트가 실패했습니다.", name="recommend_product_agent")],
+                },
+            )
+
+        if task.status != TaskStatus.COMPLETED or not task.artifacts:
+            _logger.error("recommend_product_agent_task_incomplete", node_name="recommend_product_agent", task_status=str(task.status))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "서브에이전트가 비정상 종료되었습니다.",
+                    "error_details": {"node": "recommend_product_agent", "task_status": str(task.status)},
+                    "logs": ["[오류] recommend_product_agent 비정상 종료"],
+                    "messages": [AIMessage(content="상품 추천 에이전트가 비정상 종료되었습니다.", name="recommend_product_agent")],
                 },
             )
 
@@ -369,21 +374,12 @@ def make_generate_message_node(client: A2AClient):
                 },
             )
 
-        if not task.artifacts:
-            _logger.error("generate_message_agent_empty_artifacts", node_name="generate_message_agent")
-            return Command(
-                goto="supervisor",
-                update={
-                    "status": "failed",
-                    "task_plan": [],
-                    "error": "빈 artifacts 응답",
-                    "logs": ["[에러] generate_message_agent: 응답에 artifacts가 없습니다"],
-                    "messages": [AIMessage(content="메시지 생성 에이전트가 빈 응답을 반환했습니다.", name="generate_message_agent")],
-                },
-            )
-
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+            error_detail = (
+                task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+                if task.artifacts
+                else "알 수 없는 오류"
+            )
             _logger.error("generate_message_agent_task_failed", node_name="generate_message_agent", error=error_detail)
             return Command(
                 goto="supervisor",
@@ -393,6 +389,20 @@ def make_generate_message_node(client: A2AClient):
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] generate_message_agent 실패"],
                     "messages": [AIMessage(content="메시지 생성 에이전트가 실패했습니다.", name="generate_message_agent")],
+                },
+            )
+
+        if task.status != TaskStatus.COMPLETED or not task.artifacts:
+            _logger.error("generate_message_agent_task_incomplete", node_name="generate_message_agent", task_status=str(task.status))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "서브에이전트가 비정상 종료되었습니다.",
+                    "error_details": {"node": "generate_message_agent", "task_status": str(task.status)},
+                    "logs": ["[오류] generate_message_agent 비정상 종료"],
+                    "messages": [AIMessage(content="메시지 생성 에이전트가 비정상 종료되었습니다.", name="generate_message_agent")],
                 },
             )
 
@@ -452,21 +462,12 @@ def make_data_registration_node(client: A2AClient):
                 },
             )
 
-        if not task.artifacts:
-            _logger.error("data_registration_agent_empty_artifacts", node_name="data_registration_agent")
-            return Command(
-                goto="supervisor",
-                update={
-                    "status": "failed",
-                    "task_plan": [],
-                    "error": "빈 artifacts 응답",
-                    "logs": ["[에러] data_registration_agent: 응답에 artifacts가 없습니다"],
-                    "messages": [AIMessage(content="데이터 등록 에이전트가 빈 응답을 반환했습니다.", name="data_registration_agent")],
-                },
-            )
-
         if task.status == TaskStatus.FAILED:
-            error_detail = task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+            error_detail = (
+                task.artifacts[0].get("data", {}).get("error", "알 수 없는 오류")
+                if task.artifacts
+                else "알 수 없는 오류"
+            )
             _logger.error("data_registration_agent_task_failed", node_name="data_registration_agent", error=error_detail)
             return Command(
                 goto="supervisor",
@@ -476,6 +477,20 @@ def make_data_registration_node(client: A2AClient):
                     "error": "에이전트 처리 중 오류가 발생했습니다.",
                     "logs": ["[오류] data_registration_agent 실패"],
                     "messages": [AIMessage(content="데이터 등록 에이전트가 실패했습니다.", name="data_registration_agent")],
+                },
+            )
+
+        if task.status != TaskStatus.COMPLETED or not task.artifacts:
+            _logger.error("data_registration_agent_task_incomplete", node_name="data_registration_agent", task_status=str(task.status))
+            return Command(
+                goto="supervisor",
+                update={
+                    "status": "failed",
+                    "task_plan": [],
+                    "error": "서브에이전트가 비정상 종료되었습니다.",
+                    "error_details": {"node": "data_registration_agent", "task_status": str(task.status)},
+                    "logs": ["[오류] data_registration_agent 비정상 종료"],
+                    "messages": [AIMessage(content="데이터 등록 에이전트가 비정상 종료되었습니다.", name="data_registration_agent")],
                 },
             )
 

@@ -60,6 +60,11 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
@@ -70,6 +75,11 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str
     role: UserRole = "user"
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
     @field_validator("password")
     @classmethod
@@ -192,9 +202,10 @@ async def login(
             headers={"Retry-After": str(retry_after)},
         )
 
-    lockout_key = f"{ip}:{body.username}"
+    email = body.username.strip().lower()
+    lockout_key = f"{ip}:{email}"
 
-    user = db.query(User).filter(User.email == body.username).first()
+    user = db.query(User).filter(User.email == email).first()
 
     # 타이밍 공격 방지: 사용자 없어도 dummy 해시 검증 수행
     if not user:
