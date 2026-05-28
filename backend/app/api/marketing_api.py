@@ -237,6 +237,7 @@ async def chat_v2(
             user_input=request.user_input,
             session_id=request.session_id,
             user_id=user_id,
+            role=current_user.role,
             conversation_id=conv_id,
             model=request.model,
             file_records=request.file_records,

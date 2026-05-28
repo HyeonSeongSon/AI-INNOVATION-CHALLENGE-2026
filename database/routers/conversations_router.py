@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, ConversationMessage
+from routers.auth_utils import resolve_role
 
 logger = logging.getLogger("conversations_api")
 
@@ -80,12 +81,12 @@ def create_conversation(body: CreateConversationRequest, db: Session = Depends(g
 @router.get("", response_model=List[ConversationSummary])
 def list_conversations(
     x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header(default="user", alias="X-User-Role"),
     db: Session = Depends(get_db),
 ):
     """사용자의 대화 목록 조회 (최신순, messages 필드 제외 / admin은 전체 조회)"""
+    role = resolve_role(db, x_user_id)
     q = db.query(Conversation)
-    if x_user_role != "admin":
+    if role != "admin":
         q = q.filter(Conversation.user_id == x_user_id)
     return q.order_by(Conversation.last_active_at.desc()).all()
 
@@ -95,14 +96,14 @@ def get_conversation(
     conv_id: str,
     limit: int = Query(default=200, le=500),
     x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header(default="user", alias="X-User-Role"),
     db: Session = Depends(get_db),
 ):
     """대화 상세 조회 (messages 포함, 최근 limit건)"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    if x_user_role != "admin" and conv.user_id != x_user_id:
+    role = resolve_role(db, x_user_id)
+    if role != "admin" and conv.user_id != x_user_id:
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     rows = (
         db.query(ConversationMessage)
@@ -128,14 +129,14 @@ def update_messages(
     conv_id: str,
     body: UpdateMessagesRequest,
     x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header(default="user", alias="X-User-Role"),
     db: Session = Depends(get_db),
 ):
     """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    if x_user_role != "admin" and conv.user_id != x_user_id:
+    role = resolve_role(db, x_user_id)
+    if role != "admin" and conv.user_id != x_user_id:
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.query(ConversationMessage).filter(
@@ -156,14 +157,14 @@ def update_messages(
 def delete_conversation(
     conv_id: str,
     x_user_id: str = Header(..., alias="X-User-Id"),
-    x_user_role: str = Header(default="user", alias="X-User-Role"),
     db: Session = Depends(get_db),
 ):
     """대화 삭제"""
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    if x_user_role != "admin" and conv.user_id != x_user_id:
+    role = resolve_role(db, x_user_id)
+    if role != "admin" and conv.user_id != x_user_id:
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.delete(conv)

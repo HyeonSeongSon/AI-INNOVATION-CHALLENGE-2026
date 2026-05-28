@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 from core.database import get_db
+from routers.auth_utils import resolve_role
 
 # 라우터 생성
 router = APIRouter(prefix="/api", tags=["Database"])
@@ -291,6 +292,8 @@ class PersonaGetRequest(BaseModel):
 
 
 class PersonaFilterRequest(BaseModel):
+    user_id: Optional[str] = None
+    role: Optional[str] = None
     gender: Optional[str] = None
     age_min: Optional[int] = None
     age_max: Optional[int] = None
@@ -394,8 +397,8 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
     from sqlalchemy import or_
 
     query = db.query(Persona)
-    # admin이 아니고 user_id가 있으면: 본인 것 + admin 것(user_id IS NULL) 조회
-    if request.role != "admin" and request.user_id:
+    role = resolve_role(db, request.user_id)
+    if role != "admin" and request.user_id:
         query = query.filter(
             or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
         )
@@ -403,7 +406,7 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
     personas = query.order_by(Persona.persona_created_at.desc()).all()
 
     email_map: dict[str, str] = {}
-    if request.role == "admin":
+    if role == "admin":
         user_ids = [p.user_id for p in personas if p.user_id]
         if user_ids:
             from sqlalchemy import text
@@ -480,7 +483,7 @@ async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteR
         return {"deleted": 0}
 
     user_id = raw_request.headers.get("X-User-Id")
-    role = raw_request.headers.get("X-User-Role", "user")
+    role = resolve_role(db, user_id)
     query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
     if role != "admin" and user_id:
         from sqlalchemy import or_
@@ -505,6 +508,13 @@ async def filter_personas(request: PersonaFilterRequest, db: Session = Depends(g
         return col.op(op)(cast(values, ARRAY(Text)))
 
     query = db.query(Persona)
+
+    role = resolve_role(db, request.user_id)
+    if role != "admin" and request.user_id:
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
+        )
 
     if request.gender is not None:
         query = query.filter(Persona.gender == request.gender)

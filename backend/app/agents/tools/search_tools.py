@@ -1,8 +1,9 @@
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolArg
+from langchain_core.runnables import RunnableConfig
 import asyncio
 import httpx
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Annotated, Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
@@ -58,14 +59,20 @@ def _load_json(filename: str) -> dict:
 # ============================================================
 
 @tool
-async def get_all_personas() -> str:
+async def get_all_personas(config: Annotated[RunnableConfig, InjectedToolArg] = None) -> str:
     """
     데이터베이스에 저장된 모든 페르소나 목록을 조회합니다.
     사용자가 페르소나 목록을 보여달라고 하거나, 어떤 페르소나가 있는지 물어볼 때 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
+    user_id = configurable.get("user_id")
+    role = configurable.get("role", "user")
     try:
         client = _get_http_client()
-        response = await client.post(f"{DB_API_BASE_URL}/personas/list")
+        response = await client.post(
+            f"{DB_API_BASE_URL}/personas/list",
+            json={"user_id": user_id, "role": role},
+        )
         response.raise_for_status()
         personas = response.json()
 
@@ -263,6 +270,7 @@ async def search_personas_by_filter(
     preferred_ingredients=None, avoided_ingredients=None,
     occupation=None, beauty_interests=None, shopping_style=None,
     preferred_brands=None, limit=10,
+    config: Annotated[RunnableConfig, InjectedToolArg] = None,
 ) -> str:
     """
     구조화된 조건으로 페르소나를 검색합니다.
@@ -270,6 +278,7 @@ async def search_personas_by_filter(
     선호/기피 성분, 가격 민감도 등 구체적인 속성 조건이 있을 때 사용하세요.
     구체적인 속성 조건이 있을 때 이 함수를 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
     f = PersonaSearchFilter(
         gender=gender, age_min=age_min, age_max=age_max,
         skin_type=skin_type, concerns=concerns, personal_color=personal_color,
@@ -281,11 +290,16 @@ async def search_personas_by_filter(
         shopping_style=shopping_style, preferred_brands=preferred_brands,
         limit=limit,
     )
+    payload = {
+        **f.model_dump(),
+        "user_id": configurable.get("user_id"),
+        "role": configurable.get("role", "user"),
+    }
     try:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/filter",
-            json=f.model_dump()
+            json=payload,
         )
         response.raise_for_status()
         rows = response.json()

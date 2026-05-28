@@ -17,6 +17,7 @@ class CRMMessageAgent:
         thread_id: str,
         session_id: str,
         user_id: str,
+        role: str = "user",
         model: Optional[str] = None,
         services: Any = None,
     ) -> Dict:
@@ -24,6 +25,7 @@ class CRMMessageAgent:
             "thread_id": thread_id,
             "session_id": session_id,
             "user_id": user_id,
+            "role": role,
         }
         if model:
             configurable["model"] = model
@@ -74,6 +76,7 @@ class CRMMessageAgent:
         session_id: str,
         user_id: str,
         conversation_id: str,
+        role: str = "user",
         model: Optional[str] = None,
         file_records: Optional[List[Dict[str, Any]]] = None,
         services: Any = None,
@@ -100,7 +103,7 @@ class CRMMessageAgent:
             }
         """
         thread_id = conversation_id
-        config = self._build_config(thread_id, session_id, user_id, model, services)
+        config = self._build_config(thread_id, session_id, user_id, role, model, services)
 
         initial_state: CRMMessageAgentState = {
             "messages": [HumanMessage(content=user_input)],
