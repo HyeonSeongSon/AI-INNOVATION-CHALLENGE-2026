@@ -576,7 +576,7 @@ async def create_analysis_result(request: AnalysisResultCreate, db: Session = De
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
 
-    analysis = AnalysisResult(**request.dict())
+    analysis = AnalysisResult(**request.model_dump())
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
@@ -619,7 +619,7 @@ async def create_search_query(request: SearchQueryCreate, db: Session = Depends(
     if not analysis:
         raise HTTPException(status_code=404, detail=f"Analysis with ID '{request.analysis_id}' not found")
 
-    search = SearchQuery(**request.dict())
+    search = SearchQuery(**request.model_dump())
     db.add(search)
     db.commit()
     db.refresh(search)

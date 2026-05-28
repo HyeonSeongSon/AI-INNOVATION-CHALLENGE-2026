@@ -3,7 +3,6 @@
 메시지 저장 및 최신 메시지 조회
 """
 
-import logging
 from datetime import date, timedelta
 from typing import Any, List, Optional
 
@@ -13,8 +12,6 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, GeneratedMessage
-
-logger = logging.getLogger("generated_messages_api")
 
 router = APIRouter(prefix="/api/generated-messages", tags=["GeneratedMessages"])
 

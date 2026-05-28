@@ -6,7 +6,6 @@ contextvars를 통해 전체 에이전트 실행 과정에 전파됩니다.
 """
 
 import time
-import traceback
 from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware

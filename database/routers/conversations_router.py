@@ -73,7 +73,7 @@ def create_conversation(body: CreateConversationRequest, db: Session = Depends(g
     )
     db.add(conv)
     db.commit()
-    logger.info("conversation_created | conv_id=%s", new_id)
+    logger.info("conversation_created", extra={"conv_id": new_id})
     return {"id": new_id, "thread_id": new_id}
 
 
@@ -148,7 +148,7 @@ def update_messages(
     conv.last_active_at = datetime.now(timezone.utc)
     db.commit()
 
-    logger.info("conversation_messages_updated | conv_id=%s", conv_id)
+    logger.info("conversation_messages_updated", extra={"conv_id": conv_id})
     return {"status": "ok"}
 
 
@@ -169,5 +169,5 @@ def delete_conversation(
     db.delete(conv)
     db.commit()
 
-    logger.info("conversation_deleted | conv_id=%s", conv_id)
+    logger.info("conversation_deleted", extra={"conv_id": conv_id})
     return {"status": "ok"}
