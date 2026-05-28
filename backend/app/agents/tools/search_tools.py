@@ -297,9 +297,11 @@ async def search_personas_by_filter(
     }
     try:
         client = _get_http_client()
+        extra_headers = {"X-User-Id": payload["user_id"]} if payload.get("user_id") else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/filter",
             json=payload,
+            headers=extra_headers,
         )
         response.raise_for_status()
         rows = response.json()

@@ -18,6 +18,15 @@ from routers.conversations_router import router as conversations_router
 from routers.generated_messages_router import router as generated_messages_router
 
 _INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+
+if not _INTERNAL_TOKEN:
+    raise RuntimeError(
+        "INTERNAL_TOKEN 환경변수가 설정되지 않았습니다. "
+        "'openssl rand -hex 32'로 생성 후 .env에 추가하세요."
+    )
+if len(_INTERNAL_TOKEN) < 32:
+    raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
+
 _SKIP_PATHS = {"/", "/health"}
 
 

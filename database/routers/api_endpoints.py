@@ -457,12 +457,18 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
 
 
 @router.delete("/personas/{persona_id}", summary="페르소나 삭제")
-async def delete_persona(persona_id: str, db: Session = Depends(get_db)):
+async def delete_persona(persona_id: str, raw_request: Request, db: Session = Depends(get_db)):
     from core.models import Persona
 
     persona = db.query(Persona).filter(Persona.persona_id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{persona_id}' not found")
+
+    user_id = raw_request.headers.get("X-User-Id")
+    role = resolve_role(db, user_id)
+    if role != "admin" and user_id:
+        if persona.user_id != user_id:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.delete(persona)
     db.commit()
@@ -486,10 +492,7 @@ async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteR
     role = resolve_role(db, user_id)
     query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
     if role != "admin" and user_id:
-        from sqlalchemy import or_
-        query = query.filter(
-            or_(Persona.user_id == user_id, Persona.user_id.is_(None))
-        )
+        query = query.filter(Persona.user_id == user_id)
     deleted = query.delete(synchronize_session=False)
     db.commit()
 
@@ -497,7 +500,7 @@ async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteR
 
 
 @router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
-async def filter_personas(request: PersonaFilterRequest, db: Session = Depends(get_db)) -> List[Any]:
+async def filter_personas(request: PersonaFilterRequest, raw_request: Request, db: Session = Depends(get_db)) -> List[Any]:
     from core.models import Persona
     from sqlalchemy import cast
     from sqlalchemy.dialects.postgresql import ARRAY
@@ -509,11 +512,13 @@ async def filter_personas(request: PersonaFilterRequest, db: Session = Depends(g
 
     query = db.query(Persona)
 
-    role = resolve_role(db, request.user_id)
-    if role != "admin" and request.user_id:
+    header_user_id = raw_request.headers.get("X-User-Id")
+    effective_user_id = header_user_id or request.user_id
+    role = resolve_role(db, effective_user_id)
+    if role != "admin" and effective_user_id:
         from sqlalchemy import or_
         query = query.filter(
-            or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
+            or_(Persona.user_id == effective_user_id, Persona.user_id.is_(None))
         )
 
     if request.gender is not None:
