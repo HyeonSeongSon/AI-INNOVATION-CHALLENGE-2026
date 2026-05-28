@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import asyncio
 import base64
@@ -5,6 +6,7 @@ import io
 from datetime import datetime
 from uuid import uuid4
 from typing import Union
+from urllib.parse import urlparse
 
 import httpx
 from PIL import Image
@@ -28,6 +30,30 @@ from ....core.http_client_registry import register
 from ....core.logging import get_logger
 
 logger = get_logger("product_registration")
+
+_ALLOWED_SCHEMES = {"http", "https"}
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+
+
+def _validate_host_not_internal(host: str) -> None:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return  # 도메인명 — 통과
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+        raise ValueError("내부 IP 범위 접근 불가")
+
+
+def _validate_image_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(f"허용되지 않는 URL 스킴: {parsed.scheme!r}")
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("URL에 호스트가 없습니다")
+    if host in _BLOCKED_HOSTS:
+        raise ValueError("내부 호스트 접근 불가")
+    _validate_host_not_internal(host)
 
 # ──────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────
@@ -188,6 +214,7 @@ class ProductRegistrationService:
 
     def __init__(self, vision_model: str | None = None, document_model: str | None = None):
         self._http_client: httpx.AsyncClient | None = None
+        self._image_http_client: httpx.AsyncClient | None = None
         register(self)
         model = settings.chatgpt_model_name
         self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision)
@@ -202,16 +229,28 @@ class ProductRegistrationService:
             )
         return self._http_client
 
+    @property
+    def image_http_client(self) -> httpx.AsyncClient:
+        if self._image_http_client is None or self._image_http_client.is_closed:
+            self._image_http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_long),
+                max_redirects=3,
+            )
+        return self._image_http_client
+
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
+        if self._image_http_client is not None and not self._image_http_client.is_closed:
+            await self._image_http_client.aclose()
 
     async def _download_image(self, url: str) -> Image.Image:
+        _validate_image_url(url)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
             "Referer": "https://www.amoremall.com/",
         }
-        response = await self.http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
+        response = await self.image_http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
         response.raise_for_status()
         return Image.open(io.BytesIO(response.content)).convert("RGB")
 
