@@ -87,7 +87,11 @@ async def _proxy_stream(
         except httpx.TimeoutException:
             yield b'data: {"type":"error","detail":"CRM service timeout"}\n\n'
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ──────────────────────────────────────────────────────
@@ -104,6 +108,18 @@ async def proxy_chat_v2(
         client, "POST", "/api/marketing/chat/v2", request,
         {"X-User-Id": user.user_id, "X-User-Role": user.role},
         timeout=httpx.Timeout(connect=settings.http_timeout_stream_connect, read=None, write=None, pool=settings.http_timeout_stream_pool),
+    )
+
+
+@router.post("/marketing/chat/v2/stream")
+async def proxy_chat_v2_stream(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+    client: httpx.AsyncClient = Depends(get_crm_client),
+):
+    return await _proxy_stream(
+        client, "POST", "/api/marketing/chat/v2/stream", request,
+        {"X-User-Id": user.user_id, "X-User-Role": user.role},
     )
 
 

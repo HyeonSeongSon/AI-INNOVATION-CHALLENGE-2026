@@ -20,6 +20,37 @@ import { useAuth } from '../context/AuthContext';
 import brandsData from '../data/brands.json';
 import categoriesData from '../data/categories.json';
 
+const NODE_STATUS = {
+  supervisor:              '요청 분석 중...',
+  search_agent:            '데이터 검색 중...',
+  recommend_product_agent: '상품 추천 중...',
+  generate_message_agent:  '메시지 생성 중...',
+  data_registration_agent: '데이터 등록 중...',
+};
+
+async function* parseSSE(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { yield JSON.parse(line.slice(6)); }
+          catch { /* 파싱 실패 무시 */ }
+        }
+      }
+    }
+  } finally {
+    reader.cancel();
+  }
+}
+
 /* --- [1] 스타일 컴포넌트 --- */
 const Container = styled.div` display: flex; height: calc(100vh - 100px); gap: 24px; max-width: 1400px; margin: 0 auto; `;
 const Sidebar = styled.div` width: 340px; background: white; border-radius: 24px; border: 1px solid #eee; padding: 24px; display: flex; flex-direction: column; gap: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02); `;
@@ -404,7 +435,7 @@ export default function Message() {
     if (chatInputRef.current) chatInputRef.current.style.height = '36px';
 
     const userMsg    = { id: Date.now(),     role: 'user', text };
-    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true, statusText: '처리 중...' };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
 
@@ -433,13 +464,36 @@ export default function Message() {
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await api.post('/marketing/chat/v2', {
-        user_input: text,
-        session_id: currentSessionId,
-        conversation_id: targetConvId,
-      }, { headers: { 'X-User-Id': user?.id } });
+      const response = await fetch('/api/marketing/chat/v2/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user?.id },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_input: text,
+          session_id: currentSessionId,
+          conversation_id: targetConvId,
+        }),
+      });
+      if (!response.ok) throw new Error('stream_request_failed');
 
-      const result = response.data;
+      let result = null;
+      for await (const event of parseSSE(response)) {
+        if (event.type === 'node_start') {
+          const label = NODE_STATUS[event.node] || '처리 중...';
+          const updatedMessages = messagesWithLoading.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          );
+          setPendingConv(targetConvId, updatedMessages, true);
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'result') {
+          result = event;
+        } else if (event.type === 'error') {
+          throw new Error('agent_error');
+        }
+      }
+      if (!result) throw new Error('no_result');
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
         id: p.product_id,
@@ -510,7 +564,7 @@ export default function Message() {
     if (chatInputRef.current) chatInputRef.current.style.height = '36px';
 
     const userMsg    = { id: Date.now(),     role: 'user', text: userMsgText };
-    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true, statusText: '처리 중...' };
 
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
@@ -534,14 +588,38 @@ export default function Message() {
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await api.post('/marketing/chat/v2', {
-        user_input: typedText || fileLabel,
-        session_id: currentSessionId,
-        conversation_id: targetConvId,
-        file_records: records,
-      }, { headers: { 'X-User-Id': user?.id } });
+      const response = await fetch('/api/marketing/chat/v2/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user?.id },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_input: typedText || fileLabel,
+          session_id: currentSessionId,
+          conversation_id: targetConvId,
+          file_records: records,
+        }),
+      });
+      if (!response.ok) throw new Error('stream_request_failed');
 
-      const result = response.data;
+      let result = null;
+      for await (const event of parseSSE(response)) {
+        if (event.type === 'node_start') {
+          const label = NODE_STATUS[event.node] || '처리 중...';
+          const updatedMessages = messagesWithUser.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          );
+          setPendingConv(targetConvId, updatedMessages, true);
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'result') {
+          result = event;
+        } else if (event.type === 'error') {
+          throw new Error('agent_error');
+        }
+      }
+      if (!result) throw new Error('no_result');
+
       const aiText = result.messages?.[0]?.content || result.messages?.[0]?.text || '처리가 완료되었습니다.';
 
       const aiMsg = { id: Date.now() + 2, role: 'ai', text: aiText };
@@ -576,7 +654,7 @@ export default function Message() {
               {msg.isLoading ? (
                 <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
                   <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                  처리 중...
+                  {msg.statusText || '처리 중...'}
                 </div>
               ) : msg.text && (
                 <div className="bubble">

@@ -7,7 +7,10 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
+import json as _json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any
 from ..config.settings import ALLOWED_MODEL_PREFIXES
@@ -307,6 +310,120 @@ async def chat_v2(
     except Exception as e:
         logger.error("chat_v2_failed", error_type=type(e).__name__, exc_info=True)
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
+
+
+@router.post("/chat/v2/stream")
+async def chat_v2_stream(
+    request: ChatRequest,
+    req: Request,
+    current_user: UserContext = Depends(get_user_from_headers),
+):
+    """
+    대화 처리 v2 — SSE 스트리밍 (astream_events 기반)
+    /chat/v2와 동일한 비즈니스 로직, 결과를 SSE로 스트리밍.
+
+    SSE event types: node_start, token, log, node_end, result, error, done
+    Keepalive: ': keepalive' SSE comments (~25s 간격)
+    """
+    # ── conversation_id 사전 확보 (chat_v2와 동일) ─────────────────
+    try:
+        user_id = current_user.user_id
+        agent = get_agent_v2(req)
+        conv_id = request.conversation_id
+        if not conv_id:
+            conv_id = str(uuid.uuid4())
+            await asyncio.to_thread(_create_conversation, conv_id, user_id, request.session_id)
+        else:
+            await asyncio.to_thread(
+                _verify_conversation_ownership, conv_id, user_id, current_user.role
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("chat_v2_stream_setup_failed", error_type=type(e).__name__, exc_info=True)
+        raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
+
+    async def generate():
+        _result_data: dict | None = None
+
+        try:
+            async for chunk in agent.chat_stream(
+                user_input=request.user_input,
+                session_id=request.session_id,
+                user_id=user_id,
+                conversation_id=conv_id,
+                role=current_user.role,
+                model=request.model,
+                file_records=request.file_records,
+            ):
+                # result 이벤트만 가로채서 DB 저장용 데이터 캡처
+                if '"type":"result"' in chunk:
+                    try:
+                        _result_data = _json.loads(chunk[len("data: "):].strip())
+                    except Exception:
+                        pass
+                yield chunk
+
+        except asyncio.CancelledError:
+            logger.info("chat_v2_stream_disconnected", conv_id=conv_id)
+            return
+        except Exception as e:
+            logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
+            yield 'data: {"type":"error","message":"스트리밍 중 오류가 발생했습니다."}\n\n'
+            yield 'data: {"type":"done"}\n\n'
+            return
+
+        # ── DB 저장 (stream 완료 후, best-effort) ─────────────────────
+        if _result_data is None:
+            return
+        try:
+            status = _result_data.get("status")
+            thread_id = _result_data.get("thread_id", conv_id)
+            now = datetime.now(timezone.utc).isoformat()
+
+            new_entries = [
+                {"role": "user", "content": request.user_input,
+                 "type": "text", "timestamp": now, "thread_id": thread_id},
+            ]
+            if status == "completed":
+                ai_messages = _result_data.get("messages", [])
+                content = ai_messages[0].get("content", "") if ai_messages else ""
+                new_entries.append({
+                    "role": "assistant", "content": content,
+                    "type": "text", "timestamp": now, "thread_id": thread_id,
+                })
+            elif status == "failed":
+                error_msg = _result_data.get("error") or "메시지 품질 검사를 통과하지 못했습니다."
+                new_entries.append({
+                    "role": "assistant", "content": error_msg,
+                    "type": "error", "timestamp": now, "thread_id": thread_id,
+                })
+
+            await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
+
+            if status == "completed":
+                await asyncio.to_thread(
+                    _save_generated_messages_best_effort,
+                    conv_id, user_id, _result_data.get("generated_tasks", []),
+                    request.user_input, thread_id, [],
+                )
+
+            logger.info(
+                "chat_v2_stream_completed",
+                status=status, thread_id=thread_id,
+                conv_id=conv_id, user_id=user_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "chat_v2_stream_db_persist_failed",
+                error_type=type(e).__name__, conv_id=conv_id,
+            )
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/health")
