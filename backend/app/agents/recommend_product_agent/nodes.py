@@ -65,7 +65,7 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("parser_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("parser_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",
@@ -156,7 +156,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("get_search_query_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("get_search_query_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",
@@ -242,7 +242,7 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("recommend_products_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("recommend_products_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",

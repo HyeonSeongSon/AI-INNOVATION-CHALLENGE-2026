@@ -68,7 +68,7 @@ async def generate_structured_persona_info(messages: List, llm) -> Dict:
         result = await ainvoke_with_timeout(structured_llm, prompt_messages)
         persona = result.model_dump()
     except Exception as e:
-        logger.error("generate_structured_persona_info_failed", error=str(e), exc_info=True)
+        logger.error("generate_structured_persona_info_failed", error_type=type(e).__name__, exc_info=True)
         raise
     logger.info(
         "generate_structured_persona_info_completed",
@@ -100,7 +100,7 @@ async def generate_search_query(messages: List, llm) -> Dict:
         result: SearchQuery = await ainvoke_with_timeout(structured_llm, prompt_messages)
         search_query = result.model_dump()
     except Exception as e:
-        logger.error("generate_search_query_failed", error=str(e), exc_info=True)
+        logger.error("generate_search_query_failed", error_type=type(e).__name__, exc_info=True)
         raise
     logger.info(
         "generate_search_query_completed",

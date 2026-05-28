@@ -583,6 +583,6 @@ class QualityChecker:
             return passed, scores
 
         except Exception as e:
-            logger.error("llm_judge_failed", error=str(e), exc_info=True)
+            logger.error("llm_judge_failed", error_type=type(e).__name__, exc_info=True)
             return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
 

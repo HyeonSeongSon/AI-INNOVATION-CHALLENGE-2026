@@ -133,7 +133,7 @@ class CRMMessageAgent:
             }
 
         except Exception as e:
-            _logger.error("chat_failed", error=str(e), exc_info=True)
+            _logger.error("chat_failed", error_type=type(e).__name__, exc_info=True)
             return {
                 "status": "failed",
                 "thread_id": thread_id,

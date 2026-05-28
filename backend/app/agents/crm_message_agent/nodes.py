@@ -101,7 +101,7 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     try:
         response = await ainvoke_with_timeout(llm, _build_summary_prompt(messages, existing_summary))
     except Exception as e:
-        _logger.warning("summarize_skipped", error=str(e))
+        _logger.warning("summarize_skipped", error_type=type(e).__name__)
         return {}
 
     messages_to_delete = messages[:-settings.conversation_keep_messages]
@@ -207,7 +207,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
             try:
                 final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
             except Exception as e:
-                _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
+                _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
                 return {"status": "failed", "error": "최종 응답 생성 실패"}
             return {"messages": [final_answer], "task_plan": []}
 
@@ -223,11 +223,11 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         )
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
-        _logger.warning("supervisor_routing_parse_failed", error=str(e), node_name="supervisor_agent")
+        _logger.warning("supervisor_routing_parse_failed", error_type=type(e).__name__, node_name="supervisor_agent")
         try:
             final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e2:
-            _logger.error("supervisor_final_answer_failed", error=str(e2), node_name="supervisor_agent")
+            _logger.error("supervisor_final_answer_failed", error_type=type(e2).__name__, node_name="supervisor_agent")
             return {"status": "failed", "error": "최종 응답 생성 실패"}
         return {"messages": [final_answer]}
 
@@ -238,7 +238,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         try:
             final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
         except Exception as e:
-            _logger.error("supervisor_final_answer_failed", error=str(e), node_name="supervisor_agent")
+            _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
             return {"status": "failed", "error": "최종 응답 생성 실패"}
         return {"messages": [final_answer]}
 
@@ -255,7 +255,7 @@ async def search_agent(state: CRMMessageAgentState, config: RunnableConfig):
     try:
         result = await agent.ainvoke({"messages": filtered_messages}, config)
     except Exception as e:
-        _logger.error("search_agent_failed", error=str(e), exc_info=True)
+        _logger.error("search_agent_failed", error_type=type(e).__name__, exc_info=True)
         return Command(goto="supervisor", update={"status": "failed", "error": "에이전트 실행 실패"})
     ai_msg, tool_msg = create_handoff_messages("search_agent")
     _logger.info("search_agent_done", node_name="search_agent")

@@ -67,7 +67,7 @@ async def recommend_product_parser(messages: List[AnyMessage], llm: BaseChatMode
         response = await ainvoke_with_timeout(parser, prompt_messages)
         return response.model_dump()
     except Exception as e:
-        logger.error("llm_parse_failed", error=str(e), exc_info=True)
+        logger.error("llm_parse_failed", error_type=type(e).__name__, exc_info=True)
         raise
 
 
@@ -87,5 +87,5 @@ async def generate_message_router(
     try:
         return await ainvoke_with_timeout(parser, prompt_messages)
     except Exception as e:
-        logger.error("llm_parse_failed", error=str(e), exc_info=True)
+        logger.error("llm_parse_failed", error_type=type(e).__name__, exc_info=True)
         raise

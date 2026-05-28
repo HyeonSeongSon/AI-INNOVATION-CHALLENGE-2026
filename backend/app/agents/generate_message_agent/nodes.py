@@ -97,7 +97,7 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
             update["active_persona_id"] = result.persona_id
         return update
     except Exception as e:
-        logger.error("router_error", user_message="[router] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("router_error", user_message="[router] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             "status": "failed",
             "error": "라우팅 중 오류가 발생했습니다.",
@@ -129,7 +129,7 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         tasks = await generator.get_crm_prompt(tasks, persona_info=persona_info)
         tasks = await generator.generate_crm_message(tasks, message_llm)
     except Exception as e:
-        agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return Command(
             goto="output_node",
             update={
@@ -203,7 +203,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
                 "quality_check_task_error",
                 user_message=f"[quality_check] 태스크 검사 실패 (product_id={task['product_id']})",
                 product_id=task["product_id"],
-                error=str(e),
+                error_type=type(e).__name__,
             )
             quality_check = {"passed": False, "failed_stage": "quality_check_error", "failure_reason": "품질 검사 중 오류가 발생했습니다."}
         checked_tasks.append({**task, "quality_check": quality_check})
@@ -285,7 +285,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             )
             updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
     except Exception as e:
-        agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return Command(
             goto="output_node",
             update={
