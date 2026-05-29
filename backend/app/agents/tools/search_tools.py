@@ -151,17 +151,20 @@ async def get_products_by_brand(brand: str) -> str:
 
 
 @tool
-async def get_persona_by_id(persona_id: str) -> str:
+async def get_persona_by_id(persona_id: str, config: Annotated[RunnableConfig, InjectedToolArg] = None) -> str:
     """
     특정 페르소나 ID의 모든 상세 정보를 조회합니다.
     페르소나 ID(예: PERSONA_001)를 알고 있을 때, 해당 페르소나의 전체 프로필을
     확인하고 싶을 때 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
+    user_id = configurable.get("user_id")
+    role = configurable.get("role", "user")
     try:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/get",
-            json={"persona_id": persona_id}
+            json={"persona_id": persona_id, "user_id": user_id, "role": role}
         )
         response.raise_for_status()
         p = response.json()
@@ -169,6 +172,8 @@ async def get_persona_by_id(persona_id: str) -> str:
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return f"해당 ID의 페르소나를 찾을 수 없습니다: {persona_id}"
+        if e.response.status_code == 403:
+            return f"해당 페르소나에 접근할 권한이 없습니다: {persona_id}"
         return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
     except httpx.RequestError:

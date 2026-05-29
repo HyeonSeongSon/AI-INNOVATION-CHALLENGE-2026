@@ -289,6 +289,8 @@ class ProductSearchQueryResponse(BaseModel):
 
 class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
+    user_id: Optional[str] = Field(None, description="조회 요청자 사용자 ID (없으면 소유권 검증 생략)")
+    role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
 
 
 class PersonaFilterRequest(BaseModel):
@@ -356,6 +358,11 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    role = resolve_role(db, request.user_id)
+    if role != "admin" and request.user_id:
+        if persona.user_id != request.user_id and persona.user_id is not None:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     return PersonaDetailResponse(
         persona_id=persona.persona_id,

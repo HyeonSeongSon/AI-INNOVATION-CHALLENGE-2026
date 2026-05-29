@@ -1,3 +1,4 @@
+import asyncio
 import hmac
 
 from fastapi import FastAPI, HTTPException, Query
@@ -302,9 +303,10 @@ async def get_product_by_id(
         }
 
         # 검색 실행
-        response = client.client.search(
+        response = await asyncio.to_thread(
+            client.client.search,
             index=index_name,
-            body=query_body
+            body=query_body,
         )
 
         hits = response.get("hits", {}).get("hits", [])
@@ -361,7 +363,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
         # 벡터 임베딩 생성
-        query_vector = client.model.encode(request.query).tolist()
+        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
         logging.info(f"쿼리 임베딩 생성 완료: 차원={len(query_vector)}")
 
         # Product ID 필터링 쿼리 구성
@@ -425,12 +427,13 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         }
 
         # 검색 실행
-        raw_results = client.search_with_pipeline(
+        raw_results = await asyncio.to_thread(
+            client.search_with_pipeline,
             query_text=request.query,
             pipeline_id=request.pipeline_id,
             index_name=request.index_name,
             query_body=query_body,
-            top_k=request.top_k
+            top_k=request.top_k,
         )
 
         # 결과 포맷팅
@@ -484,7 +487,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         client = get_opensearch_client()
 
         # 쿼리 벡터 생성
-        query_vector = client.model.encode(request.query).tolist()
+        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
 
         query_body = {
             "size": request.top_k,
@@ -501,9 +504,10 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
             }
         }
 
-        response = client.client.search(
+        response = await asyncio.to_thread(
+            client.client.search,
             index=request.index_name,
-            body=query_body
+            body=query_body,
         )
 
         hits = response.get("hits", {}).get("hits", [])
@@ -548,7 +552,8 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = client.search_combined(
+        raw_results = await asyncio.to_thread(
+            client.search_combined,
             query_text=request.query,
             product_ids=request.product_ids,
             top_k=request.top_k,
@@ -601,7 +606,8 @@ async def search_by_field(request: FieldSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = client.search_by_field(
+        raw_results = await asyncio.to_thread(
+            client.search_by_field,
             query_text=request.query,
             bm25_fields=request.bm25_fields,
             vector_field=request.vector_field,
@@ -653,7 +659,8 @@ async def search_multivector(request: MultiVectorSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
         
-        raw_results = client.search_multivector_field(
+        raw_results = await asyncio.to_thread(
+            client.search_multivector_field,
             query_text=request.query,
             index_name=request.index_name,
             product_ids=request.product_ids,
@@ -704,7 +711,7 @@ async def index_multivector(request: IndexMultivectorRequest):
                 vectordb_id[f"{_INDEX_PREFIX}_{field}"] = []
                 continue
 
-            vectors = client.model.encode(sentences, batch_size=64)
+            vectors = await asyncio.to_thread(client.model.encode, sentences, batch_size=64)
             index_name = f"{_INDEX_PREFIX}_{field}"
             doc_ids: List[str] = []
             bulk_body = []
@@ -723,7 +730,7 @@ async def index_multivector(request: IndexMultivectorRequest):
                     "embedding_model": _EMBEDDING_MODEL_VERSION,
                 })
 
-            response = client.client.bulk(body=bulk_body, refresh=True)
+            response = await asyncio.to_thread(client.client.bulk, body=bulk_body, refresh=True)
             failed = [item for item in response.get("items", []) if "error" in item.get("index", {})]
             indexed_counts[field] = len(doc_ids) - len(failed)
             vectordb_id[index_name] = doc_ids

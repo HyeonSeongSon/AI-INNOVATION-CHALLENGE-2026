@@ -71,16 +71,17 @@ async def lifespan(app: FastAPI):
     logger.info("cleanup_worker_started", interval_seconds=settings.cleanup_interval_seconds)
     logger.info("api_gateway_initialized")
 
-    yield
-
-    cleanup_task.cancel()
     try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("cleanup_worker_stopped")
-    await app.state.crm_client.aclose()
-    await app.state.internal_client.aclose()
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("cleanup_worker_stopped")
+        await app.state.crm_client.aclose()
+        await app.state.internal_client.aclose()
 
 
 app = FastAPI(
