@@ -477,6 +477,7 @@ export default function Message() {
       if (!response.ok) throw new Error('stream_request_failed');
 
       let result = null;
+      let accStreamingText = '';
       for await (const event of parseSSE(response)) {
         if (event.type === 'node_start') {
           const label = NODE_STATUS[event.node] || '처리 중...';
@@ -486,6 +487,25 @@ export default function Message() {
           setPendingConv(targetConvId, updatedMessages, true);
           setMessages(prev => prev.map(m =>
             m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'text_chunk') {
+          accStreamingText += event.content;
+          const currentText = accStreamingText;
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+          ));
+          setPendingConv(targetConvId,
+            messagesWithLoading.map(m =>
+              m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+            ),
+            true
+          );
+        } else if (event.type === 'text_done') {
+          const hasTitle = accStreamingText.startsWith('## ');
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id
+              ? { ...m, streamingDone: true, text: accStreamingText, isGenerated: hasTitle }
+              : m
           ));
         } else if (event.type === 'result') {
           result = event;
@@ -602,6 +622,7 @@ export default function Message() {
       if (!response.ok) throw new Error('stream_request_failed');
 
       let result = null;
+      let accStreamingText = '';
       for await (const event of parseSSE(response)) {
         if (event.type === 'node_start') {
           const label = NODE_STATUS[event.node] || '처리 중...';
@@ -611,6 +632,25 @@ export default function Message() {
           setPendingConv(targetConvId, updatedMessages, true);
           setMessages(prev => prev.map(m =>
             m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'text_chunk') {
+          accStreamingText += event.content;
+          const currentText = accStreamingText;
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+          ));
+          setPendingConv(targetConvId,
+            messagesWithUser.map(m =>
+              m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+            ),
+            true
+          );
+        } else if (event.type === 'text_done') {
+          const hasTitle = accStreamingText.startsWith('## ');
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id
+              ? { ...m, streamingDone: true, text: accStreamingText, isGenerated: hasTitle }
+              : m
           ));
         } else if (event.type === 'result') {
           result = event;
@@ -652,10 +692,28 @@ export default function Message() {
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
               {msg.isLoading ? (
-                <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
-                  <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                  {msg.statusText || '처리 중...'}
-                </div>
+                msg.streamingText ? (
+                  <div className="bubble">
+                    <MarkdownBody>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                          )
+                        }}
+                      >
+                        {msg.streamingText}
+                      </ReactMarkdown>
+                    </MarkdownBody>
+                    {!msg.streamingDone && <span className="streaming-cursor" />}
+                  </div>
+                ) : (
+                  <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
+                    <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    {msg.statusText || '처리 중...'}
+                  </div>
+                )
               ) : msg.text && (
                 <div className="bubble">
                   {msg.role === 'ai' ? (

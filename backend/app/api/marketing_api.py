@@ -356,10 +356,11 @@ async def chat_v2_stream(
                 model=request.model,
                 file_records=request.file_records,
             ):
-                # result 이벤트만 가로채서 DB 저장용 데이터 캡처
-                if '"type":"result"' in chunk:
+                if chunk.startswith("data: "):
                     try:
-                        _result_data = _json.loads(chunk[len("data: "):].strip())
+                        payload = _json.loads(chunk[len("data: "):].strip())
+                        if isinstance(payload, dict) and payload.get("type") == "result":
+                            _result_data = payload
                     except Exception:
                         pass
                 yield chunk

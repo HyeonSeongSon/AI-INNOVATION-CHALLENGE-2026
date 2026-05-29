@@ -50,8 +50,7 @@ async def send_task(request: TaskSendRequest, req: Request):
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
-        agent_status = result.get("status")
-        status = TaskStatus.COMPLETED if agent_status == "completed" else TaskStatus.FAILED
+        status = TaskStatus.COMPLETED  # 정상 실행은 항상 COMPLETED; FAILED는 except 블록에서만
 
         _logger.info("a2a_task_completed", task_id=request.id, status=status)
 

@@ -184,7 +184,7 @@ def _get_search_agent(model_name: str):
 async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
     _logger.info("supervisor_started", node_name="supervisor_agent")
 
-    if state.get("status") == "failed":
+    if state.get("status") in ("failed", "partial_failure"):
         _logger.warning("supervisor_aborted_on_error", node_name="supervisor_agent")
         return {
             "messages": [AIMessage(content="처리 중 오류가 발생하여 작업을 중단합니다. 다시 시도해주세요.", name="supervisor")],
@@ -424,12 +424,31 @@ def make_generate_message_node(client: A2AClient):
                     "messages": [AIMessage(content="메시지 생성 에이전트 응답 처리에 실패했습니다.", name="generate_message_agent")],
                 },
             )
+        internal_status = result.get("status")
+
+        if internal_status in ("failed", "partial_failure"):
+            _logger.warning(
+                "generate_message_agent_internal_failure",
+                node_name="generate_message_agent",
+                internal_status=internal_status,
+            )
+            return Command(
+                goto="supervisor",
+                update={
+                    "messages": messages + [ai_msg, tool_msg],
+                    "generated_tasks": result.get("generated_tasks", []),
+                    "status": "failed",
+                    "task_plan": [],
+                    "logs": result.get("logs", []),
+                },
+            )
+
         return Command(
             goto="supervisor",
             update={
                 "messages": messages + [ai_msg, tool_msg],
                 "generated_tasks": result.get("generated_tasks", []),
-                "status": result.get("status"),
+                "status": internal_status,
                 "logs": result.get("logs", []),
             },
         )

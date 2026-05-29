@@ -179,6 +179,8 @@ class CRMMessageAgent:
         SSE event types:
           node_start — 노드 진입 (tracked nodes 기준, supervisor는 최초 1회만)
           token      — LLM 토큰 (supervisor 직접 호출분만; A2A 너머 토큰은 미전달)
+          text_chunk — 생성 메시지 콘텐츠 청크 (generate_message_agent 완료 후 점진적 방출)
+          text_done  — text_chunk 시퀀스 완료 신호 (커서 제거용)
           log        — state["logs"] 항목
           node_end   — 노드 완료
           result     — 최종 결과 (recommended_products, generated_tasks, messages 포함)
@@ -306,6 +308,22 @@ class CRMMessageAgent:
                     log_data = _extract_from_output(output)
                     for log_line in log_data.get("logs", []):
                         yield _sse({"type": "log", "message": log_line})
+                    if node_name == "generate_message_agent":
+                        tasks = _acc.get("generated_tasks", [])
+                        if tasks and _acc.get("status") != "failed":
+                            msg_data = tasks[0].get("message", {})
+                            if isinstance(msg_data, dict):
+                                title = msg_data.get("title", "")
+                                content = msg_data.get("message", "") or msg_data.get("content", "")
+                            else:
+                                title, content = "", str(msg_data)
+                            streaming_text = f"## {title}\n\n{content}" if title and content else (content or title)
+                            if streaming_text:
+                                chunk_size = 3
+                                for i in range(0, len(streaming_text), chunk_size):
+                                    yield _sse({"type": "text_chunk", "content": streaming_text[i:i + chunk_size]})
+                                    await asyncio.sleep(0.015)
+                                yield _sse({"type": "text_done"})
                     yield _sse({"type": "node_end", "node": node_name})
 
         except asyncio.CancelledError:
