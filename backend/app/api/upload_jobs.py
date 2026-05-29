@@ -25,6 +25,7 @@ class JobStatus(str, Enum):
 class UploadJob:
     job_id: str
     job_type: str  # "persona" | "product"
+    creator_user_id: str
     status: JobStatus
     total: int
     events: deque[dict[str, Any]]
@@ -37,10 +38,11 @@ class UploadJob:
 _store: dict[str, UploadJob] = {}
 
 
-def create_job(job_type: str, total: int) -> UploadJob:
+def create_job(job_type: str, total: int, creator_user_id: str) -> UploadJob:
     job = UploadJob(
         job_id=str(uuid.uuid4()),
         job_type=job_type,
+        creator_user_id=creator_user_id,
         status=JobStatus.PENDING,
         total=total,
         events=deque(maxlen=EVENT_BUFFER_SIZE),

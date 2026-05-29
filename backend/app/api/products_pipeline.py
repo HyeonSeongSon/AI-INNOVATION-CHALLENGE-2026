@@ -293,7 +293,7 @@ async def upload_products_file(
         raise HTTPException(status_code=422, detail="파일에서 유효한 레코드를 찾을 수 없습니다.")
 
     service = request.app.state.registration
-    job = create_job("product", len(records))
+    job = create_job("product", len(records), creator_user_id=current_user.user_id)
 
     asyncio.create_task(
         _guarded_run_product_job(job, records, service)

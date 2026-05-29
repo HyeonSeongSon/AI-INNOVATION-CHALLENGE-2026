@@ -303,7 +303,7 @@ async def upload_personas_file(
 
     llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
     persona_client = req.app.state.persona_client
-    job = create_job("persona", len(texts))
+    job = create_job("persona", len(texts), creator_user_id=current_user.user_id)
 
     asyncio.create_task(
         _guarded_run_persona_job(job, texts, llm, persona_client, current_user.user_id)
@@ -324,6 +324,8 @@ async def stream_persona_job(
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     if job.job_type != "persona":
         raise HTTPException(status_code=400, detail="잘못된 작업 유형입니다.")
+    if current_user.role != "admin" and job.creator_user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     return StreamingResponse(
         _stream_job_events(job),
         media_type="text/event-stream",

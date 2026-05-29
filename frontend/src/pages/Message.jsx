@@ -590,7 +590,8 @@ export default function Message() {
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
 
-    const messagesWithUser = [...messagesRef.current, userMsg, loadingMsg];
+    const messagesWithUser    = [...messagesRef.current, userMsg];
+    const messagesWithLoading = [...messagesWithUser, loadingMsg];
     const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
     let targetConvId = convId;
 
@@ -601,11 +602,11 @@ export default function Message() {
         });
         targetConvId = created.data.id;
         await loadConversations();
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
         navigate(`/message/${targetConvId}`, { replace: true });
       } else {
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
       }
 
@@ -627,7 +628,7 @@ export default function Message() {
       for await (const event of parseSSE(response)) {
         if (event.type === 'node_start') {
           const label = NODE_STATUS[event.node] || '처리 중...';
-          const updatedMessages = messagesWithUser.map(m =>
+          const updatedMessages = messagesWithLoading.map(m =>
             m.id === loadingMsg.id ? { ...m, statusText: label } : m
           );
           setPendingConv(targetConvId, updatedMessages, true);
@@ -641,7 +642,7 @@ export default function Message() {
             m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
           ));
           setPendingConv(targetConvId,
-            messagesWithUser.map(m =>
+            messagesWithLoading.map(m =>
               m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
             ),
             true

@@ -160,7 +160,7 @@ def _save_generated_messages_best_effort(
         db.rollback()
         logger.warning(
             "save_generated_messages_best_effort_failed",
-            error=str(db_err),
+            error_type=type(db_err).__name__,
             conv_id=conv_id,
             exc_info=True,
         )

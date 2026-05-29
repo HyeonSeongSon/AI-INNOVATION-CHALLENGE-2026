@@ -64,7 +64,7 @@ class CrmMessageGenerator:
         enriched = []
         for item, product_info in zip(tasks, results):
             if isinstance(product_info, Exception):
-                logger.warning("get_product_info.fetch_failed", product_id=item["product_id"], error=str(product_info))
+                logger.warning("get_product_info.fetch_failed", product_id=item["product_id"], error_type=type(product_info).__name__)
                 continue
             if product_info:
                 enriched.append({**item, "product_info": product_info})
