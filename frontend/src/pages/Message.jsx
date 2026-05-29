@@ -509,6 +509,8 @@ export default function Message() {
           ));
         } else if (event.type === 'result') {
           result = event;
+        } else if (event.type === 'done') {
+          break;
         } else if (event.type === 'error') {
           throw new Error('agent_error');
         }
@@ -549,11 +551,10 @@ export default function Message() {
       };
       const finalMessages = [...messagesWithUser, aiMsg];
 
-      await saveMessages(targetConvId, finalMessages);
+      setPendingConv(targetConvId, finalMessages, false);
       setThreadId(result.thread_id || null);
       setSessionId(result.session_id || null);
-
-      setPendingConv(targetConvId, finalMessages, false);
+      saveMessages(targetConvId, finalMessages).catch(e => console.error("메시지 저장 실패:", e));
 
     } catch (error) {
       console.error("채팅 전송 실패:", error);
@@ -654,6 +655,8 @@ export default function Message() {
           ));
         } else if (event.type === 'result') {
           result = event;
+        } else if (event.type === 'done') {
+          break;
         } else if (event.type === 'error') {
           throw new Error('agent_error');
         }
@@ -664,8 +667,8 @@ export default function Message() {
 
       const aiMsg = { id: Date.now() + 2, role: 'ai', text: aiText };
       const finalMessages = [...messagesWithUser.filter(m => !m.isLoading), aiMsg];
-      await saveMessages(targetConvId, finalMessages);
       setPendingConv(targetConvId, finalMessages, false);
+      saveMessages(targetConvId, finalMessages).catch(e => console.error("메시지 저장 실패:", e));
 
     } catch (error) {
       const errMsg = error.response?.data?.detail || '서버와의 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';

@@ -343,6 +343,51 @@ async def chat_v2_stream(
         logger.error("chat_v2_stream_setup_failed", error_type=type(e).__name__, exc_info=True)
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
+    async def _persist_results(result_data: dict) -> None:
+        """result SSE 데이터를 DB에 저장한다. 실패해도 스트림 흐름에 영향 없음."""
+        try:
+            status = result_data.get("status")
+            thread_id = result_data.get("thread_id", conv_id)
+            now = datetime.now(timezone.utc).isoformat()
+
+            new_entries = [
+                {"role": "user", "content": request.user_input,
+                 "type": "text", "timestamp": now, "thread_id": thread_id},
+            ]
+            if status == "completed":
+                ai_messages = result_data.get("messages", [])
+                content = ai_messages[0].get("content", "") if ai_messages else ""
+                new_entries.append({
+                    "role": "assistant", "content": content,
+                    "type": "text", "timestamp": now, "thread_id": thread_id,
+                })
+            elif status == "failed":
+                error_msg = result_data.get("error") or "메시지 품질 검사를 통과하지 못했습니다."
+                new_entries.append({
+                    "role": "assistant", "content": error_msg,
+                    "type": "error", "timestamp": now, "thread_id": thread_id,
+                })
+
+            await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
+
+            if status == "completed":
+                await asyncio.to_thread(
+                    _save_generated_messages_best_effort,
+                    conv_id, user_id, result_data.get("generated_tasks", []),
+                    request.user_input, thread_id, [],
+                )
+
+            logger.info(
+                "chat_v2_stream_completed",
+                status=status, thread_id=thread_id,
+                conv_id=conv_id, user_id=user_id,
+            )
+        except Exception as e:
+            logger.warning(
+                "chat_v2_stream_db_persist_failed",
+                error_type=type(e).__name__, conv_id=conv_id,
+            )
+
     async def generate():
         _result_data: dict | None = None
 
@@ -359,8 +404,15 @@ async def chat_v2_stream(
                 if chunk.startswith("data: "):
                     try:
                         payload = _json.loads(chunk[len("data: "):].strip())
-                        if isinstance(payload, dict) and payload.get("type") == "result":
-                            _result_data = payload
+                        if isinstance(payload, dict):
+                            if payload.get("type") == "result":
+                                _result_data = payload
+                            elif payload.get("type") == "done" and _result_data is not None:
+                                # done yield 전에 DB 저장 실행
+                                # done 수신 후 클라이언트가 연결을 끊으면 generator task가
+                                # 취소되어 post-loop 코드가 실행되지 않을 수 있음
+                                await _persist_results(_result_data)
+                                _result_data = None
                     except Exception:
                         pass
                 yield chunk
@@ -373,52 +425,6 @@ async def chat_v2_stream(
             yield 'data: {"type":"error","message":"스트리밍 중 오류가 발생했습니다."}\n\n'
             yield 'data: {"type":"done"}\n\n'
             return
-
-        # ── DB 저장 (stream 완료 후, best-effort) ─────────────────────
-        if _result_data is None:
-            return
-        try:
-            status = _result_data.get("status")
-            thread_id = _result_data.get("thread_id", conv_id)
-            now = datetime.now(timezone.utc).isoformat()
-
-            new_entries = [
-                {"role": "user", "content": request.user_input,
-                 "type": "text", "timestamp": now, "thread_id": thread_id},
-            ]
-            if status == "completed":
-                ai_messages = _result_data.get("messages", [])
-                content = ai_messages[0].get("content", "") if ai_messages else ""
-                new_entries.append({
-                    "role": "assistant", "content": content,
-                    "type": "text", "timestamp": now, "thread_id": thread_id,
-                })
-            elif status == "failed":
-                error_msg = _result_data.get("error") or "메시지 품질 검사를 통과하지 못했습니다."
-                new_entries.append({
-                    "role": "assistant", "content": error_msg,
-                    "type": "error", "timestamp": now, "thread_id": thread_id,
-                })
-
-            await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
-
-            if status == "completed":
-                await asyncio.to_thread(
-                    _save_generated_messages_best_effort,
-                    conv_id, user_id, _result_data.get("generated_tasks", []),
-                    request.user_input, thread_id, [],
-                )
-
-            logger.info(
-                "chat_v2_stream_completed",
-                status=status, thread_id=thread_id,
-                conv_id=conv_id, user_id=user_id,
-            )
-        except Exception as e:
-            logger.warning(
-                "chat_v2_stream_db_persist_failed",
-                error_type=type(e).__name__, conv_id=conv_id,
-            )
 
     return StreamingResponse(
         generate(),

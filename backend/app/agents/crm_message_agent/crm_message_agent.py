@@ -10,6 +10,59 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 _logger = get_logger("crm_message_agent")
 
+
+def _extract_from_output(output: Any) -> Dict[str, Any]:
+    """on_chain_end output에서 state 변경분 추출. Command.update 또는 plain dict 처리."""
+    try:
+        from langgraph.types import Command as LGCommand
+        if isinstance(output, LGCommand):
+            return output.update or {}
+        if isinstance(output, dict):
+            return output
+    except Exception:
+        pass
+    return {}
+
+
+
+def _get_node_streaming_text(
+    node_name: str,
+    output: Any,
+    acc: Dict[str, Any],
+) -> str:
+    """각 노드 on_chain_end 시점에 text_chunk로 스트리밍할 텍스트를 반환. 없으면 빈 문자열.
+
+    원칙: accStreamingText(누적)가 result.messages[0](최종 메시지)와 정확히 일치하는
+    에이전트만 스트리밍한다. 불일치 시 done 이벤트 후 setPendingConv가 로딩 버블을
+    교체할 때 시각적 충돌이 발생한다.
+    """
+    if node_name == "generate_message_agent":
+        # result.messages[0] = "## 제목\n\n내용" — 정확히 일치
+        tasks = acc.get("generated_tasks", [])
+        if not tasks or acc.get("status") == "failed":
+            return ""
+        msg_data = tasks[0].get("message", {})
+        if isinstance(msg_data, dict):
+            title = msg_data.get("title", "")
+            content = msg_data.get("message", "") or msg_data.get("content", "")
+        else:
+            title, content = "", str(msg_data)
+        return (f"## {title}\n\n{content}" if title and content else content or title)
+
+    if node_name == "supervisor":
+        # generated_tasks가 있으면 generate_message_agent가 이미 최종 콘텐츠를 스트리밍했으므로 생략
+        if acc.get("generated_tasks"):
+            return ""
+        # generated_tasks가 없을 때만 supervisor 응답이 result.messages[0]과 일치
+        data = _extract_from_output(output)
+        ai_msgs = [m for m in data.get("messages", []) if isinstance(m, AIMessage)]
+        return ai_msgs[-1].content if ai_msgs else ""
+
+    # search_agent: supervisor가 재가공 → result.messages[0]과 불일치 → 스트리밍 안 함
+    # recommend_product_agent: 상품 카드 UI로 표시 → 텍스트 목록과 불일치 → 스트리밍 안 함
+    return ""
+
+
 _TRACKED_NODES: frozenset[str] = frozenset({
     "supervisor",
     "search_agent",
@@ -211,18 +264,6 @@ class CRMMessageAgent:
         def _sse(data: Dict[str, Any]) -> str:
             return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-        def _extract_from_output(output: Any) -> Dict[str, Any]:
-            """on_chain_end output에서 state 변경분 추출. Command.update 또는 plain dict 처리."""
-            try:
-                from langgraph.types import Command as LGCommand
-                if isinstance(output, LGCommand):
-                    return output.update or {}
-                if isinstance(output, dict):
-                    return output
-            except Exception:
-                pass
-            return {}
-
         def _accumulate(node_name: str, output: Any) -> None:
             data = _extract_from_output(output)
             if data.get("logs"):
@@ -308,22 +349,13 @@ class CRMMessageAgent:
                     log_data = _extract_from_output(output)
                     for log_line in log_data.get("logs", []):
                         yield _sse({"type": "log", "message": log_line})
-                    if node_name == "generate_message_agent":
-                        tasks = _acc.get("generated_tasks", [])
-                        if tasks and _acc.get("status") != "failed":
-                            msg_data = tasks[0].get("message", {})
-                            if isinstance(msg_data, dict):
-                                title = msg_data.get("title", "")
-                                content = msg_data.get("message", "") or msg_data.get("content", "")
-                            else:
-                                title, content = "", str(msg_data)
-                            streaming_text = f"## {title}\n\n{content}" if title and content else (content or title)
-                            if streaming_text:
-                                chunk_size = 3
-                                for i in range(0, len(streaming_text), chunk_size):
-                                    yield _sse({"type": "text_chunk", "content": streaming_text[i:i + chunk_size]})
-                                    await asyncio.sleep(0.015)
-                                yield _sse({"type": "text_done"})
+                    streaming_text = _get_node_streaming_text(node_name, output, _acc)
+                    if streaming_text:
+                        chunk_size = 3
+                        for i in range(0, len(streaming_text), chunk_size):
+                            yield _sse({"type": "text_chunk", "content": streaming_text[i:i + chunk_size]})
+                            await asyncio.sleep(0.015)
+                        yield _sse({"type": "text_done"})
                     yield _sse({"type": "node_end", "node": node_name})
 
         except asyncio.CancelledError:
