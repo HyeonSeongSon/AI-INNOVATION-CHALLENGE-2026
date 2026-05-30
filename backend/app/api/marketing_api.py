@@ -11,7 +11,7 @@ import json as _json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any
 from ..config.settings import ALLOWED_MODEL_PREFIXES
 from ..core.auth import UserContext
@@ -184,11 +184,11 @@ class ChatRequest(BaseModel):
     thread_id는 매 /chat 호출마다 에이전트 내부에서 fresh UUID로 생성됩니다.
     interrupt/resume 시에는 /chat 응답의 thread_id를 /resume 요청에 그대로 사용하세요.
     """
-    user_input: str
+    user_input: str = Field(max_length=50_000)
     session_id: str
     conversation_id: Optional[str] = None  # None이면 신규 대화 레코드 생성
     model: Optional[str] = None
-    file_records: Optional[List[Dict[str, Any]]] = None  # 파일 업로드 시 파싱된 레코드 배열
+    file_records: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=500)
 
     @field_validator("model")
     @classmethod
@@ -230,13 +230,15 @@ async def chat_v2(
 
         # 1. conversation_id 사전 확보 (에이전트 호출 전에 thread_id를 결정해야 함)
         conv_id = request.conversation_id
+        loop = asyncio.get_running_loop()
+        db_executor = req.app.state.db_executor
         if not conv_id:
             conv_id = str(uuid.uuid4())
-            await asyncio.to_thread(_create_conversation, conv_id, user_id, request.session_id)
+            await loop.run_in_executor(db_executor, _create_conversation, conv_id, user_id, request.session_id)
         else:
             # IDOR 방어: 클라이언트가 전달한 conversation_id가 현재 사용자 소유인지 검증
-            await asyncio.to_thread(
-                _verify_conversation_ownership, conv_id, user_id, current_user.role
+            await loop.run_in_executor(
+                db_executor, _verify_conversation_ownership, conv_id, user_id, current_user.role
             )
 
         # 2. 에이전트 호출 — conversation_id 전달, history 제거
@@ -286,17 +288,17 @@ async def chat_v2(
                 "thread_id": thread_id,
             })
 
-        await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
+        asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
 
         # 품질 검사 통과 메시지만 generated_messages 저장
         if status == "completed" and conv_id:
             generated_tasks = result.get("generated_tasks", [])
-            await asyncio.to_thread(
+            asyncio.create_task(asyncio.to_thread(
                 _save_generated_messages_best_effort,
                 conv_id, user_id, generated_tasks,
                 request.user_input, thread_id,
                 result.get("regeneration_history"),
-            )
+            ))
 
         logger.info(
             "chat_v2_completed",
@@ -334,12 +336,14 @@ async def chat_v2_stream(
         user_id = current_user.user_id
         agent = get_agent_v2(req)
         conv_id = request.conversation_id
+        loop = asyncio.get_running_loop()
+        db_executor = req.app.state.db_executor
         if not conv_id:
             conv_id = str(uuid.uuid4())
-            await asyncio.to_thread(_create_conversation, conv_id, user_id, request.session_id)
+            await loop.run_in_executor(db_executor, _create_conversation, conv_id, user_id, request.session_id)
         else:
-            await asyncio.to_thread(
-                _verify_conversation_ownership, conv_id, user_id, current_user.role
+            await loop.run_in_executor(
+                db_executor, _verify_conversation_ownership, conv_id, user_id, current_user.role
             )
     except HTTPException:
         raise
@@ -372,14 +376,14 @@ async def chat_v2_stream(
                     "type": "error", "timestamp": now, "thread_id": thread_id,
                 })
 
-            await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
+            asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
 
             if status == "completed":
-                await asyncio.to_thread(
+                asyncio.create_task(asyncio.to_thread(
                     _save_generated_messages_best_effort,
                     conv_id, user_id, result_data.get("generated_tasks", []),
                     request.user_input, thread_id, [],
-                )
+                ))
 
             logger.info(
                 "chat_v2_stream_completed",

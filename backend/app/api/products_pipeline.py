@@ -35,7 +35,11 @@ _FORMULA_CHARS = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _sanitize_formula(value: Any) -> Any:
-    if isinstance(value, str) and value.startswith(_FORMULA_CHARS):
+    if not isinstance(value, str):
+        return value
+    # 임베디드 newline은 CSV export 시 셀 분리를 유발하므로 공백으로 치환
+    value = value.replace("\n", " ").replace("\r", " ")
+    if value.startswith(_FORMULA_CHARS):
         return "'" + value
     return value
 

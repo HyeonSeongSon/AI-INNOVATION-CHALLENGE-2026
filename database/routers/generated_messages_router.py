@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, GeneratedMessage
-from routers.auth_utils import get_user_id_from_request, resolve_role
+from routers.auth_utils import get_request_user_id, get_user_id_from_request, resolve_role
 
 router = APIRouter(prefix="/api/generated-messages", tags=["GeneratedMessages"])
 
@@ -174,15 +174,18 @@ def list_generated_messages(
 
 
 @router.delete("")
-def delete_messages(raw_request: Request, ids: List[str] = Body(..., embed=True), db: Session = Depends(get_db)):
+def delete_messages(
+    ids: List[str] = Body(..., embed=True),
+    x_user_id: str = Depends(get_request_user_id),
+    db: Session = Depends(get_db),
+):
     """선택한 메시지 ID 목록 일괄 삭제"""
     if not ids:
         return {"deleted": 0}
-    user_id = get_user_id_from_request(raw_request)
-    role = resolve_role(db, user_id)
+    role = resolve_role(db, x_user_id)
     query = db.query(GeneratedMessage).filter(GeneratedMessage.id.in_(ids))
-    if role != "admin" and user_id:
-        query = query.filter(GeneratedMessage.user_id == user_id)
+    if role != "admin":
+        query = query.filter(GeneratedMessage.user_id == x_user_id)
     deleted = query.delete(synchronize_session=False)
     db.commit()
     return {"deleted": deleted}

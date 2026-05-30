@@ -572,7 +572,10 @@ class ProductRegistrationService:
                 timeout=settings.http_timeout_upload,
             )
             r.raise_for_status()
-            product_data["vectordb_id"] = r.json().get("vectordb_id", {})
+            index_result = r.json()
+            if not index_result.get("success", False):
+                raise RuntimeError("OpenSearch 색인 실패")
+            product_data["vectordb_id"] = index_result.get("vectordb_id", {})
             logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 
             # 5. DB 저장 (vectordb_id 포함)

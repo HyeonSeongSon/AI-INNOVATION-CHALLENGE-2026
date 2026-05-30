@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 from core.database import get_db
-from routers.auth_utils import get_user_id_from_request, resolve_role
+from routers.auth_utils import get_request_user_id, get_user_id_from_request, resolve_role
 from core.pagination import (
     PERSONAS_LIST_DEFAULT_PAGE_SIZE, PERSONAS_LIST_MAX_PAGE_SIZE,
     PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, PRODUCTS_BY_TAG_MAX_PAGE_SIZE,
@@ -506,17 +506,20 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
 
 
 @router.delete("/personas/{persona_id}", summary="페르소나 삭제")
-async def delete_persona(persona_id: str, raw_request: Request, db: Session = Depends(get_db)):
+async def delete_persona(
+    persona_id: str,
+    x_user_id: str = Depends(get_request_user_id),
+    db: Session = Depends(get_db),
+):
     from core.models import Persona
 
     persona = db.query(Persona).filter(Persona.persona_id == persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{persona_id}' not found")
 
-    user_id = get_user_id_from_request(raw_request)
-    role = resolve_role(db, user_id)
-    if role != "admin" and user_id:
-        if persona.user_id != user_id:
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        if persona.user_id != x_user_id:
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     db.delete(persona)
@@ -531,17 +534,20 @@ class PersonaBulkDeleteRequest(BaseModel):
 
 
 @router.delete("/personas", summary="페르소나 일괄 삭제")
-async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteRequest, db: Session = Depends(get_db)):
+async def delete_personas_bulk(
+    request: PersonaBulkDeleteRequest,
+    x_user_id: str = Depends(get_request_user_id),
+    db: Session = Depends(get_db),
+):
     from core.models import Persona
 
     if not request.ids:
         return {"deleted": 0}
 
-    user_id = get_user_id_from_request(raw_request)
-    role = resolve_role(db, user_id)
+    role = resolve_role(db, x_user_id)
     query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
-    if role != "admin" and user_id:
-        query = query.filter(Persona.user_id == user_id)
+    if role != "admin":
+        query = query.filter(Persona.user_id == x_user_id)
     deleted = query.delete(synchronize_session=False)
     db.commit()
 

@@ -17,6 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.api import marketing_api, products_pipeline, persona_pipeline
 from app.api.upload_jobs import cleanup_expired_jobs
+from app.core.cleanup import cleanup_old_checkpoints
 from app.config.settings import settings
 from app.core.data_loader import validate_static_configs
 from app.core.internal_auth import InternalTokenMiddleware
@@ -57,6 +58,17 @@ async def lifespan(app: FastAPI):
         await pool.wait()
         checkpointer = AsyncPostgresSaver(pool)
         await checkpointer.setup()
+
+        async with pool.connection() as conn:
+            await conn.execute(
+                "ALTER TABLE checkpoints ADD COLUMN IF NOT EXISTS"
+                " created_at TIMESTAMPTZ DEFAULT NOW()"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at"
+                " ON checkpoints(created_at)"
+            )
+
         app.state.pool = pool
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("crm_services_initialized")
@@ -74,14 +86,31 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.error("upload_cleanup_failed", exc_info=True)
 
+        async def _checkpoint_cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(86400)  # 24시간마다
+                try:
+                    deleted = await cleanup_old_checkpoints(
+                        pool,
+                        settings.checkpoint_retention_days,
+                        settings.checkpoint_cleanup_batch_size,
+                    )
+                    if deleted:
+                        logger.info("checkpoint_cleanup_done", deleted_threads=deleted)
+                except Exception as e:
+                    logger.warning("checkpoint_cleanup_failed", error_type=type(e).__name__)
+
         upload_cleanup_task = asyncio.create_task(_upload_cleanup_loop())
+        checkpoint_cleanup_task = asyncio.create_task(_checkpoint_cleanup_loop())
         logger.info("upload_cleanup_worker_started")
+        logger.info("checkpoint_cleanup_worker_started", retention_days=settings.checkpoint_retention_days)
 
         yield
 
         upload_cleanup_task.cancel()
+        checkpoint_cleanup_task.cancel()
         try:
-            await upload_cleanup_task
+            await asyncio.gather(upload_cleanup_task, checkpoint_cleanup_task, return_exceptions=True)
         except asyncio.CancelledError:
             pass
         await close_all()

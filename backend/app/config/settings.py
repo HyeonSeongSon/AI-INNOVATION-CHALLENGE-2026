@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # DB cleanup background worker
     cleanup_interval_seconds: int = 3600
     cleanup_token_grace_days: int = 1
+    max_refresh_tokens_per_user: int = 10  # 1명당 동시 활성 토큰 상한
+
+    # LangGraph checkpoint retention
+    checkpoint_retention_days: int = 30       # 마지막 체크포인트 기준 보존 기간 (일)
+    checkpoint_cleanup_batch_size: int = 500  # 1회 삭제 최대 thread 수 (락 경합 방지)
 
     # A2A URLs
     recommend_agent_url: str = "http://localhost:8001"
@@ -162,6 +167,9 @@ class Settings(BaseSettings):
     sse_keepalive_timeout: float = 25.0
     max_upload_bytes: int = 52428800  # 50 * 1024 * 1024
 
+    # Chat request body size limit (미들웨어에서 강제 적용)
+    max_chat_body_bytes: int = 10 * 1024 * 1024  # 10MB
+
     # Upload concurrency
     upload_persona_concurrency: int = 5
     upload_product_concurrency: int = 3
@@ -192,7 +200,8 @@ class Settings(BaseSettings):
     image_max_chunks: int = 10
 
     # A2A retry backoff
-    a2a_retry_backoff_base: int = 2
+    a2a_retry_backoff_base: float = 2.0
+    a2a_retry_backoff_max: float = 30.0
 
     # LLM temperatures (역할별)
     llm_temperature_classifier: float = 0.0

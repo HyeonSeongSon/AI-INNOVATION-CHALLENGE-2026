@@ -244,6 +244,8 @@ class IndexMultivectorResponse(BaseModel):
     product_id: str
     indexed_counts: Dict[str, int]
     vectordb_id: Dict[str, List[str]]
+    partial_failure: bool = False
+    failed_counts: Dict[str, int] = {}
 
 
 def get_opensearch_client() -> OpenSearchHybridClient:
@@ -727,6 +729,7 @@ async def index_multivector(request: IndexMultivectorRequest):
     try:
         client = get_opensearch_client()
         indexed_counts: Dict[str, int] = {}
+        failed_counts: Dict[str, int] = {}
         vectordb_id: Dict[str, List[str]] = {}
 
         for field in _MULTIVECTOR_FIELD_NAMES:
@@ -756,18 +759,36 @@ async def index_multivector(request: IndexMultivectorRequest):
                 })
 
             response = await asyncio.to_thread(client.client.bulk, body=bulk_body, refresh=True)
-            failed = [item for item in response.get("items", []) if "error" in item.get("index", {})]
-            indexed_counts[field] = len(doc_ids) - len(failed)
-            vectordb_id[index_name] = doc_ids
+            failed_ids = {
+                item["index"]["_id"]
+                for item in response.get("items", [])
+                if "error" in item.get("index", {})
+            }
+            fail_count = len(failed_ids)
+            indexed_counts[field] = len(doc_ids) - fail_count
+            failed_counts[field] = fail_count
+            vectordb_id[index_name] = [d for d in doc_ids if d not in failed_ids]
 
-        logging.info(
-            f"멀티벡터 색인 완료 - product_id: {request.product_id}, counts: {indexed_counts}"
-        )
+        has_failure = any(v > 0 for v in failed_counts.values())
+        if has_failure:
+            logging.warning(
+                "index_multivector_partial_failure",
+                product_id=request.product_id,
+                failed_counts=failed_counts,
+            )
+        else:
+            logging.info(
+                "index_multivector_complete",
+                product_id=request.product_id,
+                indexed_counts=indexed_counts,
+            )
         return IndexMultivectorResponse(
-            success=True,
+            success=not has_failure,
             product_id=request.product_id,
             indexed_counts=indexed_counts,
             vectordb_id=vectordb_id,
+            partial_failure=has_failure,
+            failed_counts=failed_counts,
         )
 
     except Exception as e:

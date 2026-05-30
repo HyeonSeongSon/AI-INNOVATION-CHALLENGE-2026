@@ -16,6 +16,7 @@ from ..config.settings import settings
 from ..core.database import get_db
 from ..core.logging import get_logger
 from ..core.models import RefreshToken, User
+from ..core.cleanup import evict_excess_tokens
 from ..core.security import (
     DUMMY_HASH,
     create_access_token,
@@ -233,6 +234,8 @@ async def login(
 
     access_token = create_access_token(user_id=str(user.id), email=user.email, role=user.role)
     raw_refresh = generate_refresh_token()
+
+    evict_excess_tokens(db, user.id, settings.max_refresh_tokens_per_user)
 
     rt = RefreshToken(
         user_id=user.id,

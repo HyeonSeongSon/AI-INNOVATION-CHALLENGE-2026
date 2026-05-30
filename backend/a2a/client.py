@@ -13,6 +13,8 @@ from app.core.http_client_registry import register
 
 _logger = get_logger("a2a_client")
 
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({502, 503, 504})
+
 
 class A2AClient:
     def __init__(self, base_url: str):
@@ -69,8 +71,24 @@ class A2AClient:
                 except Exception as e:
                     _logger.error("a2a_response_parse_failed", error_type=type(e).__name__, exc_info=True)
                     raise ValueError("A2A 응답 파싱 실패") from None
-            except httpx.HTTPStatusError:
-                raise
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code not in _RETRYABLE_STATUS_CODES:
+                    raise
+                last_exc = e
+                error_type = f"HTTP{e.response.status_code}"
+                attempt_errors.append(f"attempt {attempt + 1}: {error_type}")
+                _logger.warning(
+                    "a2a_send_task_retry",
+                    url=self.base_url,
+                    attempt=attempt + 1,
+                    max_retries=settings.a2a_max_retries,
+                    error_type=error_type,
+                    status_code=e.response.status_code,
+                )
+                if attempt < settings.a2a_max_retries - 1:
+                    await asyncio.sleep(
+                        min(settings.a2a_retry_backoff_base ** attempt, settings.a2a_retry_backoff_max)
+                    )
             except (httpx.RequestError, httpx.TimeoutException) as e:
                 last_exc = e
                 error_type = type(e).__name__
@@ -83,7 +101,9 @@ class A2AClient:
                     error_type=error_type,
                 )
                 if attempt < settings.a2a_max_retries - 1:
-                    await asyncio.sleep(settings.a2a_retry_backoff_base ** attempt)
+                    await asyncio.sleep(
+                        min(settings.a2a_retry_backoff_base ** attempt, settings.a2a_retry_backoff_max)
+                    )
 
         _logger.error(
             "a2a_send_task_all_retries_exhausted",

@@ -5,6 +5,7 @@ Auth + BFF proxy — 외부 노출 서버.
 
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import httpx
@@ -16,6 +17,7 @@ from app.api import crm_proxy
 from app.config.settings import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
+from app.core.body_limit import BodySizeLimitMiddleware, PayloadTooLargeError
 from app.core.auth import get_auth_provider
 from app.core.cleanup import cleanup_loop
 
@@ -61,6 +63,10 @@ async def lifespan(app: FastAPI):
         window_seconds=settings.rate_limit_chat_window_seconds,
     )
 
+    # max_workers=20: DB 커넥션풀(pool_size=10, max_overflow=20)보다 작게 설정해 풀 고갈 방지
+    db_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="db_worker")
+    app.state.db_executor = db_executor
+
     app.state.crm_client = httpx.AsyncClient(
         base_url=settings.crm_service_url,
         headers={"X-Internal-Token": settings.internal_token},
@@ -87,6 +93,7 @@ async def lifespan(app: FastAPI):
         logger.info("cleanup_worker_stopped")
         await app.state.crm_client.aclose()
         await app.state.internal_client.aclose()
+        db_executor.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -96,6 +103,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(PayloadTooLargeError)
+async def payload_too_large_handler(request: Request, exc: PayloadTooLargeError):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=413, content={"detail": "요청 바디가 너무 큽니다."})
+
+
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_chat_body_bytes)
 app.add_middleware(RequestLoggingMiddleware)
 _allowed_origins = settings.allowed_origins
 app.add_middleware(
