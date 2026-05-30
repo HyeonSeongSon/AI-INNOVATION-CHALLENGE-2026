@@ -10,7 +10,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 from core.database import get_db
-from routers.auth_utils import resolve_role
+from routers.auth_utils import get_user_id_from_request, resolve_role
+from core.pagination import (
+    PERSONAS_LIST_DEFAULT_PAGE_SIZE, PERSONAS_LIST_MAX_PAGE_SIZE,
+    PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, PRODUCTS_BY_TAG_MAX_PAGE_SIZE,
+    PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, PRODUCTS_BY_BRAND_MAX_PAGE_SIZE,
+    PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, PRODUCTS_FILTER_MAX_PAGE_SIZE,
+    ANALYSIS_RESULTS_DEFAULT_PAGE_SIZE, ANALYSIS_RESULTS_MAX_PAGE_SIZE,
+)
 
 # 라우터 생성
 router = APIRouter(prefix="/api", tags=["Database"])
@@ -37,6 +44,8 @@ class PersonaListRequest(BaseModel):
     """페르소나 목록 조회 요청"""
     user_id: Optional[str] = Field(None, description="조회할 사용자 ID (없으면 전체 조회)")
     role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
+    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PERSONAS_LIST_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
 
 
 class PersonaCreate(BaseModel):
@@ -118,11 +127,15 @@ class ProductCreate(BaseModel):
 class ProductByTagRequest(BaseModel):
     """상품종류(태그)로 상품 조회 요청"""
     tag: str = Field(..., description="상품 태그(종류)", examples=["에센스&세럼&오일"])
+    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
 
 
 class ProductByBrandRequest(BaseModel):
     """브랜드명으로 상품 조회 요청"""
     brand: str = Field(..., description="브랜드명", examples=["설화수"])
+    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
 
 
 class ProductFilterRequest(BaseModel):
@@ -139,6 +152,8 @@ class ProductFilterRequest(BaseModel):
     lifestyle_values: Optional[List[str]] = Field(None, description="가치관 (OR 조건)")
     personal_color: Optional[str] = Field(None, description="퍼스널 컬러")
     shade_number: Optional[int] = Field(None, description="셰이드 번호")
+    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
 
 
 # ============================================================
@@ -200,6 +215,8 @@ class AnalysisResultDetailResponse(BaseModel):
 
 class AnalysisResultGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
+    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(ANALYSIS_RESULTS_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
 
 
 class SearchQueryResponse(BaseModel):
@@ -254,6 +271,22 @@ class ProductDetailResponse(BaseModel):
 
 class ProductListResponse(BaseModel):
     items: List[ProductDetailResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class PersonaListResponse(BaseModel):
+    items: List[PersonaDetailResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class AnalysisResultListResponse(BaseModel):
+    items: List[AnalysisResultDetailResponse]
     total: int
     page: int
     page_size: int
@@ -398,7 +431,7 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
     )
 
 
-@router.post("/personas/list", response_model=List[PersonaDetailResponse], summary="전체 페르소나 목록 조회")
+@router.post("/personas/list", response_model=PersonaListResponse, summary="전체 페르소나 목록 조회")
 async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: Session = Depends(get_db)):
     from core.models import Persona
     from sqlalchemy import or_
@@ -410,7 +443,10 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
             or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
         )
 
-    personas = query.order_by(Persona.persona_created_at.desc()).all()
+    page_size = min(request.page_size, PERSONAS_LIST_MAX_PAGE_SIZE)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    personas = query.order_by(Persona.persona_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
 
     email_map: dict[str, str] = {}
     if role == "admin":
@@ -425,42 +461,48 @@ async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: 
             ).fetchall()
             email_map = {r[0]: r[1] for r in email_rows}
 
-    return [
-        PersonaDetailResponse(
-            persona_id=p.persona_id,
-            name=p.name,
-            gender=p.gender,
-            age=p.age,
-            occupation=p.occupation,
-            skin_type=p.skin_type,
-            concerns=p.concerns,
-            personal_color=p.personal_color,
-            shade_number=p.shade_number,
-            preferred_colors=p.preferred_colors,
-            preferred_ingredients=p.preferred_ingredients,
-            avoided_ingredients=p.avoided_ingredients,
-            preferred_scents=p.preferred_scents,
-            lifestyle_values=p.lifestyle_values,
-            skincare_routine=p.skincare_routine,
-            main_environment=p.main_environment,
-            preferred_texture=p.preferred_texture,
-            hair_type=p.hair_type,
-            beauty_interests=p.beauty_interests,
-            pets=p.pets,
-            avg_sleep_hours=p.avg_sleep_hours,
-            stress_level=p.stress_level,
-            daily_screen_hours=p.daily_screen_hours,
-            shopping_style=p.shopping_style,
-            purchase_decision_factors=p.purchase_decision_factors,
-            price_sensitivity=p.price_sensitivity,
-            preferred_brands=p.preferred_brands,
-            avoided_brands=p.avoided_brands,
-            persona_created_at=p.persona_created_at,
-            ai_analysis=_build_ai_analysis(p.persona_summary),
-            created_by_email=email_map.get(p.user_id) or p.user_id or None,
-        )
-        for p in personas
-    ]
+    return PersonaListResponse(
+        items=[
+            PersonaDetailResponse(
+                persona_id=p.persona_id,
+                name=p.name,
+                gender=p.gender,
+                age=p.age,
+                occupation=p.occupation,
+                skin_type=p.skin_type,
+                concerns=p.concerns,
+                personal_color=p.personal_color,
+                shade_number=p.shade_number,
+                preferred_colors=p.preferred_colors,
+                preferred_ingredients=p.preferred_ingredients,
+                avoided_ingredients=p.avoided_ingredients,
+                preferred_scents=p.preferred_scents,
+                lifestyle_values=p.lifestyle_values,
+                skincare_routine=p.skincare_routine,
+                main_environment=p.main_environment,
+                preferred_texture=p.preferred_texture,
+                hair_type=p.hair_type,
+                beauty_interests=p.beauty_interests,
+                pets=p.pets,
+                avg_sleep_hours=p.avg_sleep_hours,
+                stress_level=p.stress_level,
+                daily_screen_hours=p.daily_screen_hours,
+                shopping_style=p.shopping_style,
+                purchase_decision_factors=p.purchase_decision_factors,
+                price_sensitivity=p.price_sensitivity,
+                preferred_brands=p.preferred_brands,
+                avoided_brands=p.avoided_brands,
+                persona_created_at=p.persona_created_at,
+                ai_analysis=_build_ai_analysis(p.persona_summary),
+                created_by_email=email_map.get(p.user_id) or p.user_id or None,
+            )
+            for p in personas
+        ],
+        total=total,
+        page=request.page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.delete("/personas/{persona_id}", summary="페르소나 삭제")
@@ -471,7 +513,7 @@ async def delete_persona(persona_id: str, raw_request: Request, db: Session = De
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{persona_id}' not found")
 
-    user_id = raw_request.headers.get("X-User-Id")
+    user_id = get_user_id_from_request(raw_request)
     role = resolve_role(db, user_id)
     if role != "admin" and user_id:
         if persona.user_id != user_id:
@@ -495,7 +537,7 @@ async def delete_personas_bulk(raw_request: Request, request: PersonaBulkDeleteR
     if not request.ids:
         return {"deleted": 0}
 
-    user_id = raw_request.headers.get("X-User-Id")
+    user_id = get_user_id_from_request(raw_request)
     role = resolve_role(db, user_id)
     query = db.query(Persona).filter(Persona.persona_id.in_(request.ids))
     if role != "admin" and user_id:
@@ -519,7 +561,7 @@ async def filter_personas(request: PersonaFilterRequest, raw_request: Request, d
 
     query = db.query(Persona)
 
-    header_user_id = raw_request.headers.get("X-User-Id")
+    header_user_id = get_user_id_from_request(raw_request)
     effective_user_id = header_user_id or request.user_id
     role = resolve_role(db, effective_user_id)
     if role != "admin" and effective_user_id:
@@ -610,7 +652,7 @@ async def create_analysis_result(request: AnalysisResultCreate, db: Session = De
     )
 
 
-@router.post("/analysis-results/get", response_model=List[AnalysisResultDetailResponse], summary="분석 결과 조회")
+@router.post("/analysis-results/get", response_model=AnalysisResultListResponse, summary="분석 결과 조회")
 async def get_analysis_results(request: AnalysisResultGetRequest, db: Session = Depends(get_db)):
     from core.models import AnalysisResult, Persona
 
@@ -618,19 +660,27 @@ async def get_analysis_results(request: AnalysisResultGetRequest, db: Session = 
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
 
-    results = db.query(AnalysisResult).filter(
-        AnalysisResult.persona_id == request.persona_id
-    ).order_by(AnalysisResult.analysis_created_at.desc()).all()
+    page_size = min(request.page_size, ANALYSIS_RESULTS_MAX_PAGE_SIZE)
+    query = db.query(AnalysisResult).filter(AnalysisResult.persona_id == request.persona_id)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    results = query.order_by(AnalysisResult.analysis_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
 
-    return [
-        AnalysisResultDetailResponse(
-            analysis_id=result.analysis_id,
-            persona_id=result.persona_id,
-            analysis_result=result.analysis_result,
-            analysis_created_at=result.analysis_created_at
-        )
-        for result in results
-    ]
+    return AnalysisResultListResponse(
+        items=[
+            AnalysisResultDetailResponse(
+                analysis_id=result.analysis_id,
+                persona_id=result.persona_id,
+                analysis_result=result.analysis_result,
+                analysis_created_at=result.analysis_created_at,
+            )
+            for result in results
+        ],
+        total=total,
+        page=request.page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.post("/search-queries", response_model=SearchQueryResponse, summary="검색 쿼리 생성")
@@ -855,21 +905,43 @@ async def get_product_by_id(product_id: str, db: Session = Depends(get_db)):
     return _to_product_detail(product)
 
 
-@router.post("/products/by-tag", response_model=List[ProductDetailResponse], summary="상품종류(소분류 태그)로 상품 조회")
+@router.post("/products/by-tag", response_model=ProductListResponse, summary="상품종류(소분류 태그)로 상품 조회")
 async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depends(get_db)):
     from core.models import Product
-    products = db.query(Product).filter(Product.sub_tag == request.tag).all()
-    return [_to_product_detail(p) for p in products]
+
+    page_size = min(request.page_size, PRODUCTS_BY_TAG_MAX_PAGE_SIZE)
+    query = db.query(Product).filter(Product.sub_tag == request.tag)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    products = query.order_by(Product.product_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
+    return ProductListResponse(
+        items=[_to_product_detail(p) for p in products],
+        total=total,
+        page=request.page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
-@router.post("/products/by-brand", response_model=List[ProductDetailResponse], summary="브랜드명으로 상품 조회")
+@router.post("/products/by-brand", response_model=ProductListResponse, summary="브랜드명으로 상품 조회")
 async def get_products_by_brand(request: ProductByBrandRequest, db: Session = Depends(get_db)):
     from core.models import Product
-    products = db.query(Product).filter(Product.brand == request.brand).all()
-    return [_to_product_detail(p) for p in products]
+
+    page_size = min(request.page_size, PRODUCTS_BY_BRAND_MAX_PAGE_SIZE)
+    query = db.query(Product).filter(Product.brand == request.brand)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    products = query.order_by(Product.product_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
+    return ProductListResponse(
+        items=[_to_product_detail(p) for p in products],
+        total=total,
+        page=request.page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
-@router.post("/products/filter", response_model=List[ProductDetailResponse], summary="상품 필터링 조회")
+@router.post("/products/filter", response_model=ProductListResponse, summary="상품 필터링 조회")
 async def filter_products(request: ProductFilterRequest, db: Session = Depends(get_db)):
     from core.models import Product
     from sqlalchemy import and_, or_, cast
@@ -919,8 +991,17 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
     if request.avoided_ingredients:
         query = query.filter(~Product.avoided_ingredients.op('&&')(cast(request.avoided_ingredients, ARRAY(Text))))
 
-    products = query.all()
-    return [_to_product_detail(p) for p in products]
+    page_size = min(request.page_size, PRODUCTS_FILTER_MAX_PAGE_SIZE)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+    products = query.order_by(Product.product_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
+    return ProductListResponse(
+        items=[_to_product_detail(p) for p in products],
+        total=total,
+        page=request.page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 # ============================================================

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, GeneratedMessage
-from routers.auth_utils import resolve_role
+from routers.auth_utils import get_user_id_from_request, resolve_role
 
 router = APIRouter(prefix="/api/generated-messages", tags=["GeneratedMessages"])
 
@@ -113,7 +113,7 @@ def list_generated_messages(
     db: Session = Depends(get_db),
 ):
     """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)"""
-    header_user_id = raw_request.headers.get("X-User-Id")
+    header_user_id = get_user_id_from_request(raw_request)
     header_role = resolve_role(db, header_user_id)
     effective_user_id = user_id if header_role == "admin" else header_user_id
     query = db.query(GeneratedMessage)
@@ -178,7 +178,7 @@ def delete_messages(raw_request: Request, ids: List[str] = Body(..., embed=True)
     """선택한 메시지 ID 목록 일괄 삭제"""
     if not ids:
         return {"deleted": 0}
-    user_id = raw_request.headers.get("X-User-Id")
+    user_id = get_user_id_from_request(raw_request)
     role = resolve_role(db, user_id)
     query = db.query(GeneratedMessage).filter(GeneratedMessage.id.in_(ids))
     if role != "admin" and user_id:
@@ -195,7 +195,7 @@ def count_generated_messages(
     db: Session = Depends(get_db),
 ):
     """user_id 기준 생성 메시지 총 개수 조회"""
-    header_user_id = raw_request.headers.get("X-User-Id") if raw_request else None
+    header_user_id = get_user_id_from_request(raw_request)
     header_role = resolve_role(db, header_user_id)
     effective_user_id = user_id if header_role == "admin" else header_user_id
     query = db.query(GeneratedMessage)

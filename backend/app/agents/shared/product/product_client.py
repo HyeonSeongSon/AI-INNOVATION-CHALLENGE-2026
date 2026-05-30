@@ -51,10 +51,11 @@ class ProductClient:
         try:
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/products/filter",
-                json=filters,
+                json={**filters, "page": 1, "page_size": 500},
             )
             response.raise_for_status()
-            products = response.json()
+            data = response.json()
+            products = data["items"]
             logger.info("products_filtered", product_count=len(products), filters=filters)
             return products
 

@@ -40,9 +40,11 @@ configure_langsmith()
 async def lifespan(app: FastAPI):
     from app.agents.shared.persona.persona_client import PersonaClient
     from app.agents.data_registration_agent.services.product_registration import ProductRegistrationService
+    from app.agents.tools.search_tools import init_search_http_client
 
     app.state.persona_client = PersonaClient()
     app.state.registration = ProductRegistrationService()
+    init_search_http_client()
 
     validate_static_configs()
 
@@ -63,7 +65,10 @@ async def lifespan(app: FastAPI):
             while True:
                 await asyncio.sleep(settings.cleanup_interval_seconds)
                 try:
-                    removed = await cleanup_expired_jobs(settings.upload_job_ttl_seconds)
+                    removed = await cleanup_expired_jobs(
+                        settings.upload_job_ttl_seconds,
+                        settings.upload_job_done_ttl_seconds,
+                    )
                     if removed:
                         logger.info("upload_jobs_cleaned", removed=removed)
                 except Exception:
@@ -105,8 +110,13 @@ async def health(req: Request):
     if pool is not None:
         try:
             async with pool.connection() as conn:
-                await conn.execute("SELECT 1")
+                await asyncio.wait_for(
+                    conn.execute("SELECT 1"),
+                    timeout=settings.health_check_db_timeout,
+                )
             db_ok = True
+        except asyncio.TimeoutError:
+            logger.warning("health_check_db_timeout")
         except Exception as e:
             logger.warning("health_check_db_failed", error_type=type(e).__name__)
 

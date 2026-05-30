@@ -181,8 +181,24 @@ class CRMMessageAgent:
         }
 
         try:
-            result = await self.workflow.ainvoke(initial_state, config)
-
+            result = await asyncio.wait_for(
+                self.workflow.ainvoke(initial_state, config),
+                timeout=settings.graph_execution_timeout,
+            )
+        except asyncio.TimeoutError:
+            _logger.error("workflow_timeout", thread_id=thread_id)
+            return {
+                "status": "failed",
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "recommended_products": [],
+                "messages": [],
+                "generated_tasks": [],
+                "regeneration_history": [],
+                "logs": ["[ERROR] 처리 시간이 초과되었습니다."],
+                "error": "처리 시간이 초과되었습니다.",
+            }
+        try:
             intermediate = result.get("intermediate", {})
             raw_status = result.get("status")
             api_status = "failed" if raw_status == "failed" else "completed"
@@ -303,13 +319,23 @@ class CRMMessageAgent:
                 await queue.put(("error", None))  # str(e) 절대 큐에 넣지 않음
 
         producer = asyncio.create_task(_produce())
+        _deadline = asyncio.get_event_loop().time() + settings.graph_execution_timeout
         try:
             while True:
+                _remaining = _deadline - asyncio.get_event_loop().time()
+                if _remaining <= 0:
+                    yield _sse({"type": "error", "message": "처리 시간이 초과되었습니다."})
+                    yield _sse({"type": "done"})
+                    return
                 try:
                     kind, data = await asyncio.wait_for(
-                        queue.get(), timeout=settings.sse_keepalive_timeout
+                        queue.get(), timeout=min(settings.sse_keepalive_timeout, _remaining)
                     )
                 except asyncio.TimeoutError:
+                    if asyncio.get_event_loop().time() >= _deadline:
+                        yield _sse({"type": "error", "message": "처리 시간이 초과되었습니다."})
+                        yield _sse({"type": "done"})
+                        return
                     yield ": keepalive\n\n"
                     continue
 

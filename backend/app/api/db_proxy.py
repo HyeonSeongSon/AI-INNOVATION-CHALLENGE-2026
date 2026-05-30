@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from ..config.settings import settings
 from ..core.auth import UserContext
+from ..core.auth_utils import create_user_assertion
 from .deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["DB Proxy"])
@@ -85,7 +86,7 @@ async def proxy_conversations_list(
 ):
     return await _proxy(
         client, "GET", "/api/conversations", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -98,7 +99,7 @@ async def proxy_conversations_get(
 ):
     return await _proxy(
         client, "GET", f"/api/conversations/{str(conv_id)}", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -111,7 +112,7 @@ async def proxy_conversations_update(
 ):
     return await _proxy(
         client, "PUT", f"/api/conversations/{str(conv_id)}/messages", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -124,7 +125,7 @@ async def proxy_conversations_delete(
 ):
     return await _proxy(
         client, "DELETE", f"/api/conversations/{str(conv_id)}", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -167,7 +168,7 @@ async def proxy_personas_bulk_delete(
 ):
     return await _proxy(
         client, "DELETE", "/api/personas", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -201,7 +202,7 @@ async def proxy_generated_messages_list(
 ):
     return await _proxy(
         client, "GET", "/api/generated-messages", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -213,7 +214,7 @@ async def proxy_generated_messages_count(
 ):
     return await _proxy(
         client, "GET", "/api/generated-messages/count", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -225,7 +226,7 @@ async def proxy_generated_messages_latest(
 ):
     return await _proxy(
         client, "GET", "/api/generated-messages/latest", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -237,7 +238,7 @@ async def proxy_generated_messages_delete(
 ):
     return await _proxy(
         client, "DELETE", "/api/generated-messages", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 

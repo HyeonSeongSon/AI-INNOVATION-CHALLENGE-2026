@@ -8,13 +8,13 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, ConversationMessage
-from routers.auth_utils import resolve_role
+from routers.auth_utils import get_request_user_id, resolve_role
 
 logger = logging.getLogger("conversations_api")
 
@@ -80,7 +80,7 @@ def create_conversation(body: CreateConversationRequest, db: Session = Depends(g
 
 @router.get("", response_model=List[ConversationSummary])
 def list_conversations(
-    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
     """사용자의 대화 목록 조회 (최신순, messages 필드 제외 / admin은 전체 조회)"""
@@ -95,7 +95,7 @@ def list_conversations(
 def get_conversation(
     conv_id: str,
     limit: int = Query(default=200, le=500),
-    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
     """대화 상세 조회 (messages 포함, 최근 limit건)"""
@@ -128,7 +128,7 @@ def get_conversation(
 def update_messages(
     conv_id: str,
     body: UpdateMessagesRequest,
-    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
     """메시지 배열 및 제목 갱신 (기존 메시지 삭제 후 재삽입)"""
@@ -156,7 +156,7 @@ def update_messages(
 @router.delete("/{conv_id}")
 def delete_conversation(
     conv_id: str,
-    x_user_id: str = Header(..., alias="X-User-Id"),
+    x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
     """대화 삭제"""

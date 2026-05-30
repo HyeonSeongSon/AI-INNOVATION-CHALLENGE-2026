@@ -294,6 +294,11 @@ async def upload_products_file(
 
     service = request.app.state.registration
     job = create_job("product", len(records), creator_user_id=current_user.user_id)
+    if job is None:
+        raise HTTPException(
+            status_code=409,
+            detail="활성 업로드 작업이 너무 많습니다. 기존 작업이 완료된 후 다시 시도하세요.",
+        )
 
     asyncio.create_task(
         _guarded_run_product_job(job, records, service)
@@ -314,6 +319,8 @@ async def stream_product_job(
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     if job.job_type != "product":
         raise HTTPException(status_code=400, detail="잘못된 작업 유형입니다.")
+    if job.creator_user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
     return StreamingResponse(
         _stream_job_events(job),
         media_type="text/event-stream",

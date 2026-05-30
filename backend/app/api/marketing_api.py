@@ -102,6 +102,7 @@ def _save_generated_messages_best_effort(
     """생성된 메시지를 DB에 저장한다. 실패해도 응답에 영향 없음."""
     db = SessionLocal()
     try:
+        saved_items: list[GeneratedMessage] = []
         for task in generated_tasks:
             _quality = task.get("quality_check") or {}
             _scores = _quality.get("llm_judge_scores") or {}
@@ -147,7 +148,10 @@ def _save_generated_messages_best_effort(
                 thread_id=thread_id,
             )
             db.add(gm)
+            saved_items.append(gm)
+        if saved_items:
             db.commit()
+        for gm in saved_items:
             logger.info(
                 "generated_message_saved",
                 conversation_id=conv_id,
@@ -408,10 +412,13 @@ async def chat_v2_stream(
                             if payload.get("type") == "result":
                                 _result_data = payload
                             elif payload.get("type") == "done" and _result_data is not None:
-                                # done yield 전에 DB 저장 실행
-                                # done 수신 후 클라이언트가 연결을 끊으면 generator task가
-                                # 취소되어 post-loop 코드가 실행되지 않을 수 있음
-                                await _persist_results(_result_data)
+                                # asyncio.shield: 클라이언트 연결 해제로 외부 태스크가 취소돼도
+                                # _persist_results 내부 Future는 독립적으로 실행 완료된다.
+                                try:
+                                    await asyncio.shield(_persist_results(_result_data))
+                                except asyncio.CancelledError:
+                                    logger.info("chat_v2_stream_disconnected_during_persist", conv_id=conv_id)
+                                    return
                                 _result_data = None
                     except Exception:
                         pass

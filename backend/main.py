@@ -55,6 +55,11 @@ async def lifespan(app: FastAPI):
         max_requests=settings.lockout_per_ip_max_attempts,
         window_seconds=settings.lockout_per_ip_window_seconds,
     )
+    app.state.chat_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_chat_max_requests,
+        window_seconds=settings.rate_limit_chat_window_seconds,
+    )
 
     app.state.crm_client = httpx.AsyncClient(
         base_url=settings.crm_service_url,
@@ -97,8 +102,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "Cache-Control"],
+    max_age=3600,
 )
 
 app.include_router(auth_router.router)

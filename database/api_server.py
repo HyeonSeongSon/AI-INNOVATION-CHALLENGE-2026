@@ -35,7 +35,7 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
         if request.url.path in _SKIP_PATHS:
             return await call_next(request)
         token = request.headers.get("X-Internal-Token", "")
-        if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+        if not token or not hmac.compare_digest(token, _INTERNAL_TOKEN):
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
 

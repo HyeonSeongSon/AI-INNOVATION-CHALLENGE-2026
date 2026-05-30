@@ -7,7 +7,7 @@ from typing import Annotated, Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
-from ...core.http_client_registry import register, replace
+from ...core.http_client_registry import register
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -25,21 +25,21 @@ DB_API_BASE_URL = settings.database_api_url + "/api"
 _http_client: Optional[httpx.AsyncClient] = None
 
 
-def _get_http_client() -> httpx.AsyncClient:
+def init_search_http_client() -> None:
     global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.http_timeout_default),
-            headers={"X-Internal-Token": settings.internal_token},
+    _http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(settings.http_timeout_default),
+        headers={"X-Internal-Token": settings.internal_token},
+    )
+    register(_http_client)
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    if _http_client is None or _http_client.is_closed:
+        raise RuntimeError(
+            "Search HTTP client not initialized — "
+            "call init_search_http_client() in lifespan before handling requests"
         )
-        register(_http_client)
-    elif _http_client.is_closed:
-        old = _http_client
-        _http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.http_timeout_default),
-            headers={"X-Internal-Token": settings.internal_token},
-        )
-        replace(old, _http_client)
     return _http_client
 
 # ============================================================
@@ -71,10 +71,10 @@ async def get_all_personas(config: Annotated[RunnableConfig, InjectedToolArg] = 
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/list",
-            json={"user_id": user_id, "role": role},
+            json={"user_id": user_id, "role": role, "page": 1, "page_size": 200},
         )
         response.raise_for_status()
-        personas = response.json()
+        personas = response.json()["items"]
 
     except httpx.HTTPStatusError:
         return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -102,10 +102,10 @@ async def get_products_by_tag(tag: str) -> str:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/products/by-tag",
-            json={"tag": tag}
+            json={"tag": tag, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()
+        products = response.json()["items"]
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -132,10 +132,10 @@ async def get_products_by_brand(brand: str) -> str:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/products/by-brand",
-            json={"brand": brand}
+            json={"brand": brand, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()
+        products = response.json()["items"]
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -264,7 +264,7 @@ class PersonaSearchFilter(BaseModel):
             "명시하지 않은 필드는 모두 'all'(AND)."
         )
     )
-    limit: int = Field(10, description="반환할 최대 결과 수 (기본 10, 최대 20)")
+    limit: int = Field(10, ge=1, le=20, description="반환할 최대 결과 수 (기본 10, 최대 20)")
 
 
 @tool(args_schema=PersonaSearchFilter)

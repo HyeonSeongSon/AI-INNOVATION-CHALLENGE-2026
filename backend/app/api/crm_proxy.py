@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 
 from ..config.settings import settings
 from ..core.auth import UserContext
-from .deps import get_current_user, require_admin
+from ..core.auth_utils import create_user_assertion
+from ..core.rate_limiter import PostgresRateLimiter
+from .deps import get_chat_limiter, get_current_user, require_admin
 
 router = APIRouter(prefix="/api", tags=["CRM Proxy"])
 
@@ -103,10 +105,13 @@ async def proxy_chat_v2(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_crm_client),
+    limiter: PostgresRateLimiter = Depends(get_chat_limiter),
 ):
+    if not await limiter.is_allowed(user.user_id):
+        raise HTTPException(status_code=429, detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.")
     return await _proxy(
         client, "POST", "/api/marketing/chat/v2", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
         timeout=httpx.Timeout(connect=settings.http_timeout_stream_connect, read=None, write=None, pool=settings.http_timeout_stream_pool),
     )
 
@@ -116,10 +121,13 @@ async def proxy_chat_v2_stream(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_crm_client),
+    limiter: PostgresRateLimiter = Depends(get_chat_limiter),
 ):
+    if not await limiter.is_allowed(user.user_id):
+        raise HTTPException(status_code=429, detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.")
     return await _proxy_stream(
         client, "POST", "/api/marketing/chat/v2/stream", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -143,7 +151,7 @@ async def proxy_products_register(
 ):
     return await _proxy_stream(
         client, "POST", "/api/pipeline/products/register", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -159,7 +167,7 @@ async def proxy_personas_create_from_text(
 ):
     return await _proxy(
         client, "POST", "/api/pipeline/personas/create-from-text", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -171,7 +179,7 @@ async def proxy_personas_create_from_file(
 ):
     return await _proxy_stream(
         client, "POST", "/api/pipeline/personas/create-from-file", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -189,7 +197,7 @@ async def proxy_personas_upload(
     )
     return await _proxy(
         client, "POST", "/api/pipeline/personas/create-from-file/upload", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
         timeout,
     )
 
@@ -203,7 +211,7 @@ async def proxy_personas_stream(
 ):
     return await _proxy_stream(
         client, "GET", f"/api/pipeline/personas/jobs/{job_id}/stream", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -221,7 +229,7 @@ async def proxy_products_upload(
     )
     return await _proxy(
         client, "POST", "/api/pipeline/products/register/upload", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
         timeout,
     )
 
@@ -235,5 +243,5 @@ async def proxy_products_stream(
 ):
     return await _proxy_stream(
         client, "GET", f"/api/pipeline/products/jobs/{job_id}/stream", request,
-        {"X-User-Id": user.user_id, "X-User-Role": user.role},
+        {"X-User-Assertion": create_user_assertion(user)},
     )

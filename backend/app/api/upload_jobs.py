@@ -1,6 +1,7 @@
 """
 Upload Job Store — 파일 업로드 백그라운드 처리를 위한 인메모리 Job 관리.
 Job은 생성 후 upload_job_ttl_seconds(기본 1시간) 경과 시 cleanup_expired_jobs()로 제거된다.
+done/error 상태 Job은 upload_job_done_ttl_seconds(기본 5분) 후 조기 제거된다.
 """
 
 import asyncio
@@ -10,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+from app.config.settings import settings
 
 EVENT_BUFFER_SIZE = 200
 
@@ -38,7 +41,14 @@ class UploadJob:
 _store: dict[str, UploadJob] = {}
 
 
-def create_job(job_type: str, total: int, creator_user_id: str) -> UploadJob:
+def create_job(job_type: str, total: int, creator_user_id: str) -> UploadJob | None:
+    active = sum(
+        1 for job in _store.values()
+        if job.creator_user_id == creator_user_id
+        and job.status in (JobStatus.PENDING, JobStatus.RUNNING)
+    )
+    if active >= settings.max_active_jobs_per_user:
+        return None
     job = UploadJob(
         job_id=str(uuid.uuid4()),
         job_type=job_type,
@@ -71,12 +81,15 @@ async def append_event(job: UploadJob, event: dict[str, Any]) -> None:
         job.condition.notify_all()
 
 
-async def cleanup_expired_jobs(ttl_seconds: int) -> int:
-    """TTL이 지난 Job을 제거한다. 제거된 Job 수를 반환한다."""
+async def cleanup_expired_jobs(ttl_seconds: int, done_ttl_seconds: int) -> int:
+    """TTL이 지난 Job을 제거한다. done/error 상태는 done_ttl_seconds, 그 외는 ttl_seconds 적용."""
     now = datetime.now(timezone.utc)
+    terminal = (JobStatus.DONE, JobStatus.ERROR)
     expired = [
         jid for jid, job in _store.items()
-        if (now - job.updated_at).total_seconds() > ttl_seconds
+        if (now - job.updated_at).total_seconds() > (
+            done_ttl_seconds if job.status in terminal else ttl_seconds
+        )
     ]
     for jid in expired:
         del _store[jid]

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512", "RS256"] = "HS256"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
+    user_assertion_expire_seconds: int = 30
 
     # Rate limiting — auth endpoints
     rate_limit_login_max_requests: int = 10
@@ -75,6 +76,10 @@ class Settings(BaseSettings):
     account_lockout_duration_seconds: int = 900
     lockout_per_ip_max_attempts: int = 10     # 동일 IP-이메일 쌍에서 최대 실패 횟수
     lockout_per_ip_window_seconds: int = 900  # 잠금 지속 시간 (기본 15분)
+
+    # Rate limiting — LLM chat endpoints (per-user)
+    rate_limit_chat_max_requests: int = 20
+    rate_limit_chat_window_seconds: int = 3600  # 1시간당 20회
 
     # DB cleanup background worker
     cleanup_interval_seconds: int = 3600
@@ -105,6 +110,8 @@ class Settings(BaseSettings):
 
     # File upload background job
     upload_job_ttl_seconds: int = 3600
+    upload_job_done_ttl_seconds: int = 300      # 완료/에러 job 5분 후 제거
+    max_active_jobs_per_user: int = 5           # 사용자당 동시 활성 job 상한
     upload_file_read_timeout: float = 30.0
     upload_file_parse_timeout: float = 15.0
 
@@ -115,6 +122,7 @@ class Settings(BaseSettings):
 
     # LangGraph
     langgraph_recursion_limit: int = 100
+    graph_execution_timeout: float = 300.0
 
     # Product recommendation tuning
     rrf_k: int = 60
@@ -170,6 +178,9 @@ class Settings(BaseSettings):
     # Database pool (psycopg async — LangGraph checkpointer)
     postgres_async_pool_min_size: int = 1
     postgres_async_pool_max_size: int = 10
+
+    # Health check
+    health_check_db_timeout: float = 2.0
 
     # Product retrieval
     product_retrieval_top_k: int = 100

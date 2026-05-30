@@ -3,10 +3,10 @@ import hmac
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AfterValidator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from typing import Dict, Optional, List, Union
+from typing import Annotated, Dict, Optional, List, Union
 import logging
 import os
 from dotenv import load_dotenv
@@ -22,7 +22,30 @@ logging.basicConfig(
 )
 
 _INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+if not _INTERNAL_TOKEN:
+    raise RuntimeError("INTERNAL_TOKEN 환경변수가 설정되지 않았습니다.")
+if len(_INTERNAL_TOKEN) < 32:
+    raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
 _SKIP_PATHS = {"/", "/health"}
+
+ALLOWED_INDEX_NAMES: frozenset[str] = frozenset({
+    "product_index_v3",
+    "forbidden_sentences",
+    "product_v4_combined",
+    "product_v4_function_desc",
+    "product_v4_attribute_desc",
+    "product_v4_target_user",
+    "product_v4_spec_feature",
+})
+
+
+def _validate_index_name(v: str) -> str:
+    if v not in ALLOWED_INDEX_NAMES:
+        raise ValueError(f"허용되지 않는 인덱스 이름입니다: '{v}'")
+    return v
+
+
+ValidatedIndexName = Annotated[str, AfterValidator(_validate_index_name)]
 
 
 class InternalTokenMiddleware(BaseHTTPMiddleware):
@@ -30,7 +53,7 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
         if request.url.path in _SKIP_PATHS:
             return await call_next(request)
         token = request.headers.get("X-Internal-Token", "")
-        if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+        if not token or not hmac.compare_digest(token, _INTERNAL_TOKEN):
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
 
@@ -63,7 +86,7 @@ opensearch_client = None
 class ProductIDSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
     product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
-    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
+    index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 결과 개수 (1-100)")
     bm25_fields: Optional[List[str]] = Field(
@@ -90,7 +113,7 @@ class ProductIDSearchRequest(BaseModel):
 
 
 class SimilarSentenceRequest(BaseModel):
-    index_name: str = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
+    index_name: ValidatedIndexName = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
     query: str = Field(..., description="유사 문장을 찾을 검색 쿼리 텍스트", min_length=1)
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 유사 문장 개수 (기본값: 3)")
 
@@ -160,7 +183,7 @@ class FieldSearchRequest(BaseModel):
     )
     vector_field: str = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
     product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
-    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
+    index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=50, ge=1, le=200, description="반환할 결과 개수 (1-200)")
 
@@ -193,7 +216,7 @@ class FieldSearchResponse(BaseModel):
 
 class MultiVectorSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    index_name: str = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
+    index_name: ValidatedIndexName = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
     product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_items=1)
     top_k: int = Field(default=100, ge=1, le=500, description="반환할 상품 수")
     aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
@@ -276,14 +299,16 @@ async def health_check():
 @app.get("/api/product/{product_id}")
 async def get_product_by_id(
     product_id: str,
-    index_name: str = Query(default="product_index", description="검색할 인덱스 이름")
+    index_name: str = Query(default="product_index_v3", description="검색할 인덱스 이름")
 ):
     """
     Product ID로 단일 상품 문서 조회
 
     - **product_id**: 조회할 상품 ID (필수)
-    - **index_name**: 검색할 인덱스 이름 (기본값: product_index)
+    - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     """
+    if index_name not in ALLOWED_INDEX_NAMES:
+        raise HTTPException(status_code=422, detail="허용되지 않는 인덱스 이름입니다.")
     try:
         logging.info(f"Product ID 조회 요청 - product_id: {product_id}")
 
@@ -345,7 +370,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
 
     - **query**: 검색 쿼리 텍스트 (필수)
     - **product_ids**: 검색할 product_id 리스트 (필수)
-    - **index_name**: 검색할 인덱스 이름 (기본값: product_index)
+    - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     - **pipeline_id**: 사용할 search pipeline ID (기본값: hybrid-minmax-pipeline)
     - **top_k**: 반환할 결과 개수 (기본값: 3, 최대: 100)
     """

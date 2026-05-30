@@ -10,3 +10,4 @@ langchain-openai
 python-multipart
 httpx
 openpyxl
+python-jose[cryptography]
