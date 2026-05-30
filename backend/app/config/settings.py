@@ -242,6 +242,11 @@ class Settings(BaseSettings):
             raise ValueError("POSTGRES_PASSWORD 환경변수가 설정되지 않았습니다.")
         if not self.internal_token:
             raise ValueError("INTERNAL_TOKEN 환경변수가 설정되지 않았습니다.")
+        if len(self.internal_token) < 32:
+            raise ValueError(
+                "INTERNAL_TOKEN은 최소 32자 이상이어야 합니다. "
+                "'openssl rand -hex 32'로 생성하세요."
+            )
         if self.auth_mode == "api_key" and not self.service_api_key:
             raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
         if self.auth_mode == "jwt":

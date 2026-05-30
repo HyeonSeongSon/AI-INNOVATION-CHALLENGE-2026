@@ -85,7 +85,7 @@ opensearch_client = None
 # 요청/응답 모델
 class ProductIDSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
+    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
     index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 결과 개수 (1-100)")
@@ -182,7 +182,7 @@ class FieldSearchRequest(BaseModel):
         description="BM25 multi_match 대상 필드 리스트 (예: ['function_tags', 'function_desc'])"
     )
     vector_field: str = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
-    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
+    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
     index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=50, ge=1, le=200, description="반환할 결과 개수 (1-200)")
@@ -217,7 +217,7 @@ class FieldSearchResponse(BaseModel):
 class MultiVectorSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
     index_name: ValidatedIndexName = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
-    product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_items=1)
+    product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_length=1, max_length=500)
     top_k: int = Field(default=100, ge=1, le=500, description="반환할 상품 수")
     aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline")

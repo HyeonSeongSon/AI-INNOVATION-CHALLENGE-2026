@@ -46,7 +46,6 @@ class ConversationDetail(ConversationSummary):
 
 class CreateConversationRequest(BaseModel):
     """새 대화 생성 요청"""
-    user_id: str
     session_id: Optional[str] = None
     title: Optional[str] = "새 대화"
 
@@ -62,12 +61,16 @@ class UpdateMessagesRequest(BaseModel):
 # ============================================================
 
 @router.post("", status_code=201)
-def create_conversation(body: CreateConversationRequest, db: Session = Depends(get_db)):
+def create_conversation(
+    body: CreateConversationRequest,
+    x_user_id: str = Depends(get_request_user_id),
+    db: Session = Depends(get_db),
+):
     """새 대화 세션 미리 생성 — 첫 메시지 전송 전 conv_id 확보용"""
     new_id = str(uuid.uuid4())
     conv = Conversation(
         id=new_id,
-        user_id=body.user_id,
+        user_id=x_user_id,
         thread_id=new_id,
         session_id=body.session_id,
         title=body.title or "새 대화",

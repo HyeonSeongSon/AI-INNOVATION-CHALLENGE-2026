@@ -11,10 +11,15 @@ from jose import jwt as jose_jwt
 from ..config.settings import settings
 from .auth import UserContext
 
+_ASSERTION_ISSUER = "api-gateway"
+_ASSERTION_AUDIENCE = "internal"
+
 
 def create_user_assertion(user: UserContext) -> str:
     """인증된 UserContext를 서명된 JWT로 직렬화한다. 다운스트림 요청 헤더에 첨부."""
     payload = {
+        "iss": _ASSERTION_ISSUER,
+        "aud": _ASSERTION_AUDIENCE,
         "user_id": user.user_id,
         "role": user.role,
         "email": user.email,
@@ -25,8 +30,14 @@ def create_user_assertion(user: UserContext) -> str:
 
 
 def verify_user_assertion(token: str) -> UserContext:
-    """X-User-Assertion JWT 검증 후 UserContext 반환. 서명 오류/만료 시 JWTError 발생."""
-    payload = jose_jwt.decode(token, settings.internal_token, algorithms=["HS256"])
+    """X-User-Assertion JWT 검증 후 UserContext 반환. 서명 오류/만료/iss·aud 불일치 시 JWTError 발생."""
+    payload = jose_jwt.decode(
+        token,
+        settings.internal_token,
+        algorithms=["HS256"],
+        audience=_ASSERTION_AUDIENCE,
+        issuer=_ASSERTION_ISSUER,
+    )
     return UserContext(
         user_id=payload["user_id"],
         role=payload.get("role", "user"),

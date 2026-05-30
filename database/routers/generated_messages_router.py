@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, GeneratedMessage
-from routers.auth_utils import get_request_user_id, get_user_id_from_request, resolve_role
+from routers.auth_utils import get_request_user_id, resolve_role
 
 router = APIRouter(prefix="/api/generated-messages", tags=["GeneratedMessages"])
 
@@ -83,12 +83,19 @@ class FilterOptions(BaseModel):
 # ============================================================
 
 @router.get("/filter-options", response_model=FilterOptions)
-def get_filter_options(user_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
-    """user_id 기준 필터 드롭다운용 distinct 값 목록 조회 (user_id 없으면 전체)"""
+def get_filter_options(
+    user_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
+    """user_id 기준 필터 드롭다운용 distinct 값 목록 조회 (admin은 전체, 일반 사용자는 본인만)"""
+    role = resolve_role(db, x_user_id)
+    effective_user_id = user_id if role == "admin" else x_user_id
+
     def _distinct_values(col):
         q = db.query(col).filter(col.isnot(None), col != "")
-        if user_id:
-            q = q.filter(GeneratedMessage.user_id == user_id)
+        if effective_user_id:
+            q = q.filter(GeneratedMessage.user_id == effective_user_id)
         rows = q.distinct().all()
         return sorted([r[0] for r in rows])
 
@@ -101,21 +108,20 @@ def get_filter_options(user_id: Optional[str] = Query(None), db: Session = Depen
 
 @router.get("", response_model=GeneratedMessageFilterResponse)
 def list_generated_messages(
-    raw_request: Request,
     user_id: Optional[str] = Query(None),
-    limit: int = Query(20),
-    offset: int = Query(0),
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     brand: Optional[str] = Query(None),
     sub_tag: Optional[str] = Query(None),
     purpose: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
 ):
     """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)"""
-    header_user_id = get_user_id_from_request(raw_request)
-    header_role = resolve_role(db, header_user_id)
-    effective_user_id = user_id if header_role == "admin" else header_user_id
+    header_role = resolve_role(db, x_user_id)
+    effective_user_id = user_id if header_role == "admin" else x_user_id
     query = db.query(GeneratedMessage)
     if effective_user_id:
         query = query.filter(GeneratedMessage.user_id == effective_user_id)
@@ -194,13 +200,12 @@ def delete_messages(
 @router.get("/count")
 def count_generated_messages(
     user_id: Optional[str] = Query(None),
-    raw_request: Request = None,
     db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
 ):
     """user_id 기준 생성 메시지 총 개수 조회"""
-    header_user_id = get_user_id_from_request(raw_request)
-    header_role = resolve_role(db, header_user_id)
-    effective_user_id = user_id if header_role == "admin" else header_user_id
+    header_role = resolve_role(db, x_user_id)
+    effective_user_id = user_id if header_role == "admin" else x_user_id
     query = db.query(GeneratedMessage)
     if effective_user_id:
         query = query.filter(GeneratedMessage.user_id == effective_user_id)

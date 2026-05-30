@@ -6,6 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 _INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+_ASSERTION_ISSUER = "api-gateway"
+_ASSERTION_AUDIENCE = "internal"
 
 
 def resolve_role(db: Session, user_id: str | None) -> str:
@@ -21,7 +23,13 @@ def resolve_role(db: Session, user_id: str | None) -> str:
 
 
 def _decode_assertion(token: str) -> dict:
-    return jose_jwt.decode(token, _INTERNAL_TOKEN, algorithms=["HS256"])
+    return jose_jwt.decode(
+        token,
+        _INTERNAL_TOKEN,
+        algorithms=["HS256"],
+        audience=_ASSERTION_AUDIENCE,
+        issuer=_ASSERTION_ISSUER,
+    )
 
 
 def get_request_user_id(request: Request) -> str:

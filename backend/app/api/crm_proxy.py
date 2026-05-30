@@ -107,8 +107,13 @@ async def proxy_chat_v2(
     client: httpx.AsyncClient = Depends(get_crm_client),
     limiter: PostgresRateLimiter = Depends(get_chat_limiter),
 ):
-    if not await limiter.is_allowed(user.user_id):
-        raise HTTPException(status_code=429, detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.")
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return await _proxy(
         client, "POST", "/api/marketing/chat/v2", request,
         {"X-User-Assertion": create_user_assertion(user)},
@@ -123,8 +128,13 @@ async def proxy_chat_v2_stream(
     client: httpx.AsyncClient = Depends(get_crm_client),
     limiter: PostgresRateLimiter = Depends(get_chat_limiter),
 ):
-    if not await limiter.is_allowed(user.user_id):
-        raise HTTPException(status_code=429, detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.")
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return await _proxy_stream(
         client, "POST", "/api/marketing/chat/v2/stream", request,
         {"X-User-Assertion": create_user_assertion(user)},

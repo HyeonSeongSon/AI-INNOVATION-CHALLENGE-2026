@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 from core.database import get_db
-from routers.auth_utils import get_request_user_id, get_user_id_from_request, resolve_role
+from routers.auth_utils import get_request_user_id, resolve_role
 from core.pagination import (
     PERSONAS_LIST_DEFAULT_PAGE_SIZE, PERSONAS_LIST_MAX_PAGE_SIZE,
     PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, PRODUCTS_BY_TAG_MAX_PAGE_SIZE,
@@ -432,15 +432,19 @@ async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db))
 
 
 @router.post("/personas/list", response_model=PersonaListResponse, summary="전체 페르소나 목록 조회")
-async def list_personas(request: PersonaListRequest = PersonaListRequest(), db: Session = Depends(get_db)):
+async def list_personas(
+    request: PersonaListRequest = PersonaListRequest(),
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
     from core.models import Persona
     from sqlalchemy import or_
 
     query = db.query(Persona)
-    role = resolve_role(db, request.user_id)
-    if role != "admin" and request.user_id:
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
         query = query.filter(
-            or_(Persona.user_id == request.user_id, Persona.user_id.is_(None))
+            or_(Persona.user_id == x_user_id, Persona.user_id.is_(None))
         )
 
     page_size = min(request.page_size, PERSONAS_LIST_MAX_PAGE_SIZE)
@@ -555,7 +559,11 @@ async def delete_personas_bulk(
 
 
 @router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
-async def filter_personas(request: PersonaFilterRequest, raw_request: Request, db: Session = Depends(get_db)) -> List[Any]:
+async def filter_personas(
+    request: PersonaFilterRequest,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+) -> List[Any]:
     from core.models import Persona
     from sqlalchemy import cast
     from sqlalchemy.dialects.postgresql import ARRAY
@@ -567,13 +575,12 @@ async def filter_personas(request: PersonaFilterRequest, raw_request: Request, d
 
     query = db.query(Persona)
 
-    header_user_id = get_user_id_from_request(raw_request)
-    effective_user_id = header_user_id or request.user_id
-    role = resolve_role(db, effective_user_id)
-    if role != "admin" and effective_user_id:
+    role = resolve_role(db, x_user_id)
+    effective_user_id = request.user_id if role == "admin" else x_user_id
+    if role != "admin":
         from sqlalchemy import or_
         query = query.filter(
-            or_(Persona.user_id == effective_user_id, Persona.user_id.is_(None))
+            or_(Persona.user_id == x_user_id, Persona.user_id.is_(None))
         )
 
     if request.gender is not None:
@@ -860,12 +867,13 @@ async def list_products(
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
     min_discount: Optional[int] = None,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
     db: Session = Depends(get_db),
 ):
     from core.models import Product
 
+    page_size = min(page_size, PRODUCTS_FILTER_MAX_PAGE_SIZE)
     query = db.query(Product)
 
     if search:
