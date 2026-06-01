@@ -5,6 +5,7 @@ CRM Service — LangGraph 오케스트레이터 + Pipeline SSE (port 8006)
 
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -69,6 +70,8 @@ async def lifespan(app: FastAPI):
                 " ON checkpoints(created_at)"
             )
 
+        db_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="db_worker")
+        app.state.db_executor = db_executor
         app.state.pool = pool
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("crm_services_initialized")
@@ -113,6 +116,7 @@ async def lifespan(app: FastAPI):
             await asyncio.gather(upload_cleanup_task, checkpoint_cleanup_task, return_exceptions=True)
         except asyncio.CancelledError:
             pass
+        db_executor.shutdown(wait=False)
         await close_all()
 
 

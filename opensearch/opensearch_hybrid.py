@@ -430,7 +430,7 @@ class OpenSearchHybridClient:
         query_vector = self.model.encode(query_text).tolist()
 
         # 문장이 상품당 최대 6~7개이므로 size를 충분히 크게
-        fetch_size = top_k * 10
+        fetch_size = min(top_k * 10, 2000)
 
         query_body = {
             "size": fetch_size,

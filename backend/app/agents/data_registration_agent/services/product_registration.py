@@ -555,7 +555,18 @@ class ProductRegistrationService:
             if product_details:
                 product_data["product_details"] = product_details
 
-            # 4. OpenSearch 먼저 색인 → vectordb_id 수집
+            # 4. DB 저장 먼저 (vectordb_id 없이) — DB 트랜잭션이 원자적이므로
+            #    실패 시 자연 롤백. OpenSearch 고아 벡터를 방지하기 위해 순서를 교환.
+            logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
+            r = await self.http_client.post(
+                f"{settings.database_api_url}/api/products",
+                json=product_data,
+                timeout=settings.http_timeout_long,
+            )
+            r.raise_for_status()
+            logger.info("register_product_db_done", product_name=product_name, product_id=product_id)
+
+            # 5. OpenSearch 색인 → vectordb_id 수집
             logger.info(
                 "register_product_opensearch_start",
                 product_name=product_name,
@@ -575,17 +586,23 @@ class ProductRegistrationService:
             index_result = r.json()
             if not index_result.get("success", False):
                 raise RuntimeError("OpenSearch 색인 실패")
-            product_data["vectordb_id"] = index_result.get("vectordb_id", {})
+            vectordb_id = index_result.get("vectordb_id", {})
             logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 
-            # 5. DB 저장 (vectordb_id 포함)
-            logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
-            r = await self.http_client.post(
-                f"{settings.database_api_url}/api/products",
-                json=product_data,
-                timeout=settings.http_timeout_long,
-            )
-            r.raise_for_status()
+            # 6. DB에 vectordb_id 업데이트 — 실패해도 상품은 DB에 존재하고 검색 동작함
+            try:
+                r = await self.http_client.patch(
+                    f"{settings.database_api_url}/api/products/{product_id}/vectordb_id",
+                    json={"vectordb_id": vectordb_id},
+                    timeout=settings.http_timeout_default,
+                )
+                r.raise_for_status()
+            except Exception as patch_err:
+                logger.error(
+                    "register_product_vectordb_id_update_failed",
+                    product_id=product_id,
+                    error_type=type(patch_err).__name__,
+                )
 
             logger.info(
                 "register_product_success",

@@ -185,7 +185,7 @@ class ChatRequest(BaseModel):
     interrupt/resume 시에는 /chat 응답의 thread_id를 /resume 요청에 그대로 사용하세요.
     """
     user_input: str = Field(max_length=50_000)
-    session_id: str
+    session_id: str = Field(max_length=100)
     conversation_id: Optional[str] = None  # None이면 신규 대화 레코드 생성
     model: Optional[str] = None
     file_records: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=500)
@@ -351,17 +351,22 @@ async def chat_v2_stream(
         logger.error("chat_v2_stream_setup_failed", error_type=type(e).__name__, exc_info=True)
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
+    # Write-ahead: 유저 메시지를 AI 처리 시작 전에 즉시 저장
+    asyncio.create_task(asyncio.to_thread(
+        _save_conversation_messages_best_effort,
+        conv_id,
+        [{"role": "user", "content": request.user_input, "type": "text",
+          "timestamp": datetime.now(timezone.utc).isoformat(), "thread_id": conv_id}],
+    ))
+
     async def _persist_results(result_data: dict) -> None:
-        """result SSE 데이터를 DB에 저장한다. 실패해도 스트림 흐름에 영향 없음."""
+        """result SSE 데이터를 DB에 저장한다. 유저 메시지는 이미 선행 저장됨."""
         try:
             status = result_data.get("status")
             thread_id = result_data.get("thread_id", conv_id)
             now = datetime.now(timezone.utc).isoformat()
 
-            new_entries = [
-                {"role": "user", "content": request.user_input,
-                 "type": "text", "timestamp": now, "thread_id": thread_id},
-            ]
+            new_entries = []
             if status == "completed":
                 ai_messages = result_data.get("messages", [])
                 content = ai_messages[0].get("content", "") if ai_messages else ""
@@ -376,7 +381,8 @@ async def chat_v2_stream(
                     "type": "error", "timestamp": now, "thread_id": thread_id,
                 })
 
-            asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
+            if new_entries:
+                asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
 
             if status == "completed":
                 asyncio.create_task(asyncio.to_thread(
@@ -398,6 +404,7 @@ async def chat_v2_stream(
 
     async def generate():
         _result_data: dict | None = None
+        _error_payload: dict | None = None
 
         try:
             async for chunk in agent.chat_stream(
@@ -415,15 +422,26 @@ async def chat_v2_stream(
                         if isinstance(payload, dict):
                             if payload.get("type") == "result":
                                 _result_data = payload
-                            elif payload.get("type") == "done" and _result_data is not None:
-                                # asyncio.shield: 클라이언트 연결 해제로 외부 태스크가 취소돼도
-                                # _persist_results 내부 Future는 독립적으로 실행 완료된다.
-                                try:
-                                    await asyncio.shield(_persist_results(_result_data))
-                                except asyncio.CancelledError:
-                                    logger.info("chat_v2_stream_disconnected_during_persist", conv_id=conv_id)
-                                    return
-                                _result_data = None
+                            elif payload.get("type") == "error":
+                                _error_payload = payload
+                            elif payload.get("type") == "done":
+                                if _result_data is not None:
+                                    # asyncio.shield: 클라이언트 연결 해제로 외부 태스크가 취소돼도
+                                    # _persist_results 내부 Future는 독립적으로 실행 완료된다.
+                                    try:
+                                        await asyncio.shield(_persist_results(_result_data))
+                                    except asyncio.CancelledError:
+                                        logger.info("chat_v2_stream_disconnected_during_persist", conv_id=conv_id)
+                                        return
+                                    _result_data = None
+                                elif _error_payload is not None:
+                                    error_msg = _error_payload.get("message") or "처리 중 오류가 발생했습니다."
+                                    asyncio.create_task(asyncio.to_thread(
+                                        _save_conversation_messages_best_effort, conv_id,
+                                        [{"role": "assistant", "content": error_msg, "type": "error",
+                                          "timestamp": datetime.now(timezone.utc).isoformat(), "thread_id": conv_id}],
+                                    ))
+                                    _error_payload = None
                     except Exception:
                         pass
                 yield chunk
@@ -433,6 +451,11 @@ async def chat_v2_stream(
             return
         except Exception as e:
             logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
+            asyncio.create_task(asyncio.to_thread(
+                _save_conversation_messages_best_effort, conv_id,
+                [{"role": "assistant", "content": "스트리밍 중 오류가 발생했습니다.", "type": "error",
+                  "timestamp": datetime.now(timezone.utc).isoformat(), "thread_id": conv_id}],
+            ))
             yield 'data: {"type":"error","message":"스트리밍 중 오류가 발생했습니다."}\n\n'
             yield 'data: {"type":"done"}\n\n'
             return

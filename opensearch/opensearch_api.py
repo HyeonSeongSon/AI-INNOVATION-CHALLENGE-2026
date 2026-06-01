@@ -218,7 +218,7 @@ class MultiVectorSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
     index_name: ValidatedIndexName = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
     product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_length=1, max_length=500)
-    top_k: int = Field(default=100, ge=1, le=500, description="반환할 상품 수")
+    top_k: int = Field(default=100, ge=1, le=200, description="반환할 상품 수")
     aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
     pipeline_id: str = Field(default="hybrid-minmax-pipeline")
 
@@ -434,7 +434,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
                                     "knn": {
                                         "content_vector": {
                                             "vector": query_vector,
-                                            "k": request.top_k * 10,
+                                            "k": min(request.top_k * 10, 2000),
                                             "filter": {
                                                 "terms": {
                                                     "product_id": request.product_ids

@@ -209,7 +209,20 @@ async def _guarded_run_product_job(
     service: Any,
 ) -> None:
     try:
-        await _run_product_job(job, records, service)
+        await asyncio.wait_for(
+            _run_product_job(job, records, service),
+            timeout=settings.upload_job_max_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "product_job_timed_out",
+            job_id=job.job_id,
+            timeout=settings.upload_job_max_seconds,
+        )
+        try:
+            await append_event(job, {"type": "error", "detail": "상품 등록 시간이 초과됐습니다."})
+        except Exception:
+            logger.error("product_job_status_update_failed", job_id=job.job_id)
     except Exception:
         logger.error("product_job_outer_crashed", job_id=job.job_id, exc_info=True)
         try:

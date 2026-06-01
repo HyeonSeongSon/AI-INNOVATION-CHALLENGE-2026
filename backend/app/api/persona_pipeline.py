@@ -184,7 +184,20 @@ async def _guarded_run_persona_job(
     creator_user_id: str,
 ) -> None:
     try:
-        await _run_persona_job(job, texts, llm, persona_client, creator_user_id)
+        await asyncio.wait_for(
+            _run_persona_job(job, texts, llm, persona_client, creator_user_id),
+            timeout=settings.upload_job_max_seconds,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "persona_job_timed_out",
+            job_id=job.job_id,
+            timeout=settings.upload_job_max_seconds,
+        )
+        try:
+            await append_event(job, {"type": "error", "detail": "페르소나 생성 시간이 초과됐습니다."})
+        except Exception:
+            logger.error("persona_job_status_update_failed", job_id=job.job_id)
     except Exception:
         logger.error("persona_job_outer_crashed", job_id=job.job_id, exc_info=True)
         try:

@@ -3,9 +3,9 @@ PostgreSQL 데이터베이스 API 엔드포인트
 새로운 테이블 스키마에 맞춰 재구성 (POST 전용)
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
@@ -16,7 +16,6 @@ from core.pagination import (
     PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, PRODUCTS_BY_TAG_MAX_PAGE_SIZE,
     PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, PRODUCTS_BY_BRAND_MAX_PAGE_SIZE,
     PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, PRODUCTS_FILTER_MAX_PAGE_SIZE,
-    ANALYSIS_RESULTS_DEFAULT_PAGE_SIZE, ANALYSIS_RESULTS_MAX_PAGE_SIZE,
 )
 
 # 라우터 생성
@@ -79,49 +78,6 @@ class PersonaCreate(BaseModel):
     avoided_brands: Optional[List[str]] = Field(default=[], description="기피 브랜드", examples=[])
     persona_summary: Optional[str] = Field(None, description="AI 생성 페르소나 요약")
     user_id: Optional[str] = Field(None, description="생성자 사용자 ID")
-
-
-class AnalysisResultCreate(BaseModel):
-    """분석 결과 생성 요청"""
-    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
-    analysis_result: str = Field(..., description="분석 결과 텍스트", examples=["지성 피부에 적합한 모공 케어 제품 추천"])
-
-
-class SearchQueryCreate(BaseModel):
-    """검색 쿼리 생성 요청"""
-    analysis_id: int = Field(..., description="분석 ID", examples=[1])
-    search_query: str = Field(..., description="검색 쿼리", examples=["지성 피부 모공 케어 세럼"])
-
-
-class ProductCreate(BaseModel):
-    """상품 생성 요청"""
-    model_config = ConfigDict(extra="forbid")
-    product_id: str = Field(..., description="상품 ID", examples=["A20251200001"])
-    vectordb_id: Optional[dict] = Field(None, description="VectorDB ID (index별 doc_id 맵)")
-    product_name: str = Field(..., description="상품명", examples=["수분 세럼 50ml"])
-    brand: Optional[str] = Field(None, description="브랜드", examples=["설화수"])
-    category: Optional[str] = Field(None, description="상품 대분류", examples=["뷰티툴"])
-    tag: Optional[str] = Field(None, description="상품 중분류", examples=["마사지/전동케어"])
-    sub_tag: Optional[str] = Field(None, description="상품 소분류", examples=["전동마사지기"])
-    rating: Optional[float] = Field(None, description="별점", examples=[4.5])
-    review_count: Optional[int] = Field(0, description="리뷰 수", examples=[128])
-    original_price: Optional[int] = Field(None, description="원가", examples=[50000])
-    discount_rate: Optional[int] = Field(None, description="할인율", examples=[20])
-    sale_price: Optional[int] = Field(None, description="판매가", examples=[40000])
-    skin_type: Optional[List[str]] = Field(default=[], description="피부 타입")
-    concerns: Optional[List[str]] = Field(default=[], description="고민")
-    preferred_colors: Optional[List[str]] = Field(default=[], description="선호 색상")
-    preferred_ingredients: Optional[List[str]] = Field(default=[], description="선호 성분")
-    avoided_ingredients: Optional[List[str]] = Field(default=[], description="기피 성분")
-    preferred_scents: Optional[List[str]] = Field(default=[], description="선호 향")
-    lifestyle_values: Optional[List[str]] = Field(default=[], description="가치관/라이프스타일")
-    exclusive_product: Optional[str] = Field(None, description="전용 제품")
-    personal_color: Optional[List[str]] = Field(default=[], description="퍼스널 컬러")
-    skin_shades: Optional[List[int]] = Field(default=[], description="피부톤 번호")
-    product_image_url: Optional[List[str]] = Field(default=[], description="상품 이미지 URL")
-    product_page_url: Optional[str] = Field(None, description="상품 페이지 URL")
-    product_comment: Optional[str] = Field(None, description="상품 한줄소개")
-    product_details: Optional[dict] = Field(None, description="구조화 상품 정보 (JSONB)")
 
 
 class ProductByTagRequest(BaseModel):
@@ -200,44 +156,6 @@ class PersonaDetailResponse(BaseModel):
     created_by_email: Optional[str] = None
 
 
-class AnalysisResultResponse(BaseModel):
-    analysis_id: int
-    persona_id: str
-    analysis_created_at: Optional[datetime] = None
-
-
-class AnalysisResultDetailResponse(BaseModel):
-    analysis_id: int
-    persona_id: str
-    analysis_result: str
-    analysis_created_at: Optional[datetime] = None
-
-
-class AnalysisResultGetRequest(BaseModel):
-    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
-    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
-    page_size: int = Field(ANALYSIS_RESULTS_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
-
-
-class SearchQueryResponse(BaseModel):
-    query_id: int
-    analysis_id: int
-    search_query: str
-    query_created_at: Optional[datetime] = None
-
-
-class SearchQueryGetRequest(BaseModel):
-    analysis_id: int = Field(..., description="분석 ID", examples=[1])
-
-
-class ProductResponse(BaseModel):
-    product_id: str
-    product_name: str
-    brand: Optional[str] = None
-    sale_price: Optional[int] = None
-    rating: Optional[float] = None
-    product_created_at: Optional[datetime] = None
-
 
 class ProductDetailResponse(BaseModel):
     product_id: str
@@ -285,14 +203,6 @@ class PersonaListResponse(BaseModel):
     total_pages: int
 
 
-class AnalysisResultListResponse(BaseModel):
-    items: List[AnalysisResultDetailResponse]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-
-
 class ProductSearchQueryCreate(BaseModel):
     """페르소나 검색 쿼리 저장 요청"""
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
@@ -324,43 +234,6 @@ class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
     user_id: Optional[str] = Field(None, description="조회 요청자 사용자 ID (없으면 소유권 검증 생략)")
     role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
-
-
-class PersonaFilterRequest(BaseModel):
-    user_id: Optional[str] = None
-    role: Optional[str] = None
-    gender: Optional[str] = None
-    age_min: Optional[int] = None
-    age_max: Optional[int] = None
-    skin_type: Optional[List[str]] = None
-    concerns: Optional[List[str]] = None
-    personal_color: Optional[str] = None
-    lifestyle_values: Optional[List[str]] = None
-    stress_level: Optional[str] = None
-    price_sensitivity: Optional[str] = None
-    preferred_ingredients: Optional[List[str]] = None
-    avoided_ingredients: Optional[List[str]] = None
-    occupation: Optional[str] = None
-    beauty_interests: Optional[List[str]] = None
-    shopping_style: Optional[List[str]] = None
-    preferred_brands: Optional[List[str]] = None
-    avoided_brands: Optional[List[str]] = None
-    preferred_scents: Optional[List[str]] = None
-    preferred_colors: Optional[List[str]] = None
-    preferred_texture: Optional[List[str]] = None
-    hair_type: Optional[List[str]] = None
-    skincare_routine: Optional[List[str]] = None
-    main_environment: Optional[List[str]] = None
-    purchase_decision_factors: Optional[List[str]] = None
-    pets: Optional[List[str]] = None
-    shade_number_min: Optional[int] = None
-    shade_number_max: Optional[int] = None
-    avg_sleep_hours_min: Optional[int] = None
-    avg_sleep_hours_max: Optional[int] = None
-    daily_screen_hours_min: Optional[int] = None
-    daily_screen_hours_max: Optional[int] = None
-    array_modes: Dict[str, str] = Field(default_factory=dict)
-    limit: int = Field(10, ge=1, le=20)
 
 
 # ============================================================
@@ -509,29 +382,6 @@ async def list_personas(
     )
 
 
-@router.delete("/personas/{persona_id}", summary="페르소나 삭제")
-async def delete_persona(
-    persona_id: str,
-    x_user_id: str = Depends(get_request_user_id),
-    db: Session = Depends(get_db),
-):
-    from core.models import Persona
-
-    persona = db.query(Persona).filter(Persona.persona_id == persona_id).first()
-    if not persona:
-        raise HTTPException(status_code=404, detail=f"Persona with ID '{persona_id}' not found")
-
-    role = resolve_role(db, x_user_id)
-    if role != "admin":
-        if persona.user_id != x_user_id:
-            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
-
-    db.delete(persona)
-    db.commit()
-
-    return {"message": f"Persona '{persona_id}' deleted successfully"}
-
-
 class PersonaBulkDeleteRequest(BaseModel):
     """페르소나 일괄 삭제 요청"""
     ids: List[str] = Field(..., description="삭제할 페르소나 ID 목록")
@@ -556,188 +406,6 @@ async def delete_personas_bulk(
     db.commit()
 
     return {"deleted": deleted}
-
-
-@router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
-async def filter_personas(
-    request: PersonaFilterRequest,
-    db: Session = Depends(get_db),
-    x_user_id: str = Depends(get_request_user_id),
-) -> List[Any]:
-    from core.models import Persona
-    from sqlalchemy import cast
-    from sqlalchemy.dialects.postgresql import ARRAY
-    from sqlalchemy.types import Text
-
-    def array_filter(col, values: list, field_name: str):
-        op = '&&' if request.array_modes.get(field_name) == "any" else '@>'
-        return col.op(op)(cast(values, ARRAY(Text)))
-
-    query = db.query(Persona)
-
-    role = resolve_role(db, x_user_id)
-    effective_user_id = request.user_id if role == "admin" else x_user_id
-    if role != "admin":
-        from sqlalchemy import or_
-        query = query.filter(
-            or_(Persona.user_id == x_user_id, Persona.user_id.is_(None))
-        )
-
-    if request.gender is not None:
-        query = query.filter(Persona.gender == request.gender)
-    if request.age_min is not None:
-        query = query.filter(Persona.age >= request.age_min)
-    if request.age_max is not None:
-        query = query.filter(Persona.age <= request.age_max)
-    if request.personal_color is not None:
-        query = query.filter(Persona.personal_color == request.personal_color)
-    if request.stress_level is not None:
-        query = query.filter(Persona.stress_level == request.stress_level)
-    if request.price_sensitivity is not None:
-        query = query.filter(Persona.price_sensitivity == request.price_sensitivity)
-    if request.occupation is not None:
-        query = query.filter(Persona.occupation == request.occupation)
-    if request.shade_number_min is not None:
-        query = query.filter(Persona.shade_number >= request.shade_number_min)
-    if request.shade_number_max is not None:
-        query = query.filter(Persona.shade_number <= request.shade_number_max)
-    if request.avg_sleep_hours_min is not None:
-        query = query.filter(Persona.avg_sleep_hours >= request.avg_sleep_hours_min)
-    if request.avg_sleep_hours_max is not None:
-        query = query.filter(Persona.avg_sleep_hours <= request.avg_sleep_hours_max)
-    if request.daily_screen_hours_min is not None:
-        query = query.filter(Persona.daily_screen_hours >= request.daily_screen_hours_min)
-    if request.daily_screen_hours_max is not None:
-        query = query.filter(Persona.daily_screen_hours <= request.daily_screen_hours_max)
-
-    _ARRAY_FIELDS = [
-        ("skin_type", Persona.skin_type),
-        ("concerns", Persona.concerns),
-        ("lifestyle_values", Persona.lifestyle_values),
-        ("preferred_ingredients", Persona.preferred_ingredients),
-        ("avoided_ingredients", Persona.avoided_ingredients),
-        ("beauty_interests", Persona.beauty_interests),
-        ("shopping_style", Persona.shopping_style),
-        ("preferred_brands", Persona.preferred_brands),
-        ("avoided_brands", Persona.avoided_brands),
-        ("preferred_scents", Persona.preferred_scents),
-        ("preferred_colors", Persona.preferred_colors),
-        ("preferred_texture", Persona.preferred_texture),
-        ("hair_type", Persona.hair_type),
-        ("skincare_routine", Persona.skincare_routine),
-        ("main_environment", Persona.main_environment),
-        ("purchase_decision_factors", Persona.purchase_decision_factors),
-        ("pets", Persona.pets),
-    ]
-    for field_name, column in _ARRAY_FIELDS:
-        values = getattr(request, field_name)
-        if values:
-            query = query.filter(array_filter(column, values, field_name))
-
-    personas = query.limit(request.limit).all()
-    rows = []
-    for p in personas:
-        row = {c.name: getattr(p, c.name) for c in p.__table__.columns}
-        for k, v in row.items():
-            if hasattr(v, 'isoformat'):
-                row[k] = v.isoformat()
-        rows.append(row)
-    return rows
-
-
-@router.post("/analysis-results", response_model=AnalysisResultResponse, summary="분석 결과 생성")
-async def create_analysis_result(request: AnalysisResultCreate, db: Session = Depends(get_db)):
-    from core.models import AnalysisResult, Persona
-
-    persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
-    if not persona:
-        raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
-
-    analysis = AnalysisResult(**request.model_dump())
-    db.add(analysis)
-    db.commit()
-    db.refresh(analysis)
-
-    return AnalysisResultResponse(
-        analysis_id=analysis.analysis_id,
-        persona_id=analysis.persona_id,
-        analysis_created_at=analysis.analysis_created_at
-    )
-
-
-@router.post("/analysis-results/get", response_model=AnalysisResultListResponse, summary="분석 결과 조회")
-async def get_analysis_results(request: AnalysisResultGetRequest, db: Session = Depends(get_db)):
-    from core.models import AnalysisResult, Persona
-
-    persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
-    if not persona:
-        raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
-
-    page_size = min(request.page_size, ANALYSIS_RESULTS_MAX_PAGE_SIZE)
-    query = db.query(AnalysisResult).filter(AnalysisResult.persona_id == request.persona_id)
-    total = query.count()
-    total_pages = (total + page_size - 1) // page_size
-    results = query.order_by(AnalysisResult.analysis_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
-
-    return AnalysisResultListResponse(
-        items=[
-            AnalysisResultDetailResponse(
-                analysis_id=result.analysis_id,
-                persona_id=result.persona_id,
-                analysis_result=result.analysis_result,
-                analysis_created_at=result.analysis_created_at,
-            )
-            for result in results
-        ],
-        total=total,
-        page=request.page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
-
-
-@router.post("/search-queries", response_model=SearchQueryResponse, summary="검색 쿼리 생성")
-async def create_search_query(request: SearchQueryCreate, db: Session = Depends(get_db)):
-    from core.models import SearchQuery, AnalysisResult
-
-    analysis = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == request.analysis_id).first()
-    if not analysis:
-        raise HTTPException(status_code=404, detail=f"Analysis with ID '{request.analysis_id}' not found")
-
-    search = SearchQuery(**request.model_dump())
-    db.add(search)
-    db.commit()
-    db.refresh(search)
-
-    return SearchQueryResponse(
-        query_id=search.query_id,
-        analysis_id=search.analysis_id,
-        search_query=search.search_query,
-        query_created_at=search.query_created_at
-    )
-
-
-@router.post("/search-queries/get", response_model=List[SearchQueryResponse], summary="검색 쿼리 조회")
-async def get_search_queries(request: SearchQueryGetRequest, db: Session = Depends(get_db)):
-    from core.models import SearchQuery, AnalysisResult
-
-    analysis = db.query(AnalysisResult).filter(AnalysisResult.analysis_id == request.analysis_id).first()
-    if not analysis:
-        raise HTTPException(status_code=404, detail=f"Analysis with ID '{request.analysis_id}' not found")
-
-    queries = db.query(SearchQuery).filter(
-        SearchQuery.analysis_id == request.analysis_id
-    ).order_by(SearchQuery.query_created_at.desc()).all()
-
-    return [
-        SearchQueryResponse(
-            query_id=query.query_id,
-            analysis_id=query.analysis_id,
-            search_query=query.search_query,
-            query_created_at=query.query_created_at
-        )
-        for query in queries
-    ]
 
 
 @router.post("/product-search-queries", response_model=ProductSearchQueryResponse, summary="삼품 검색 쿼리 저장")
@@ -802,27 +470,24 @@ async def get_product_search_queries(request: ProductSearchQueryGetRequest, db: 
     )
 
 
-@router.post("/products", response_model=ProductResponse, summary="상품 생성")
-async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
+class ProductVectordbUpdate(BaseModel):
+    vectordb_id: dict
+
+
+@router.patch("/products/{product_id}/vectordb_id", summary="상품 vectordb_id 업데이트")
+async def update_product_vectordb_id(
+    product_id: str,
+    request: ProductVectordbUpdate,
+    db: Session = Depends(get_db),
+):
     from core.models import Product
 
-    existing = db.query(Product).filter(Product.product_id == request.product_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Product with ID '{request.product_id}' already exists")
-
-    product = Product(**request.model_dump())
-    db.add(product)
+    product = db.query(Product).filter(Product.product_id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product '{product_id}' not found")
+    product.vectordb_id = request.vectordb_id
     db.commit()
-    db.refresh(product)
-
-    return ProductResponse(
-        product_id=product.product_id,
-        product_name=product.product_name,
-        brand=product.brand,
-        sale_price=product.sale_price,
-        rating=float(product.rating) if product.rating else None,
-        product_created_at=product.product_created_at
-    )
+    return {"success": True, "product_id": product_id}
 
 
 def _to_product_detail(p) -> ProductDetailResponse:

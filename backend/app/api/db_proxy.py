@@ -4,7 +4,6 @@ DB Proxy Router — BFF(Backend for Frontend) 패턴.
 프론트엔드는 이 라우터를 통해 데이터에 접근하며, database 서비스 포트는 외부에 노출하지 않는다.
 """
 
-import json
 from uuid import UUID
 
 import httpx
@@ -56,25 +55,9 @@ async def proxy_conversations_create(
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    raw_body = await request.body()
-    if raw_body:
-        try:
-            body_data = json.loads(raw_body)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
-    else:
-        body_data = {}
-    body_data["user_id"] = user.user_id
-    try:
-        upstream = await client.post("/api/conversations", json=body_data)
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Database service timeout")
-    return Response(
-        content=upstream.content,
-        status_code=upstream.status_code,
-        media_type=upstream.headers.get("content-type", "application/json"),
+    return await _proxy(
+        client, "POST", "/api/conversations", request,
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -137,26 +120,9 @@ async def proxy_personas_list(
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    raw_body = await request.body()
-    if raw_body:
-        try:
-            body_data = json.loads(raw_body)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
-    else:
-        body_data = {}
-    body_data["user_id"] = user.user_id
-    body_data["role"] = user.role
-    try:
-        upstream = await client.post("/api/personas/list", json=body_data)
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Database service unavailable")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Database service timeout")
-    return Response(
-        content=upstream.content,
-        status_code=upstream.status_code,
-        media_type=upstream.headers.get("content-type", "application/json"),
+    return await _proxy(
+        client, "POST", "/api/personas/list", request,
+        {"X-User-Assertion": create_user_assertion(user)},
     )
 
 
@@ -188,10 +154,13 @@ async def proxy_product_search_queries_get(
 @router.get("/generated-messages/filter-options")
 async def proxy_generated_messages_filter_options(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy(client, "GET", "/api/generated-messages/filter-options", request)
+    return await _proxy(
+        client, "GET", "/api/generated-messages/filter-options", request,
+        {"X-User-Assertion": create_user_assertion(user)},
+    )
 
 
 @router.get("/generated-messages")

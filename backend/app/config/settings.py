@@ -119,6 +119,7 @@ class Settings(BaseSettings):
     max_active_jobs_per_user: int = 5           # 사용자당 동시 활성 job 상한
     upload_file_read_timeout: float = 30.0
     upload_file_parse_timeout: float = 15.0
+    upload_job_max_seconds: int = 7200           # 배치 잡 전체 최대 실행 시간 (기본 2시간)
 
     # LLM call timeouts (seconds)
     llm_timeout: float = 60.0

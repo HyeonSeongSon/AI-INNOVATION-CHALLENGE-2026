@@ -388,7 +388,7 @@ export default function PersonaManager() {
         user_id: user?.role === 'admin' ? undefined : user?.id,
         role: user?.role,
       });
-      const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
+      const rawData = Array.isArray(response.data) ? response.data : response.data.items || [];
       const formatted = rawData.map(p => ({
         ...p,
         id: p.persona_id || p.id,
@@ -400,7 +400,10 @@ export default function PersonaManager() {
       }));
       setPersonas(formatted);
     } catch (err) {
-      console.warn('페르소나 목록 로드 실패:', err);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      console.error('페르소나 목록 로드 실패:', status, detail, err);
+      addToast(`페르소나 목록 로드 실패 (${status ?? 'network'})${detail ? ': ' + detail : ''}`, 'error');
       setPersonas([]);
     } finally {
       setLoading(false);

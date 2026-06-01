@@ -7,6 +7,8 @@ from typing import Annotated, Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
+from ...core.auth import UserContext
+from ...core.auth_utils import create_user_assertion
 from ...core.http_client_registry import register
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
@@ -42,6 +44,14 @@ def _get_http_client() -> httpx.AsyncClient:
         )
     return _http_client
 
+
+def _make_user_assertion(user_id: str | None, role: str) -> str | None:
+    if not user_id:
+        return None
+    return create_user_assertion(
+        UserContext(user_id=user_id, role=role, email="", auth_method="jwt")
+    )
+
 # ============================================================
 # 로컬 데이터 파일 로드 (ToDo: DB에서 호출하도록 변경)
 # ============================================================
@@ -69,12 +79,15 @@ async def get_all_personas(config: Annotated[RunnableConfig, InjectedToolArg] = 
     role = configurable.get("role", "user")
     try:
         client = _get_http_client()
+        assertion = _make_user_assertion(user_id, role)
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/list",
-            json={"user_id": user_id, "role": role, "page": 1, "page_size": 200},
+            json={"page": 1, "page_size": 200},
+            headers=extra_headers,
         )
         response.raise_for_status()
-        personas = response.json()["items"]
+        personas = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -105,7 +118,7 @@ async def get_products_by_tag(tag: str) -> str:
             json={"tag": tag, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()["items"]
+        products = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -135,7 +148,7 @@ async def get_products_by_brand(brand: str) -> str:
             json={"brand": brand, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()["items"]
+        products = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -302,7 +315,8 @@ async def search_personas_by_filter(
     }
     try:
         client = _get_http_client()
-        extra_headers = {"X-User-Id": payload["user_id"]} if payload.get("user_id") else {}
+        assertion = _make_user_assertion(configurable.get("user_id"), configurable.get("role", "user"))
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/filter",
             json=payload,
