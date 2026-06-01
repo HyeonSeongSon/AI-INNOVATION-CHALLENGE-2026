@@ -24,17 +24,33 @@ class PersonaClient:
             )
         return self._http_client
 
+    def _make_user_assertion(self, user_id: str) -> str:
+        """user_id를 database 엔드포인트용 X-User-Assertion JWT로 직렬화."""
+        import time
+        from jose import jwt as jose_jwt
+        payload = {
+            "iss": "api-gateway",
+            "aud": "internal",
+            "user_id": user_id,
+            "exp": int(time.time()) + 300,
+        }
+        return jose_jwt.encode(payload, settings.internal_token, algorithm="HS256")
+
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
 
     @traced(name="get_persona_info", run_type="tool")
-    async def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
+    async def get_persona_info(self, persona_id: str, user_id: str | None = None) -> Dict[str, Any]:
         """페르소나 정보 조회"""
         try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas/get",
                 json={"persona_id": persona_id},
+                headers=extra_headers,
             )
             response.raise_for_status()
             api_data = response.json()
@@ -79,12 +95,16 @@ class PersonaClient:
             raise
 
     @traced(name="get_existing_product_search_query", run_type="tool")
-    async def get_existing_product_search_query(self, persona_id: str) -> Optional[Dict[str, Any]]:
+    async def get_existing_product_search_query(self, persona_id: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         """DB에서 기존에 생성한 상품 검색 쿼리 조회 (가장 최신 결과 1개)"""
         try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/product-search-queries/get",
                 json={"persona_id": persona_id},
+                headers=extra_headers,
             )
             response.raise_for_status()
             results = response.json()
@@ -109,11 +129,13 @@ class PersonaClient:
         """페르소나 정보를 DB에 저장하고 persona_id 반환"""
         try:
             payload = {**persona_data}
+            extra_headers = {}
             if user_id:
-                payload["user_id"] = user_id
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas",
                 json=payload,
+                headers=extra_headers,
             )
             response.raise_for_status()
             result = response.json()
@@ -129,16 +151,20 @@ class PersonaClient:
             raise
 
     @traced(name="save_product_search_query", run_type="tool")
-    async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any]) -> Dict[str, int]:
+    async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any], user_id: str | None = None) -> Dict[str, int]:
         """생성한 상품 검색 쿼리를 DB에 저장"""
         try:
             data = {
                 "persona_id": persona_id,
                 **search_queries
             }
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/product-search-queries",
-                json=data
+                json=data,
+                headers=extra_headers,
             )
             response.raise_for_status()
             result = response.json()

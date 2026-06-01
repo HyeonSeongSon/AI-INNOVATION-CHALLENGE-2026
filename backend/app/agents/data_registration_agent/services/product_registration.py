@@ -220,6 +220,17 @@ class ProductRegistrationService:
         self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision)
         self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document)
 
+    def _make_user_assertion(self, user_id: str) -> str:
+        import time
+        from jose import jwt as jose_jwt
+        payload = {
+            "iss": "api-gateway",
+            "aud": "internal",
+            "user_id": user_id,
+            "exp": int(time.time()) + 300,
+        }
+        return jose_jwt.encode(payload, settings.internal_token, algorithm="HS256")
+
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
@@ -460,7 +471,7 @@ class ProductRegistrationService:
             f"멀티벡터 문서 생성 실패 (그룹 {group}). 오류: {errors}"
         )
 
-    async def register_product(self, record: dict) -> dict:
+    async def register_product(self, record: dict, *, user_id: str | None = None) -> dict:
         """
         JSONL 레코드 1개를 받아 구조화 → 멀티벡터 → DB 저장 → OpenSearch 색인을 수행한다.
 
@@ -591,9 +602,13 @@ class ProductRegistrationService:
 
             # 6. DB에 vectordb_id 업데이트 — 실패해도 상품은 DB에 존재하고 검색 동작함
             try:
+                extra_headers = {}
+                if user_id:
+                    extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
                 r = await self.http_client.patch(
                     f"{settings.database_api_url}/api/products/{product_id}/vectordb_id",
                     json={"vectordb_id": vectordb_id},
+                    headers=extra_headers,
                     timeout=settings.http_timeout_default,
                 )
                 r.raise_for_status()

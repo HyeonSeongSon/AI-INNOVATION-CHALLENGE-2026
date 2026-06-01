@@ -108,7 +108,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             source = "generated"
 
         if resolved_persona_id:
-            search_queries = await recommender.get_product_search_queries(resolved_persona_id)
+            user_id = config.get("configurable", {}).get("user_id")
+            search_queries = await recommender.get_product_search_queries(resolved_persona_id, user_id=user_id)
 
             if search_queries is None:
                 logger.warning(
@@ -132,7 +133,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
 
             user_id = config.get("configurable", {}).get("user_id")
             resolved_persona_id = await recommender.persona_client.save_persona(structured_persona, user_id=user_id)
-            await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries)
+            await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries, user_id=user_id)
 
             search_queries = {
                 "user_need_query": raw_queries["need"],

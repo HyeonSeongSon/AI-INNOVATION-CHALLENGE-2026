@@ -122,8 +122,9 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
         tasks = await generator.get_product_info(tasks)
         tasks = await generator.get_brand_tone(tasks)
         tasks = await generator.get_crm_prompt(tasks, persona_info=persona_info)
@@ -174,8 +175,9 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
     except Exception as e:
         agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None
@@ -251,8 +253,9 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     services = config["configurable"]["services"]
     applier = services.applier
     generator = services.generator
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
     except Exception as e:
         agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None

@@ -33,8 +33,11 @@ async def send_task(request: TaskSendRequest, req: Request):
         {},
     )
 
+    configurable: dict = {"thread_id": request.sessionId or request.id, "services": req.app.state.services}
+    if data.get("user_id"):
+        configurable["user_id"] = data["user_id"]
     config = {
-        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "configurable": configurable,
         "recursion_limit": settings.langgraph_recursion_limit,
     }
 

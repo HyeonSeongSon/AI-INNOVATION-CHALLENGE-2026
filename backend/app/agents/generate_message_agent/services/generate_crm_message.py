@@ -26,10 +26,10 @@ class CrmMessageGenerator:
             "라이프스타일/연령대 강조 소개": self._purpose.build_purpose_lifestyle_and_age_point_prompt,
         }
 
-    async def get_persona_info(self, persona_id: str) -> Optional[Dict]:
+    async def get_persona_info(self, persona_id: str, user_id: str | None = None) -> Optional[Dict]:
         """persona_id로 DB에서 페르소나 정보를 조회해 반환."""
         try:
-            return await self._persona_client.get_persona_info(persona_id)
+            return await self._persona_client.get_persona_info(persona_id, user_id=user_id)
         except Exception as e:
             logger.error("persona_fetch_failed", persona_id=persona_id, error_type=type(e).__name__, exc_info=True)
             raise

@@ -138,6 +138,7 @@ async def _run_product_job(
     job: UploadJob,
     records: List[Dict[str, Any]],
     service: Any,
+    creator_user_id: str,
 ) -> None:
     """파일 내 모든 레코드를 처리하고 결과를 job 이벤트 버퍼에 기록한다."""
     queue: asyncio.Queue = asyncio.Queue()
@@ -146,7 +147,7 @@ async def _run_product_job(
     async def process_and_enqueue(record: dict) -> None:
         try:
             async with semaphore:
-                result = await service.register_product(record)
+                result = await service.register_product(record, user_id=creator_user_id)
         except Exception:
             logger.error("register_product_failed", product_name=record.get("상품명", ""), exc_info=True)
             result = {
@@ -207,10 +208,11 @@ async def _guarded_run_product_job(
     job: UploadJob,
     records: list[dict],
     service: Any,
+    creator_user_id: str,
 ) -> None:
     try:
         await asyncio.wait_for(
-            _run_product_job(job, records, service),
+            _run_product_job(job, records, service, creator_user_id),
             timeout=settings.upload_job_max_seconds,
         )
     except asyncio.TimeoutError:
@@ -318,7 +320,7 @@ async def upload_products_file(
         )
 
     asyncio.create_task(
-        _guarded_run_product_job(job, records, service)
+        _guarded_run_product_job(job, records, service, current_user.user_id)
     )
 
     return {"job_id": job.job_id, "total": job.total}

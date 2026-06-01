@@ -43,6 +43,11 @@ def get_request_user_id(request: Request) -> str:
         raise HTTPException(status_code=401, detail="Invalid user assertion")
 
 
+def get_optional_request_user_id(request: Request) -> str | None:
+    """FastAPI Depends: X-User-Assertion JWT에서 user_id 반환. 없거나 invalid면 None (401 없음)."""
+    return get_user_id_from_request(request)
+
+
 def get_user_id_from_request(request: Request | None) -> str | None:
     """raw_request 패턴용: X-User-Assertion에서 user_id 반환. 없거나 invalid면 None."""
     if not request:

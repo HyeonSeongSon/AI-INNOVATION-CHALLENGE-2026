@@ -37,7 +37,7 @@ async def create_persona_from_text_tool(
         structured_persona = await generate_structured_persona_info(human_messages, llm)
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         raw_queries = await generate_search_query(human_messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries)
+        await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
 
         summary = (
             f"**페르소나 등록 완료**\n\n"

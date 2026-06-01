@@ -143,10 +143,13 @@ async def proxy_personas_bulk_delete(
 @router.post("/product-search-queries/get")
 async def proxy_product_search_queries_get(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy(client, "POST", "/api/product-search-queries/get", request)
+    return await _proxy(
+        client, "POST", "/api/product-search-queries/get", request,
+        {"X-User-Assertion": create_user_assertion(user)},
+    )
 
 
 # ── Generated Messages ────────────────────────────────────────────────────────

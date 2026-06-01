@@ -16,20 +16,21 @@ class ProductRecommender:
         self.persona_client = PersonaClient()
         self.product_client = ProductClient()
     
-    async def get_product_search_queries(self, persona_id):
+    async def get_product_search_queries(self, persona_id, user_id: str | None = None):
         """페르소나에 저장된 상품 검색 쿼리 4종을 반환한다.
 
         Args:
             persona_id: 조회할 페르소나 ID
+            user_id: 소유권 검증용 사용자 ID
 
         Returns:
             {"user_need_query", "user_preference_query", "retrieval", "persona"} 딕셔너리.
             저장된 쿼리가 없으면 None.
         """
         logger.info("product_search_queries.start", persona_id=persona_id)
-        
+
         # 기존 상품 검색 쿼리 조회
-        existing_product_search_queries = await self.persona_client.get_existing_product_search_query(persona_id)
+        existing_product_search_queries = await self.persona_client.get_existing_product_search_query(persona_id, user_id=user_id)
 
         if not existing_product_search_queries:
             logger.warning("product_search_queries.not_found", persona_id=persona_id)

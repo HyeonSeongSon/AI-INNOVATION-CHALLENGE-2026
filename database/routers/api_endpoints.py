@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 from core.database import get_db
+from core.models import Persona, Product
 from routers.auth_utils import get_request_user_id, resolve_role
 from core.pagination import (
     PERSONAS_LIST_DEFAULT_PAGE_SIZE, PERSONAS_LIST_MAX_PAGE_SIZE,
@@ -232,8 +233,6 @@ class ProductSearchQueryResponse(BaseModel):
 
 class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
-    user_id: Optional[str] = Field(None, description="조회 요청자 사용자 ID (없으면 소유권 검증 생략)")
-    role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
 
 
 # ============================================================
@@ -241,11 +240,13 @@ class PersonaGetRequest(BaseModel):
 # ============================================================
 
 @router.post("/personas", response_model=PersonaResponse, summary="페르소나 생성")
-async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
-    from core.models import Persona
-
-    # persona_id는 DB가 gen_random_uuid()로 자동 생성
-    persona = Persona(**request.model_dump())
+async def create_persona(
+    request: PersonaCreate,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
+    data = request.model_dump(exclude={"user_id"})
+    persona = Persona(**data, user_id=x_user_id)
     db.add(persona)
     db.commit()
     db.refresh(persona)
@@ -258,16 +259,18 @@ async def create_persona(request: PersonaCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/personas/get", response_model=PersonaDetailResponse, summary="페르소나 정보 조회")
-async def get_persona(request: PersonaGetRequest, db: Session = Depends(get_db)):
-    from core.models import Persona
-
+async def get_persona(
+    request: PersonaGetRequest,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
 
-    role = resolve_role(db, request.user_id)
-    if role != "admin" and request.user_id:
-        if persona.user_id != request.user_id and persona.user_id is not None:
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        if persona.user_id != x_user_id and persona.user_id is not None:
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     return PersonaDetailResponse(
@@ -310,7 +313,6 @@ async def list_personas(
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ):
-    from core.models import Persona
     from sqlalchemy import or_
 
     query = db.query(Persona)
@@ -393,8 +395,6 @@ async def delete_personas_bulk(
     x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
-    from core.models import Persona
-
     if not request.ids:
         return {"deleted": 0}
 
@@ -409,12 +409,19 @@ async def delete_personas_bulk(
 
 
 @router.post("/product-search-queries", response_model=ProductSearchQueryResponse, summary="삼품 검색 쿼리 저장")
-async def generate_product_search_queries(request: ProductSearchQueryCreate, db: Session = Depends(get_db)):
-    from core.models import Persona
-
+async def generate_product_search_queries(
+    request: ProductSearchQueryCreate,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        if persona.user_id != x_user_id and persona.user_id is not None:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     upsert_sql = sa_text("""
         INSERT INTO search_queries (persona_id, query_type, query_text)
@@ -444,12 +451,19 @@ async def generate_product_search_queries(request: ProductSearchQueryCreate, db:
 
 
 @router.post("/product-search-queries/get", response_model=ProductSearchQueryResponse, summary="상품 검색 쿼리 조회")
-async def get_product_search_queries(request: ProductSearchQueryGetRequest, db: Session = Depends(get_db)):
-    from core.models import Persona
-
+async def get_product_search_queries(
+    request: ProductSearchQueryGetRequest,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+):
     persona = db.query(Persona).filter(Persona.persona_id == request.persona_id).first()
     if not persona:
         raise HTTPException(status_code=404, detail=f"Persona with ID '{request.persona_id}' not found")
+
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        if persona.user_id != x_user_id and persona.user_id is not None:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     result = db.execute(
         sa_text("SELECT search_query_id, query_type, query_text FROM search_queries WHERE persona_id = :persona_id"),
@@ -479,8 +493,11 @@ async def update_product_vectordb_id(
     product_id: str,
     request: ProductVectordbUpdate,
     db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
 ):
-    from core.models import Product
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
 
     product = db.query(Product).filter(Product.product_id == product_id).first()
     if not product:
@@ -536,8 +553,6 @@ async def list_products(
     page_size: int = Query(20, ge=1),
     db: Session = Depends(get_db),
 ):
-    from core.models import Product
-
     page_size = min(page_size, PRODUCTS_FILTER_MAX_PAGE_SIZE)
     query = db.query(Product)
 
@@ -575,8 +590,6 @@ async def list_products(
 
 @router.get("/products/{product_id}", response_model=ProductDetailResponse, summary="product_id로 상품 상세 조회")
 async def get_product_by_id(product_id: str, db: Session = Depends(get_db)):
-    from core.models import Product
-
     product = db.query(Product).filter(Product.product_id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail=f"Product with ID '{product_id}' not found")
@@ -586,8 +599,6 @@ async def get_product_by_id(product_id: str, db: Session = Depends(get_db)):
 
 @router.post("/products/by-tag", response_model=ProductListResponse, summary="상품종류(소분류 태그)로 상품 조회")
 async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depends(get_db)):
-    from core.models import Product
-
     page_size = min(request.page_size, PRODUCTS_BY_TAG_MAX_PAGE_SIZE)
     query = db.query(Product).filter(Product.sub_tag == request.tag)
     total = query.count()
@@ -604,8 +615,6 @@ async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depend
 
 @router.post("/products/by-brand", response_model=ProductListResponse, summary="브랜드명으로 상품 조회")
 async def get_products_by_brand(request: ProductByBrandRequest, db: Session = Depends(get_db)):
-    from core.models import Product
-
     page_size = min(request.page_size, PRODUCTS_BY_BRAND_MAX_PAGE_SIZE)
     query = db.query(Product).filter(Product.brand == request.brand)
     total = query.count()
@@ -622,7 +631,6 @@ async def get_products_by_brand(request: ProductByBrandRequest, db: Session = De
 
 @router.post("/products/filter", response_model=ProductListResponse, summary="상품 필터링 조회")
 async def filter_products(request: ProductFilterRequest, db: Session = Depends(get_db)):
-    from core.models import Product
     from sqlalchemy import and_, or_, cast
     from sqlalchemy.dialects.postgresql import ARRAY, INTEGER
     from sqlalchemy.types import Text

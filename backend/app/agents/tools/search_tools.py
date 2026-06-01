@@ -175,9 +175,12 @@ async def get_persona_by_id(persona_id: str, config: Annotated[RunnableConfig, I
     role = configurable.get("role", "user")
     try:
         client = _get_http_client()
+        assertion = _make_user_assertion(user_id, role)
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/get",
-            json={"persona_id": persona_id, "user_id": user_id, "role": role}
+            json={"persona_id": persona_id},
+            headers=extra_headers,
         )
         response.raise_for_status()
         p = response.json()

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.models import Conversation, GeneratedMessage
-from routers.auth_utils import get_request_user_id, resolve_role
+from routers.auth_utils import get_optional_request_user_id, get_request_user_id, resolve_role
 
 router = APIRouter(prefix="/api/generated-messages", tags=["GeneratedMessages"])
 
@@ -217,17 +217,17 @@ def get_latest(
     conversation_id: str = Query(...),
     product_id: str = Query(...),
     db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
 ):
     """conversation_id + product_id 기준 가장 최근 생성 메시지 조회"""
-    msg = (
-        db.query(GeneratedMessage)
-        .filter(
-            GeneratedMessage.conversation_id == conversation_id,
-            GeneratedMessage.product_id == product_id,
-        )
-        .order_by(GeneratedMessage.created_at.desc())
-        .first()
+    role = resolve_role(db, x_user_id)
+    query = db.query(GeneratedMessage).filter(
+        GeneratedMessage.conversation_id == conversation_id,
+        GeneratedMessage.product_id == product_id,
     )
+    if role != "admin":
+        query = query.filter(GeneratedMessage.user_id == x_user_id)
+    msg = query.order_by(GeneratedMessage.created_at.desc()).first()
     if not msg:
         raise HTTPException(status_code=404, detail="No generated message found")
     return msg

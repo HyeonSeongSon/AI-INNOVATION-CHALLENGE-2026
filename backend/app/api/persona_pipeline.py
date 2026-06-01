@@ -45,7 +45,7 @@ async def _process_one_text(index: int, text: str, llm, persona_client, user_id:
         structured_persona = await generate_structured_persona_info(messages, llm)
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         raw_queries = await generate_search_query(messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries)
+        await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
         return {
             "index": index,
             "success": True,
