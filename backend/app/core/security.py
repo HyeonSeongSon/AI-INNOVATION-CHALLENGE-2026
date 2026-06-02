@@ -12,9 +12,12 @@ from passlib.context import CryptContext
 
 from ..config.settings import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated=["bcrypt"],  # 기존 bcrypt 해시 검증 허용, 로그인 시 bcrypt_sha256으로 자동 업그레이드
+)
 
-# 로그인 타이밍 공격 방어용 — 사용자 미존재 시 bcrypt 시간 소비를 보장하기 위해 사용
+# 로그인 타이밍 공격 방어용 — 사용자 미존재 시 bcrypt_sha256 시간 소비를 보장하기 위해 사용
 DUMMY_HASH: str = pwd_context.hash("dummy")
 
 
@@ -28,6 +31,16 @@ def hash_password(plain: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+
+def verify_and_update_password(plain: str, hashed: str) -> tuple[bool, str | None]:
+    """비밀번호 검증 후 필요 시 최신 스킴으로 재해시.
+
+    Returns:
+        (is_valid, new_hash) — new_hash는 재해시가 필요한 경우에만 반환, 아니면 None.
+    """
+    is_valid, new_hash = pwd_context.verify_and_update(plain, hashed)
+    return is_valid, new_hash or None
 
 
 # ──────────────────────────────────────────────────────

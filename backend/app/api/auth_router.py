@@ -24,9 +24,10 @@ from ..core.security import (
     get_refresh_token_expiry,
     hash_password,
     hash_token,
+    verify_and_update_password,
     verify_password,
 )
-from .deps import get_current_user, get_lockout_limiter, get_login_limiter, get_register_limiter, require_admin
+from .deps import get_current_user, get_lockout_limiter, get_login_limiter, get_logout_limiter, get_refresh_limiter, get_register_limiter, require_admin
 from ..core.auth import UserContext
 from ..core.ip_utils import get_client_ip
 from ..core.rate_limiter import PostgresRateLimiter
@@ -48,6 +49,8 @@ _COOKIE_SAMESITE = "lax"
 def _check_password_complexity(v: str) -> str:
     if len(v) < 8:
         raise ValueError("비밀번호는 최소 8자 이상이어야 합니다.")
+    if len(v.encode("utf-8")) > 1024:
+        raise ValueError("비밀번호는 1024바이트를 초과할 수 없습니다.")
     if not re.search(r"[A-Z]", v):
         raise ValueError("비밀번호에 대문자가 하나 이상 포함되어야 합니다.")
     if not re.search(r"[a-z]", v):
@@ -222,12 +225,18 @@ async def login(
             headers={"Retry-After": str(settings.lockout_per_ip_window_seconds)},
         )
 
-    if not verify_password(body.password, user.password_hash):
+    is_valid, new_hash = verify_and_update_password(body.password, user.password_hash)
+    if not is_valid:
         await lockout_limiter.is_allowed(lockout_key)  # 실패 카운터 증가
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다.")
+
+    # 기존 bcrypt 해시 → bcrypt_sha256으로 자동 업그레이드
+    if new_hash:
+        user.password_hash = new_hash
+        db.commit()
 
     # 로그인 성공 시 해당 IP-email 잠금 카운터 초기화
     await lockout_limiter.reset(lockout_key)
@@ -262,11 +271,22 @@ async def refresh_token(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
+    limiter: PostgresRateLimiter = Depends(get_refresh_limiter),
 ):
     """
     Refresh Token으로 새 Access Token + Refresh Token 발급 (Token Rotation).
     refresh_token Cookie는 Path=/auth로 제한되어 /auth/* 엔드포인트에만 전송된다.
     """
+    ip = get_client_ip(request)
+    allowed, retry_after = await limiter.is_allowed(ip)
+    if not allowed:
+        logger.warning("rate_limit_exceeded", endpoint="refresh", client_ip=ip, retry_after=retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     raw_refresh = request.cookies.get("refresh_token")
     if not raw_refresh:
         raise HTTPException(status_code=401, detail="Refresh Token이 없습니다.")
@@ -320,10 +340,21 @@ async def logout(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
+    limiter: PostgresRateLimiter = Depends(get_logout_limiter),
 ):
     """로그아웃. Refresh Token DB에서 폐기 + 양쪽 Cookie 삭제.
     Access Token 만료 여부와 무관하게 항상 실행된다.
     """
+    ip = get_client_ip(request)
+    allowed, retry_after = await limiter.is_allowed(ip)
+    if not allowed:
+        logger.warning("rate_limit_exceeded", endpoint="logout", client_ip=ip, retry_after=retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     raw_refresh = request.cookies.get("refresh_token")
     if raw_refresh:
         rt = db.query(RefreshToken).filter(

@@ -44,8 +44,8 @@ class PersonaListRequest(BaseModel):
     """페르소나 목록 조회 요청"""
     user_id: Optional[str] = Field(None, description="조회할 사용자 ID (없으면 전체 조회)")
     role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
-    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
-    page_size: int = Field(PERSONAS_LIST_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
+    page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PERSONAS_LIST_DEFAULT_PAGE_SIZE, ge=1, le=PERSONAS_LIST_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 class PersonaCreate(BaseModel):
@@ -84,15 +84,15 @@ class PersonaCreate(BaseModel):
 class ProductByTagRequest(BaseModel):
     """상품종류(태그)로 상품 조회 요청"""
     tag: str = Field(..., description="상품 태그(종류)", examples=["에센스&세럼&오일"])
-    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
-    page_size: int = Field(PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
+    page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_BY_TAG_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 class ProductByBrandRequest(BaseModel):
     """브랜드명으로 상품 조회 요청"""
     brand: str = Field(..., description="브랜드명", examples=["설화수"])
-    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
-    page_size: int = Field(PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
+    page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_BY_BRAND_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 class ProductFilterRequest(BaseModel):
@@ -109,8 +109,8 @@ class ProductFilterRequest(BaseModel):
     lifestyle_values: Optional[List[str]] = Field(None, description="가치관 (OR 조건)")
     personal_color: Optional[str] = Field(None, description="퍼스널 컬러")
     shade_number: Optional[int] = Field(None, description="셰이드 번호")
-    page: int = Field(1, ge=1, description="페이지 번호 (1부터 시작)")
-    page_size: int = Field(PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, ge=1, description="페이지당 항목 수")
+    page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
+    page_size: int = Field(PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_FILTER_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 # ============================================================
@@ -386,7 +386,7 @@ async def list_personas(
 
 class PersonaBulkDeleteRequest(BaseModel):
     """페르소나 일괄 삭제 요청"""
-    ids: List[str] = Field(..., description="삭제할 페르소나 ID 목록")
+    ids: List[str] = Field(..., min_length=1, max_length=100, description="삭제할 페르소나 ID 목록")
 
 
 @router.delete("/personas", summary="페르소나 일괄 삭제")
@@ -546,11 +546,11 @@ async def list_products(
     category: Optional[str] = None,
     tag: Optional[str] = None,
     sub_tag: Optional[str] = None,
-    min_price: Optional[int] = None,
-    max_price: Optional[int] = None,
-    min_discount: Optional[int] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1),
+    min_price: Optional[int] = Query(None, ge=0, le=10_000_000),
+    max_price: Optional[int] = Query(None, ge=0, le=10_000_000),
+    min_discount: Optional[int] = Query(None, ge=0, le=100),
+    page: int = Query(1, ge=1, le=10000),
+    page_size: int = Query(20, ge=1, le=PRODUCTS_FILTER_MAX_PAGE_SIZE),
     db: Session = Depends(get_db),
 ):
     page_size = min(page_size, PRODUCTS_FILTER_MAX_PAGE_SIZE)

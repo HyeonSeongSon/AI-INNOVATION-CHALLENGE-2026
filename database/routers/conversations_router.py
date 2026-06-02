@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -46,14 +46,14 @@ class ConversationDetail(ConversationSummary):
 
 class CreateConversationRequest(BaseModel):
     """새 대화 생성 요청"""
-    session_id: Optional[str] = None
-    title: Optional[str] = "새 대화"
+    session_id: Optional[str] = Field(default=None, max_length=100)
+    title: Optional[str] = Field(default="새 대화", max_length=500)
 
 
 class UpdateMessagesRequest(BaseModel):
     """메시지 + 제목 갱신 요청"""
-    messages: List[Any]
-    title: Optional[str] = None
+    messages: List[Any] = Field(..., max_length=500)
+    title: Optional[str] = Field(default=None, max_length=500)
 
 
 # ============================================================
@@ -83,6 +83,8 @@ def create_conversation(
 
 @router.get("", response_model=List[ConversationSummary])
 def list_conversations(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
@@ -91,7 +93,12 @@ def list_conversations(
     q = db.query(Conversation)
     if role != "admin":
         q = q.filter(Conversation.user_id == x_user_id)
-    return q.order_by(Conversation.last_active_at.desc()).all()
+    return (
+        q.order_by(Conversation.last_active_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/{conv_id}", response_model=ConversationDetail)

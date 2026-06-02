@@ -81,6 +81,28 @@ class Settings(BaseSettings):
     rate_limit_chat_max_requests: int = 20
     rate_limit_chat_window_seconds: int = 3600  # 1시간당 20회
 
+    # Rate limiting — auth token endpoints (per-IP)
+    rate_limit_refresh_max_requests: int = 30
+    rate_limit_refresh_window_seconds: int = 600   # 10분당 30회
+    rate_limit_logout_max_requests: int = 20
+    rate_limit_logout_window_seconds: int = 60     # 1분당 20회
+
+    # Rate limiting — persona pipeline endpoints (per-user)
+    rate_limit_persona_text_max_requests: int = 20
+    rate_limit_persona_text_window_seconds: int = 3600   # 1시간당 20회
+    rate_limit_persona_upload_max_requests: int = 5
+    rate_limit_persona_upload_window_seconds: int = 3600  # 1시간당 5회
+
+    # Rate limiting — DB write endpoints (per-user)
+    rate_limit_conversation_write_max_requests: int = 100
+    rate_limit_conversation_write_window_seconds: int = 3600  # 1시간당 100회
+    rate_limit_persona_delete_max_requests: int = 30
+    rate_limit_persona_delete_window_seconds: int = 3600      # 1시간당 30회
+
+    # Rate limiting — admin product upload (per-user)
+    rate_limit_product_upload_max_requests: int = 10
+    rate_limit_product_upload_window_seconds: int = 86400  # 1일당 10회
+
     # DB cleanup background worker
     cleanup_interval_seconds: int = 3600
     cleanup_token_grace_days: int = 1
@@ -174,6 +196,7 @@ class Settings(BaseSettings):
     # Upload concurrency
     upload_persona_concurrency: int = 5
     upload_product_concurrency: int = 3
+    max_records_per_upload: int = 10000
 
     # Conversation management
     conversation_summarize_threshold: int = 30

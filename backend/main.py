@@ -62,6 +62,41 @@ async def lifespan(app: FastAPI):
         max_requests=settings.rate_limit_chat_max_requests,
         window_seconds=settings.rate_limit_chat_window_seconds,
     )
+    app.state.refresh_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_refresh_max_requests,
+        window_seconds=settings.rate_limit_refresh_window_seconds,
+    )
+    app.state.logout_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_logout_max_requests,
+        window_seconds=settings.rate_limit_logout_window_seconds,
+    )
+    app.state.persona_text_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_persona_text_max_requests,
+        window_seconds=settings.rate_limit_persona_text_window_seconds,
+    )
+    app.state.persona_upload_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_persona_upload_max_requests,
+        window_seconds=settings.rate_limit_persona_upload_window_seconds,
+    )
+    app.state.conversation_write_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_conversation_write_max_requests,
+        window_seconds=settings.rate_limit_conversation_write_window_seconds,
+    )
+    app.state.persona_delete_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_persona_delete_max_requests,
+        window_seconds=settings.rate_limit_persona_delete_window_seconds,
+    )
+    app.state.product_upload_limiter = PostgresRateLimiter(
+        session_factory=SessionLocal,
+        max_requests=settings.rate_limit_product_upload_max_requests,
+        window_seconds=settings.rate_limit_product_upload_window_seconds,
+    )
 
     # max_workers=20: DB 커넥션풀(pool_size=10, max_overflow=20)보다 작게 설정해 풀 고갈 방지
     db_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="db_worker")

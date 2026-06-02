@@ -12,9 +12,11 @@ from ..config.settings import settings
 from ..core.auth import UserContext
 from ..core.auth_utils import create_user_assertion
 from ..core.rate_limiter import PostgresRateLimiter
-from .deps import get_chat_limiter, get_current_user, require_admin
+from .deps import get_chat_limiter, get_current_user, get_persona_delete_limiter, get_persona_text_limiter, get_persona_upload_limiter, get_product_upload_limiter, require_admin
 
 router = APIRouter(prefix="/api", tags=["CRM Proxy"])
+
+_ALLOWED_CONTENT_TYPES = ("application/json", "multipart/form-data", "application/octet-stream")
 
 
 def get_crm_client(request: Request) -> httpx.AsyncClient:
@@ -32,6 +34,8 @@ async def _proxy(
     body = await request.body()
     params = dict(request.query_params)
     content_type = request.headers.get("Content-Type", "application/json")
+    if not any(content_type.startswith(ct) for ct in _ALLOWED_CONTENT_TYPES):
+        raise HTTPException(status_code=415, detail="Unsupported Media Type")
     headers = {"Content-Type": content_type, **(extra_headers or {})}
     if isinstance(timeout, (int, float)):
         request_timeout = httpx.Timeout(timeout)
@@ -69,8 +73,7 @@ async def _proxy_stream(
     """SSE 스트리밍 프록시. read timeout=None으로 처리 완료까지 연결 유지."""
     body = await request.body()
     params = dict(request.query_params)
-    content_type = request.headers.get("Content-Type", "")
-    headers = {"Content-Type": content_type, **(extra_headers or {})}
+    headers = {"Content-Type": "application/json", **(extra_headers or {})}
 
     async def generate():
         try:
@@ -84,10 +87,10 @@ async def _proxy_stream(
             ) as response:
                 async for chunk in response.aiter_bytes():
                     yield chunk
-        except httpx.ConnectError:
-            yield b'data: {"type":"error","detail":"CRM service unavailable"}\n\n'
         except httpx.TimeoutException:
             yield b'data: {"type":"error","detail":"CRM service timeout"}\n\n'
+        except httpx.RequestError:
+            yield b'data: {"type":"error","detail":"CRM service unavailable"}\n\n'
 
     return StreamingResponse(
         generate(),
@@ -174,7 +177,15 @@ async def proxy_personas_create_from_text(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_crm_client),
+    limiter: PostgresRateLimiter = Depends(get_persona_text_limiter),
 ):
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return await _proxy(
         client, "POST", "/api/pipeline/personas/create-from-text", request,
         {"X-User-Assertion": create_user_assertion(user)},
@@ -198,7 +209,15 @@ async def proxy_personas_upload(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_crm_client),
+    limiter: PostgresRateLimiter = Depends(get_persona_upload_limiter),
 ):
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     timeout = httpx.Timeout(
         connect=settings.http_timeout_stream_connect,
         read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,
@@ -230,7 +249,15 @@ async def proxy_products_upload(
     request: Request,
     user: UserContext = Depends(require_admin),
     client: httpx.AsyncClient = Depends(get_crm_client),
+    limiter: PostgresRateLimiter = Depends(get_product_upload_limiter),
 ):
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     timeout = httpx.Timeout(
         connect=settings.http_timeout_stream_connect,
         read=settings.upload_file_read_timeout + settings.upload_file_parse_timeout + 10.0,

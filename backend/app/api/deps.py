@@ -55,3 +55,31 @@ async def get_lockout_limiter(request: Request) -> PostgresRateLimiter:
 
 async def get_chat_limiter(request: Request) -> PostgresRateLimiter:
     return request.app.state.chat_limiter
+
+
+async def get_refresh_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.refresh_limiter
+
+
+async def get_logout_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.logout_limiter
+
+
+async def get_persona_text_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.persona_text_limiter
+
+
+async def get_persona_upload_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.persona_upload_limiter
+
+
+async def get_conversation_write_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.conversation_write_limiter
+
+
+async def get_persona_delete_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.persona_delete_limiter
+
+
+async def get_product_upload_limiter(request: Request) -> PostgresRateLimiter:
+    return request.app.state.product_upload_limiter

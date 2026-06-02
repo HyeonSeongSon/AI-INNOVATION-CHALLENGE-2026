@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from ..config.settings import settings
 from ..core.auth import UserContext
 from ..core.auth_utils import create_user_assertion
-from .deps import get_current_user
+from ..core.rate_limiter import PostgresRateLimiter
+from .deps import get_conversation_write_limiter, get_current_user, get_persona_delete_limiter
 
 router = APIRouter(prefix="/api", tags=["DB Proxy"])
 
@@ -24,8 +25,7 @@ def get_internal_client(request: Request) -> httpx.AsyncClient:
 async def _proxy(client: httpx.AsyncClient, method: str, path: str, request: Request, extra_headers: dict | None = None) -> Response:
     body = await request.body()
     params = dict(request.query_params)
-    content_type = request.headers.get("Content-Type", "application/json")
-    headers = {"Content-Type": content_type, **(extra_headers or {})}
+    headers = {"Content-Type": "application/json", **(extra_headers or {})}
 
     try:
         upstream = await client.request(
@@ -92,7 +92,15 @@ async def proxy_conversations_update(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
+    limiter: PostgresRateLimiter = Depends(get_conversation_write_limiter),
 ):
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return await _proxy(
         client, "PUT", f"/api/conversations/{str(conv_id)}/messages", request,
         {"X-User-Assertion": create_user_assertion(user)},
@@ -131,7 +139,15 @@ async def proxy_personas_bulk_delete(
     request: Request,
     user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
+    limiter: PostgresRateLimiter = Depends(get_persona_delete_limiter),
 ):
+    allowed, retry_after = await limiter.is_allowed(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+            headers={"Retry-After": str(retry_after)},
+        )
     return await _proxy(
         client, "DELETE", "/api/personas", request,
         {"X-User-Assertion": create_user_assertion(user)},

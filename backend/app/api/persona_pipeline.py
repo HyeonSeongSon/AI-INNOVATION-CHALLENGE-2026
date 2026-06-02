@@ -119,6 +119,8 @@ async def _run_persona_job(
     """파일 내 모든 텍스트를 처리하고 결과를 job 이벤트 버퍼에 기록한다."""
     queue: asyncio.Queue = asyncio.Queue()
     semaphore = asyncio.Semaphore(settings.upload_persona_concurrency)
+    chunk_size = settings.upload_persona_concurrency * 4
+    active_tasks: list[asyncio.Task] = []
 
     async def process_and_enqueue(i: int, text: str) -> None:
         try:
@@ -129,28 +131,33 @@ async def _run_persona_job(
             result = {"success": False, "name": None, "error": "페르소나 생성 중 오류가 발생했습니다."}
         await queue.put(result)
 
-    tasks = [asyncio.create_task(process_and_enqueue(i, t)) for i, t in enumerate(texts)]
-
     try:
         succeeded = 0
         failed = 0
-        for _ in range(job.total):
-            result = await queue.get()
-            if result["success"]:
-                succeeded += 1
-            else:
-                failed += 1
-            await append_event(job, {
-                "type": "progress",
-                "current": succeeded + failed,
-                "total": job.total,
-                "name": result.get("name"),
-                "success": result["success"],
-                "persona_id": result.get("persona_id"),
-                "error": result.get("error"),
-            })
+        for chunk_start in range(0, len(texts), chunk_size):
+            chunk = texts[chunk_start : chunk_start + chunk_size]
+            active_tasks = [
+                asyncio.create_task(process_and_enqueue(chunk_start + i, t))
+                for i, t in enumerate(chunk)
+            ]
+            for _ in range(len(chunk)):
+                result = await queue.get()
+                if result["success"]:
+                    succeeded += 1
+                else:
+                    failed += 1
+                await append_event(job, {
+                    "type": "progress",
+                    "current": succeeded + failed,
+                    "total": job.total,
+                    "name": result.get("name"),
+                    "success": result["success"],
+                    "persona_id": result.get("persona_id"),
+                    "error": result.get("error"),
+                })
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+            active_tasks = []
 
-        await asyncio.gather(*tasks, return_exceptions=True)
         logger.info(
             "create_personas_job_completed",
             job_id=job.job_id,
@@ -171,9 +178,10 @@ async def _run_persona_job(
             "detail": "페르소나 생성 중 오류가 발생했습니다.",
         })
     finally:
-        for task in tasks:
+        for task in active_tasks:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        if active_tasks:
+            await asyncio.gather(*active_tasks, return_exceptions=True)
 
 
 async def _guarded_run_persona_job(
@@ -313,6 +321,12 @@ async def upload_personas_file(
 
     if not texts:
         raise HTTPException(status_code=422, detail="파일에서 유효한 레코드를 찾을 수 없습니다.")
+
+    if len(texts) > settings.max_records_per_upload:
+        raise HTTPException(
+            status_code=422,
+            detail=f"레코드 수가 최대 허용치({settings.max_records_per_upload}개)를 초과합니다. 현재: {len(texts)}개",
+        )
 
     llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
     persona_client = req.app.state.persona_client

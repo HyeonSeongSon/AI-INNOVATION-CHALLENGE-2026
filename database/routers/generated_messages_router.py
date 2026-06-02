@@ -6,8 +6,8 @@
 from datetime import date, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -78,6 +78,10 @@ class FilterOptions(BaseModel):
     purposes: List[str]
 
 
+class DeleteMessagesRequest(BaseModel):
+    ids: List[str] = Field(..., min_length=1, max_length=100)
+
+
 # ============================================================
 # 엔드포인트
 # ============================================================
@@ -110,7 +114,7 @@ def get_filter_options(
 def list_generated_messages(
     user_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=10000),
     brand: Optional[str] = Query(None),
     sub_tag: Optional[str] = Query(None),
     purpose: Optional[str] = Query(None),
@@ -181,15 +185,13 @@ def list_generated_messages(
 
 @router.delete("")
 def delete_messages(
-    ids: List[str] = Body(..., embed=True),
+    body: DeleteMessagesRequest,
     x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
     """선택한 메시지 ID 목록 일괄 삭제"""
-    if not ids:
-        return {"deleted": 0}
     role = resolve_role(db, x_user_id)
-    query = db.query(GeneratedMessage).filter(GeneratedMessage.id.in_(ids))
+    query = db.query(GeneratedMessage).filter(GeneratedMessage.id.in_(body.ids))
     if role != "admin":
         query = query.filter(GeneratedMessage.user_id == x_user_id)
     deleted = query.delete(synchronize_session=False)

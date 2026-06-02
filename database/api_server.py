@@ -4,12 +4,14 @@ DB CRUD + Pipeline API (port 8020)
 """
 
 import hmac
+import json
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 load_dotenv()
 
@@ -28,6 +30,62 @@ if len(_INTERNAL_TOKEN) < 32:
     raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
 
 _SKIP_PATHS = {"/", "/health"}
+_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+class BodySizeLimitMiddleware:
+    def __init__(self, app: ASGIApp, max_body_bytes: int = _MAX_BODY_BYTES) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        content_length_raw = headers.get(b"content-length")
+        if content_length_raw is not None:
+            try:
+                content_length = int(content_length_raw)
+            except ValueError:
+                content_length = 0
+            if content_length > self.max_body_bytes:
+                await self._send_413(send)
+                return
+
+        total_bytes = 0
+
+        async def limited_receive() -> dict:
+            nonlocal total_bytes
+            message = await receive()
+            if message.get("type") == "http.request":
+                total_bytes += len(message.get("body", b""))
+                if total_bytes > self.max_body_bytes:
+                    raise _PayloadTooLargeError()
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _PayloadTooLargeError:
+            await self._send_413(send)
+
+    @staticmethod
+    async def _send_413(send: Send) -> None:
+        body = json.dumps({"detail": "요청 바디가 너무 큽니다."}).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+
+class _PayloadTooLargeError(Exception):
+    pass
 
 
 class InternalTokenMiddleware(BaseHTTPMiddleware):
@@ -48,6 +106,7 @@ app = FastAPI(
 
 # InternalTokenMiddleware는 CORS보다 먼저 등록 (인증 먼저 체크)
 app.add_middleware(InternalTokenMiddleware)
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
 
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
