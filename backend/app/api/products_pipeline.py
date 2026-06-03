@@ -19,7 +19,7 @@ from ..config.settings import settings
 from ..core.auth import UserContext
 from ..core.logging import get_logger
 from .deps import require_admin_from_headers
-from .upload_jobs import JobStatus, UploadJob, append_event, create_job, get_job
+from .upload_jobs import UploadJob, append_event, create_job, get_events_after, get_job
 
 logger = get_logger("products_pipeline")
 
@@ -247,37 +247,33 @@ async def _guarded_run_product_job(
 
 async def _stream_job_events(job: UploadJob):
     """
-    재연결을 지원하는 SSE 이벤트 스트림.
-    Phase A: 기존 이벤트 replay → Phase B: asyncio.Condition으로 새 이벤트 대기.
-    25초마다 keepalive 코멘트를 전송해 프록시 타임아웃을 방지한다.
+    재연결을 지원하는 SSE 이벤트 스트림 (PostgreSQL polling).
+    Phase A: 기존 이벤트 즉시 replay → Phase B: 0.5초 간격으로 새 이벤트 polling.
+    sse_keepalive_timeout초마다 keepalive 코멘트를 전송해 프록시 타임아웃을 방지한다.
     """
-    cursor = 0
+    last_id = 0
+    keepalive_ticks = 0
+    keepalive_interval = max(1, int(settings.sse_keepalive_timeout / 0.5))
+    first = True
 
-    # Phase A: 이미 쌓인 이벤트 전송 (재연결 시 replay)
-    async with job.condition:
-        snapshot = list(job.events)
-        cursor = job.evicted_count + len(snapshot)
-    for event in snapshot:
-        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-    # Phase B: 새 이벤트 대기
     while True:
-        async with job.condition:
-            while len(job.events) + job.evicted_count <= cursor:
-                if job.status in (JobStatus.DONE, JobStatus.ERROR):
-                    return
-                try:
-                    await asyncio.wait_for(job.condition.wait(), timeout=settings.sse_keepalive_timeout)
-                except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
-                    continue
-            new_events = list(job.events)[cursor - job.evicted_count:]
-            cursor += len(new_events)
+        if not first:
+            await asyncio.sleep(0.5)
+        first = False
 
-        for event in new_events:
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            if event.get("type") in ("done", "error"):
-                return
+        event_rows = await get_events_after(job.job_id, after_id=last_id)
+        if event_rows:
+            for event_id, event in event_rows:
+                last_id = event_id
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event.get("type") in ("done", "error"):
+                    return
+            keepalive_ticks = 0
+        else:
+            keepalive_ticks += 1
+            if keepalive_ticks >= keepalive_interval:
+                yield ": keepalive\n\n"
+                keepalive_ticks = 0
 
 
 # ──────────────────────────────────────────────────────

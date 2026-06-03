@@ -26,6 +26,8 @@ from .category_config import (
     resolve_extra_category,
     PROMPT_BUILDERS as _PROMPT_BUILDERS,
 )
+from ....core.auth import UserContext
+from ....core.auth_utils import create_user_assertion
 from ....core.http_client_registry import register
 from ....core.logging import get_logger
 
@@ -221,15 +223,9 @@ class ProductRegistrationService:
         self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document)
 
     def _make_user_assertion(self, user_id: str) -> str:
-        import time
-        from jose import jwt as jose_jwt
-        payload = {
-            "iss": "api-gateway",
-            "aud": "internal",
-            "user_id": user_id,
-            "exp": int(time.time()) + 300,
-        }
-        return jose_jwt.encode(payload, settings.internal_token, algorithm="HS256")
+        return create_user_assertion(
+            UserContext(user_id=user_id, role="user", auth_method="jwt")
+        )
 
     @property
     def http_client(self) -> httpx.AsyncClient:

@@ -319,10 +319,11 @@ class CRMMessageAgent:
                 await queue.put(("error", None))  # str(e) 절대 큐에 넣지 않음
 
         producer = asyncio.create_task(_produce())
-        _deadline = asyncio.get_event_loop().time() + settings.graph_execution_timeout
+        _loop = asyncio.get_running_loop()
+        _deadline = _loop.time() + settings.graph_execution_timeout
         try:
             while True:
-                _remaining = _deadline - asyncio.get_event_loop().time()
+                _remaining = _deadline - _loop.time()
                 if _remaining <= 0:
                     yield _sse({"type": "error", "message": "처리 시간이 초과되었습니다."})
                     yield _sse({"type": "done"})
@@ -332,7 +333,7 @@ class CRMMessageAgent:
                         queue.get(), timeout=min(settings.sse_keepalive_timeout, _remaining)
                     )
                 except asyncio.TimeoutError:
-                    if asyncio.get_event_loop().time() >= _deadline:
+                    if _loop.time() >= _deadline:
                         yield _sse({"type": "error", "message": "처리 시간이 초과되었습니다."})
                         yield _sse({"type": "done"})
                         return

@@ -1,7 +1,9 @@
 from langchain_core.tools import tool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 import asyncio
+import functools
 import httpx
+import json
 from pathlib import Path
 from typing import Annotated, Optional, Literal
 from pydantic import BaseModel, Field
@@ -58,8 +60,8 @@ def _make_user_assertion(user_id: str | None, role: str) -> str | None:
 
 _DATA_DIR = Path(__file__).parents[4] / "data"
 
+@functools.lru_cache(maxsize=None)
 def _load_json(filename: str) -> dict:
-    import json
     with open(_DATA_DIR / filename, encoding="utf-8") as f:
         return json.load(f)
 
@@ -205,7 +207,7 @@ async def get_all_brands() -> str:
     사용자가 어떤 브랜드가 있는지 물어보거나, get_products_by_brand 호출 전에
     유효한 브랜드명을 확인할 때 사용하세요.
     """
-    brands = (await asyncio.to_thread(_load_json, "brands.json")).get("brands", [])
+    brands = _load_json("brands.json").get("brands", [])
     if not brands:
         return "등록된 브랜드가 없습니다."
     return format_get_all_brands(brands)
@@ -218,7 +220,7 @@ async def get_all_categories() -> str:
     사용자가 어떤 상품 종류가 있는지 물어보거나, get_products_by_tag 호출 전에
     유효한 카테고리명을 확인할 때 사용하세요.
     """
-    categories = (await asyncio.to_thread(_load_json, "category.json")).get("sub_tags", [])
+    categories = _load_json("category.json").get("sub_tags", [])
     if not categories:
         return "등록된 상품 종류가 없습니다."
     return format_get_all_categories(categories)
@@ -230,7 +232,7 @@ async def get_all_message_types() -> str:
     CRM 메시지 생성 시 사용할 수 있는 메시지 타입(목적) 목록과 각 설명을 반환합니다.
     사용자가 어떤 메시지 타입이 있는지 물어볼 때 사용하세요.
     """
-    purposes = (await asyncio.to_thread(_load_json, "purposes.json")).get("purposes", {})
+    purposes = _load_json("purposes.json").get("purposes", {})
     if not purposes:
         return "등록된 메시지 타입이 없습니다."
     return format_get_all_message_types(purposes)

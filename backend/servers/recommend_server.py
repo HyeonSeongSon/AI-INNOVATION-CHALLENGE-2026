@@ -5,11 +5,13 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"))
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
 from app.agents.recommend_product_agent.a2a_agent import router
 from app.agents.recommend_product_agent.workflow import build_workflow
+from app.core.body_limit import BodySizeLimitMiddleware, PayloadTooLargeError
 from app.core.internal_auth import InternalTokenMiddleware
+from app.core.middleware import RequestLoggingMiddleware
 from app.core.logging import configure_logging, get_logger
 from app.core.http_client_registry import close_all
 from app.config.settings import settings
@@ -35,16 +37,17 @@ async def lifespan(app: FastAPI):
     await close_all()
 
 
-_allowed_origins = settings.allowed_origins
 app = FastAPI(title="Recommend Product Agent", version="1.0.0", lifespan=lifespan)
+
+
+@app.exception_handler(PayloadTooLargeError)
+async def payload_too_large_handler(request: Request, exc: PayloadTooLargeError):
+    return JSONResponse(status_code=413, content={"detail": "요청 본문이 너무 큽니다."})
+
+
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(InternalTokenMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_chat_body_bytes)
 app.include_router(router)
 
 

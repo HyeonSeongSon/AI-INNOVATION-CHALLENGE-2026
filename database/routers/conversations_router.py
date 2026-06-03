@@ -84,7 +84,7 @@ def create_conversation(
 @router.get("", response_model=List[ConversationSummary])
 def list_conversations(
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=10000),
     x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):
@@ -104,7 +104,7 @@ def list_conversations(
 @router.get("/{conv_id}", response_model=ConversationDetail)
 def get_conversation(
     conv_id: str,
-    limit: int = Query(default=200, le=500),
+    limit: int = Query(default=200, ge=1, le=500),
     x_user_id: str = Depends(get_request_user_id),
     db: Session = Depends(get_db),
 ):

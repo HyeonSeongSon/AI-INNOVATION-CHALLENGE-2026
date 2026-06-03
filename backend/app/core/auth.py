@@ -30,21 +30,18 @@ class AuthProvider(ABC):
 
 
 class APIKeyAuthProvider(AuthProvider):
-    """X-API-Key 헤더 검증 후 X-User-Id를 신뢰."""
+    """X-API-Key 헤더 검증 후 서버 설정의 고정 user_id 반환. 클라이언트 제공 X-User-Id 미신뢰."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, user_id: str) -> None:
         self._api_key = api_key
+        self._user_id = user_id
 
     async def authenticate(self, request: Request) -> UserContext:
         provided_key = request.headers.get("X-API-Key", "")
         if not provided_key or not hmac.compare_digest(provided_key, self._api_key):
             raise HTTPException(status_code=401, detail="유효하지 않은 API Key입니다.")
 
-        user_id = request.headers.get("X-User-Id", "")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="X-User-Id 헤더가 필요합니다.")
-
-        return UserContext(user_id=user_id, auth_method="api_key")
+        return UserContext(user_id=self._user_id, auth_method="api_key")
 
 
 class JWTAuthProvider(AuthProvider):
@@ -85,4 +82,4 @@ def get_auth_provider() -> AuthProvider:
     """settings.auth_mode에 따라 AuthProvider 구현체 반환."""
     if settings.auth_mode == "jwt":
         return JWTAuthProvider(settings.jwt_secret, settings.jwt_algorithm)
-    return APIKeyAuthProvider(settings.service_api_key)
+    return APIKeyAuthProvider(settings.service_api_key, settings.service_api_key_user_id)

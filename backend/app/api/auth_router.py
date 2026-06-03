@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..config.settings import settings
@@ -61,8 +61,8 @@ def _check_password_complexity(v: str) -> str:
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., max_length=255)
+    password: str = Field(..., max_length=1_024)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -76,8 +76,8 @@ class RegisterRequest(BaseModel):
 
 
 class CreateUserRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., max_length=255)
+    password: str = Field(..., max_length=1_024)
     role: UserRole = "user"
 
     @field_validator("email", mode="before")

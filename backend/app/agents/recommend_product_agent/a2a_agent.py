@@ -34,7 +34,11 @@ async def send_task(request: TaskSendRequest, req: Request):
     )
 
     config = {
-        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "configurable": {
+            "thread_id": request.sessionId or request.id,
+            "services": req.app.state.services,
+            "user_id": data.get("user_id"),
+        },
         "recursion_limit": settings.langgraph_recursion_limit,
     }
 

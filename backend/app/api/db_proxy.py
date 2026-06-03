@@ -235,7 +235,10 @@ async def proxy_generated_messages_delete(
 @router.get("/products")
 async def proxy_products_list(
     request: Request,
-    _: UserContext = Depends(get_current_user),
+    user: UserContext = Depends(get_current_user),
     client: httpx.AsyncClient = Depends(get_internal_client),
 ):
-    return await _proxy(client, "GET", "/api/products", request)
+    return await _proxy(
+        client, "GET", "/api/products", request,
+        {"X-User-Assertion": create_user_assertion(user)},
+    )

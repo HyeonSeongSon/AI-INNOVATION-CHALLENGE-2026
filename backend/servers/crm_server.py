@@ -12,15 +12,17 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"))
 
 from fastapi import FastAPI, Request
+from starlette.responses import JSONResponse
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 
 from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
 from app.api import marketing_api, products_pipeline, persona_pipeline
-from app.api.upload_jobs import cleanup_expired_jobs
+from app.api.upload_jobs import cleanup_expired_jobs, set_pool as set_upload_pool
 from app.core.cleanup import cleanup_old_checkpoints
 from app.config.settings import settings
 from app.core.data_loader import validate_static_configs
+from app.core.body_limit import BodySizeLimitMiddleware, PayloadTooLargeError
 from app.core.internal_auth import InternalTokenMiddleware
 from app.core.logging import configure_logging, get_logger
 from app.core.langsmith_config import configure_langsmith
@@ -69,6 +71,37 @@ async def lifespan(app: FastAPI):
                 "CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at"
                 " ON checkpoints(created_at)"
             )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS upload_jobs (
+                    job_id          TEXT PRIMARY KEY,
+                    job_type        TEXT NOT NULL,
+                    creator_user_id TEXT NOT NULL,
+                    status          TEXT NOT NULL DEFAULT 'pending',
+                    total           INTEGER NOT NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS upload_job_events (
+                    id         BIGSERIAL PRIMARY KEY,
+                    job_id     TEXT NOT NULL REFERENCES upload_jobs(job_id) ON DELETE CASCADE,
+                    event_data JSONB NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_upload_job_events_job_id_id
+                ON upload_job_events(job_id, id)
+                """
+            )
+
+        set_upload_pool(pool)
 
         db_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="db_worker")
         app.state.db_executor = db_executor
@@ -127,8 +160,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(RequestLoggingMiddleware)
+
+@app.exception_handler(PayloadTooLargeError)
+async def payload_too_large_handler(request: Request, exc: PayloadTooLargeError):
+    return JSONResponse(status_code=413, content={"detail": "요청 본문이 너무 큽니다."})
+
+
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_chat_body_bytes)
 app.add_middleware(InternalTokenMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(marketing_api.router)
 app.include_router(products_pipeline.router)

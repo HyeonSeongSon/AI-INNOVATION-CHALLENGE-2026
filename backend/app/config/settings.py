@@ -1,6 +1,6 @@
 from typing import Literal
 from pathlib import Path
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_MODEL_PREFIXES: tuple[str, ...] = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # Auth
     auth_mode: Literal["api_key", "jwt"] = "jwt"
     service_api_key: str = ""
+    service_api_key_user_id: str = ""  # AUTH_MODE=api_key 시 API Key에 매핑할 서버 측 고정 user_id
     jwt_secret: str = ""
     jwt_algorithm: Literal["HS256", "HS384", "HS512", "RS256"] = "HS256"
     jwt_access_token_expire_minutes: int = 15
@@ -117,7 +118,7 @@ class Settings(BaseSettings):
     generate_message_agent_url: str = "http://localhost:8002"
     data_registration_agent_url: str = "http://localhost:8003"
     a2a_timeout: float = 120.0
-    a2a_max_retries: int = 3
+    a2a_max_retries: int = Field(default=3, ge=1)
 
     # CRM Service (내부 전용)
     crm_service_url: str = "http://localhost:8006"
@@ -273,6 +274,11 @@ class Settings(BaseSettings):
             )
         if self.auth_mode == "api_key" and not self.service_api_key:
             raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
+        if self.auth_mode == "api_key" and not self.service_api_key_user_id:
+            raise ValueError(
+                "AUTH_MODE=api_key일 때 SERVICE_API_KEY_USER_ID가 필요합니다. "
+                "API Key에 매핑할 서비스 계정 ID를 설정하세요."
+            )
         if self.auth_mode == "jwt":
             if not self.jwt_secret:
                 raise ValueError("AUTH_MODE=jwt일 때 JWT_SECRET이 필요합니다.")
@@ -298,6 +304,13 @@ class Settings(BaseSettings):
         if any(m.startswith("gemini-") for m in active_models) and not self.google_api_key:
             raise ValueError(
                 "Google 모델이 설정되어 있지만 GOOGLE_API_KEY가 비어 있습니다."
+            )
+
+        if self.environment == "production" and not self.trusted_proxy_ips:
+            raise ValueError(
+                "프로덕션 환경에서 TRUSTED_PROXY_IPS가 비어 있으면 IP 기반 Rate Limit이 "
+                "무효화됩니다. Nginx IP를 TRUSTED_PROXY_IPS 환경변수에 추가하세요. "
+                "예: TRUSTED_PROXY_IPS=10.0.0.1"
             )
 
         # LangSmith 트레이싱 활성화 시 API 키 필요

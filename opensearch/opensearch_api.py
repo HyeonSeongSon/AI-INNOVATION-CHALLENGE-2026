@@ -1,12 +1,14 @@
 import asyncio
 import hmac
+import json
+import re
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, AfterValidator
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from typing import Annotated, Dict, Optional, List, Union
+from starlette.types import ASGIApp, Receive, Scope, Send
+from typing import Annotated, Dict, Literal, Optional, List, Union
 import logging
 import os
 from dotenv import load_dotenv
@@ -26,7 +28,63 @@ if not _INTERNAL_TOKEN:
     raise RuntimeError("INTERNAL_TOKEN 환경변수가 설정되지 않았습니다.")
 if len(_INTERNAL_TOKEN) < 32:
     raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
-_SKIP_PATHS = {"/", "/health"}
+_SKIP_PATHS = {"/", "/health", "/ready"}
+_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+class _PayloadTooLargeError(Exception):
+    pass
+
+
+class _BodySizeLimitMiddleware:
+    def __init__(self, app: ASGIApp, max_body_bytes: int = _MAX_BODY_BYTES) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        content_length_raw = headers.get(b"content-length")
+        if content_length_raw is not None:
+            try:
+                content_length = int(content_length_raw)
+            except ValueError:
+                content_length = 0
+            if content_length > self.max_body_bytes:
+                await self._send_413(send)
+                return
+
+        total_bytes = 0
+
+        async def limited_receive() -> dict:
+            nonlocal total_bytes
+            message = await receive()
+            if message.get("type") == "http.request":
+                total_bytes += len(message.get("body", b""))
+                if total_bytes > self.max_body_bytes:
+                    raise _PayloadTooLargeError()
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _PayloadTooLargeError:
+            await self._send_413(send)
+
+    @staticmethod
+    async def _send_413(send: Send) -> None:
+        body = json.dumps({"detail": "요청 바디가 너무 큽니다."}).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
 
 ALLOWED_INDEX_NAMES: frozenset[str] = frozenset({
     "product_index_v3",
@@ -38,6 +96,21 @@ ALLOWED_INDEX_NAMES: frozenset[str] = frozenset({
     "product_v4_spec_feature",
 })
 
+ALLOWED_PIPELINE_IDS: frozenset[str] = frozenset({
+    "hybrid-minmax-pipeline",
+})
+
+ALLOWED_VECTOR_FIELDS: frozenset[str] = frozenset({
+    "combined_vector",
+    "function_desc_vector",
+    "attribute_desc_vector",
+    "target_user_vector",
+    "spec_feature_vector",
+})
+
+# BM25 필드명: 알파벳·밑줄로 시작, 알파벳·밑줄·숫자로 구성, 선택적으로 boost 접미사(^숫자)
+_BM25_FIELD_RE = re.compile(r'^[a-zA-Z_][a-zA-Z_0-9]*(\^[0-9]+(\.[0-9]+)?)?$')
+
 
 def _validate_index_name(v: str) -> str:
     if v not in ALLOWED_INDEX_NAMES:
@@ -45,7 +118,28 @@ def _validate_index_name(v: str) -> str:
     return v
 
 
+def _validate_pipeline_id(v: str) -> str:
+    if v not in ALLOWED_PIPELINE_IDS:
+        raise ValueError(f"허용되지 않는 파이프라인 ID입니다: '{v}'")
+    return v
+
+
+def _validate_bm25_field(v: str) -> str:
+    if not _BM25_FIELD_RE.match(v):
+        raise ValueError(f"유효하지 않은 BM25 필드명입니다: '{v}'")
+    return v
+
+
+def _validate_vector_field(v: str) -> str:
+    if v not in ALLOWED_VECTOR_FIELDS:
+        raise ValueError(f"허용되지 않는 벡터 필드입니다: '{v}'")
+    return v
+
+
 ValidatedIndexName = Annotated[str, AfterValidator(_validate_index_name)]
+ValidatedPipelineId = Annotated[str, AfterValidator(_validate_pipeline_id)]
+ValidatedBm25Field = Annotated[str, AfterValidator(_validate_bm25_field)]
+ValidatedVectorField = Annotated[str, AfterValidator(_validate_vector_field)]
 
 
 class InternalTokenMiddleware(BaseHTTPMiddleware):
@@ -65,18 +159,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# InternalTokenMiddleware는 CORS보다 먼저 등록 (인증 먼저 체크)
 app.add_middleware(InternalTokenMiddleware)
-
-# CORS 설정
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(_BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
 
 # OpenSearch 클라이언트 (싱글톤)
 opensearch_client = None
@@ -87,13 +171,13 @@ class ProductIDSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
     product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
     index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 결과 개수 (1-100)")
-    bm25_fields: Optional[List[str]] = Field(
+    bm25_fields: Optional[List[ValidatedBm25Field]] = Field(
         default=None,
         description="BM25 multi_match 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)"
     )
-    vector_field: Optional[str] = Field(
+    vector_field: Optional[ValidatedVectorField] = Field(
         default="combined_vector",
         description="KNN 대상 벡터 필드 (기본: combined_vector)"
     )
@@ -177,14 +261,14 @@ class CombinedSearchResponse(BaseModel):
 
 class FieldSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    bm25_fields: List[str] = Field(
+    bm25_fields: List[ValidatedBm25Field] = Field(
         ...,
         description="BM25 multi_match 대상 필드 리스트 (예: ['function_tags', 'function_desc'])"
     )
-    vector_field: str = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
+    vector_field: ValidatedVectorField = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
     product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
     index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=50, ge=1, le=200, description="반환할 결과 개수 (1-200)")
 
     class Config:
@@ -219,8 +303,8 @@ class MultiVectorSearchRequest(BaseModel):
     index_name: ValidatedIndexName = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
     product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_length=1, max_length=500)
     top_k: int = Field(default=100, ge=1, le=200, description="반환할 상품 수")
-    aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline")
+    aggregation: Literal["max", "topk_avg"] = Field(default="max", description="집계 방식")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline")
 
 
 class MultiVectorSearchResponse(BaseModel):
@@ -233,7 +317,7 @@ class MultiVectorSearchResponse(BaseModel):
 
 class IndexMultivectorRequest(BaseModel):
     product_id: str = Field(..., description="등록할 상품 ID")
-    group: str = Field(..., description="멀티벡터 그룹 (A~G)")
+    group: Literal["A", "B", "C", "D", "E", "F", "G"] = Field(..., description="멀티벡터 그룹")
     multivector: Dict[str, List[str]] = Field(
         ..., description="필드명 → 문장 리스트 (combined, function_desc, attribute_desc, target_user, spec_feature)"
     )
@@ -301,7 +385,7 @@ async def health_check():
 @app.get("/api/product/{product_id}")
 async def get_product_by_id(
     product_id: str,
-    index_name: str = Query(default="product_index_v3", description="검색할 인덱스 이름")
+    index_name: ValidatedIndexName = Query(default="product_index_v3", description="검색할 인덱스 이름")
 ):
     """
     Product ID로 단일 상품 문서 조회
@@ -309,8 +393,6 @@ async def get_product_by_id(
     - **product_id**: 조회할 상품 ID (필수)
     - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     """
-    if index_name not in ALLOWED_INDEX_NAMES:
-        raise HTTPException(status_code=422, detail="허용되지 않는 인덱스 이름입니다.")
     try:
         logging.info(f"Product ID 조회 요청 - product_id: {product_id}")
 

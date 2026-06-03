@@ -5,7 +5,7 @@ from starlette.responses import JSONResponse
 
 from ..config.settings import settings
 
-_SKIP_PATHS = {"/", "/health"}
+_SKIP_PATHS = {"/", "/health", "/ready"}
 
 
 class InternalTokenMiddleware(BaseHTTPMiddleware):

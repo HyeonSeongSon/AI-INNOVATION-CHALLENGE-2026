@@ -219,6 +219,7 @@ def make_recommend_product_node(client: A2AClient):
             task = await client.send_task(session_id, {
                 "messages": _filter_handoff_messages(state.get("messages", [])),
                 "active_persona_id": state.get("active_persona_id"),
+                "user_id": (config or {}).get("configurable", {}).get("user_id"),
             })
         except Exception as e:
             _logger.error("recommend_product_agent_failed", node_name="recommend_product_agent", error_type=type(e).__name__)
@@ -305,6 +306,7 @@ def make_generate_message_node(client: A2AClient):
             task = await client.send_task(session_id, {
                 "messages": _filter_handoff_messages(state.get("messages", [])),
                 "active_persona_id": state.get("active_persona_id"),
+                "user_id": (config or {}).get("configurable", {}).get("user_id"),
             })
         except Exception as e:
             _logger.error("generate_message_agent_failed", node_name="generate_message_agent", error_type=type(e).__name__)

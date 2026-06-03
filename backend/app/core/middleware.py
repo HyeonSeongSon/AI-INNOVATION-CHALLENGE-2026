@@ -5,6 +5,7 @@
 contextvars를 통해 전체 에이전트 실행 과정에 전파됩니다.
 """
 
+import re
 import time
 from typing import Callable
 
@@ -14,6 +15,9 @@ from starlette.responses import Response
 
 from .context import generate_request_id, set_request_id
 from .logging import get_logger
+
+# 영숫자 + 하이픈만 허용, 최대 64자. 클라이언트 제공 X-Request-ID 검증용
+_REQUEST_ID_RE = re.compile(r'^[a-zA-Z0-9\-]{1,64}$')
 
 logger = get_logger("http")
 
@@ -28,8 +32,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 상관관계 ID 생성 및 설정
-        request_id = request.headers.get("X-Request-ID") or generate_request_id()
+        # 클라이언트 제공 X-Request-ID는 형식 검증 후 신뢰, 미통과 시 서버 생성값 사용
+        client_request_id = request.headers.get("X-Request-ID", "")
+        request_id = (
+            client_request_id
+            if client_request_id and _REQUEST_ID_RE.match(client_request_id)
+            else generate_request_id()
+        )
         set_request_id(request_id)
 
         # 엔드포인트에서 접근할 수 있도록 request.state에 저장

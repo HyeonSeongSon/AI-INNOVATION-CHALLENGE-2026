@@ -50,64 +50,64 @@ class PersonaListRequest(BaseModel):
 
 class PersonaCreate(BaseModel):
     """페르소나 생성 요청"""
-    name: str = Field(..., description="이름", examples=["김지현"])
-    gender: Optional[str] = Field(None, description="성별", examples=["여성"])
+    name: str = Field(..., max_length=200, description="이름", examples=["김지현"])
+    gender: Optional[str] = Field(None, max_length=20, description="성별", examples=["여성"])
     age: Optional[int] = Field(None, description="나이", examples=[28])
-    occupation: Optional[str] = Field(None, description="직업", examples=["마케터"])
-    skin_type: Optional[List[str]] = Field(default=[], description="피부 타입", examples=[["지성", "복합성"]])
-    concerns: Optional[List[str]] = Field(default=[], description="고민 (피부·헤어·기타)", examples=[["모공", "칙칙함"]])
-    personal_color: Optional[str] = Field(None, description="퍼스널 컬러", examples=["웜톤"])
+    occupation: Optional[str] = Field(None, max_length=500, description="직업", examples=["마케터"])
+    skin_type: Optional[List[str]] = Field(default=[], max_length=50, description="피부 타입", examples=[["지성", "복합성"]])
+    concerns: Optional[List[str]] = Field(default=[], max_length=50, description="고민 (피부·헤어·기타)", examples=[["모공", "칙칙함"]])
+    personal_color: Optional[str] = Field(None, max_length=50, description="퍼스널 컬러", examples=["웜톤"])
     shade_number: Optional[int] = Field(None, description="셰이드 번호", examples=[21])
-    preferred_colors: Optional[List[str]] = Field(default=[], description="선호 색상", examples=[["코랄", "핑크"]])
-    preferred_ingredients: Optional[List[str]] = Field(default=[], description="선호 성분", examples=[["히알루론산", "나이아신아마이드"]])
-    avoided_ingredients: Optional[List[str]] = Field(default=[], description="기피 성분", examples=[["알코올", "파라벤"]])
-    preferred_scents: Optional[List[str]] = Field(default=[], description="선호 향", examples=["플로럴"])
-    lifestyle_values: Optional[List[str]] = Field(default=[], description="가치관/라이프스타일", examples=[["비건", "친환경"]])
-    skincare_routine: Optional[List[str]] = Field(default=[], description="스킨케어 루틴", examples=[["간단한 루틴"]])
-    main_environment: Optional[List[str]] = Field(default=[], description="주 활동 환경", examples=[["실내"]])
-    preferred_texture: Optional[List[str]] = Field(default=[], description="선호 제형", examples=[["에센스", "세럼"]])
-    hair_type: Optional[List[str]] = Field(default=[], description="헤어 타입", examples=[["직모", "손상모"]])
-    beauty_interests: Optional[List[str]] = Field(default=[], description="관심 뷰티 카테고리", examples=[["스킨케어", "헤어"]])
-    pets: Optional[List[str]] = Field(default=[], description="반려동물", examples=[["고양이"]])
+    preferred_colors: Optional[List[str]] = Field(default=[], max_length=50, description="선호 색상", examples=[["코랄", "핑크"]])
+    preferred_ingredients: Optional[List[str]] = Field(default=[], max_length=50, description="선호 성분", examples=[["히알루론산", "나이아신아마이드"]])
+    avoided_ingredients: Optional[List[str]] = Field(default=[], max_length=50, description="기피 성분", examples=[["알코올", "파라벤"]])
+    preferred_scents: Optional[List[str]] = Field(default=[], max_length=50, description="선호 향", examples=["플로럴"])
+    lifestyle_values: Optional[List[str]] = Field(default=[], max_length=50, description="가치관/라이프스타일", examples=[["비건", "친환경"]])
+    skincare_routine: Optional[List[str]] = Field(default=[], max_length=50, description="스킨케어 루틴", examples=[["간단한 루틴"]])
+    main_environment: Optional[List[str]] = Field(default=[], max_length=50, description="주 활동 환경", examples=[["실내"]])
+    preferred_texture: Optional[List[str]] = Field(default=[], max_length=50, description="선호 제형", examples=[["에센스", "세럼"]])
+    hair_type: Optional[List[str]] = Field(default=[], max_length=50, description="헤어 타입", examples=[["직모", "손상모"]])
+    beauty_interests: Optional[List[str]] = Field(default=[], max_length=50, description="관심 뷰티 카테고리", examples=[["스킨케어", "헤어"]])
+    pets: Optional[List[str]] = Field(default=[], max_length=50, description="반려동물", examples=[["고양이"]])
     avg_sleep_hours: Optional[int] = Field(None, description="평균 수면 시간", examples=[6])
-    stress_level: Optional[str] = Field(None, description="스트레스 수준", examples=["높음"])
+    stress_level: Optional[str] = Field(None, max_length=50, description="스트레스 수준", examples=["높음"])
     daily_screen_hours: Optional[int] = Field(None, description="하루 스크린 사용 시간", examples=[8])
-    shopping_style: Optional[List[str]] = Field(default=[], description="쇼핑 스타일", examples=[["신중형"]])
-    purchase_decision_factors: Optional[List[str]] = Field(default=[], description="구매 결정 요인", examples=[["리뷰", "성분"]])
-    price_sensitivity: Optional[str] = Field(None, description="가격 민감도", examples=["가성비중시"])
-    preferred_brands: Optional[List[str]] = Field(default=[], description="선호 브랜드", examples=[["설화수"]])
-    avoided_brands: Optional[List[str]] = Field(default=[], description="기피 브랜드", examples=[])
-    persona_summary: Optional[str] = Field(None, description="AI 생성 페르소나 요약")
-    user_id: Optional[str] = Field(None, description="생성자 사용자 ID")
+    shopping_style: Optional[List[str]] = Field(default=[], max_length=50, description="쇼핑 스타일", examples=[["신중형"]])
+    purchase_decision_factors: Optional[List[str]] = Field(default=[], max_length=50, description="구매 결정 요인", examples=[["리뷰", "성분"]])
+    price_sensitivity: Optional[str] = Field(None, max_length=50, description="가격 민감도", examples=["가성비중시"])
+    preferred_brands: Optional[List[str]] = Field(default=[], max_length=50, description="선호 브랜드", examples=[["설화수"]])
+    avoided_brands: Optional[List[str]] = Field(default=[], max_length=50, description="기피 브랜드", examples=[])
+    persona_summary: Optional[str] = Field(None, max_length=10_000, description="AI 생성 페르소나 요약")
+    user_id: Optional[str] = Field(None, max_length=100, description="생성자 사용자 ID")
 
 
 class ProductByTagRequest(BaseModel):
     """상품종류(태그)로 상품 조회 요청"""
-    tag: str = Field(..., description="상품 태그(종류)", examples=["에센스&세럼&오일"])
+    tag: str = Field(..., max_length=200, description="상품 태그(종류)", examples=["에센스&세럼&오일"])
     page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
     page_size: int = Field(PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_BY_TAG_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 class ProductByBrandRequest(BaseModel):
     """브랜드명으로 상품 조회 요청"""
-    brand: str = Field(..., description="브랜드명", examples=["설화수"])
+    brand: str = Field(..., max_length=100, description="브랜드명", examples=["설화수"])
     page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
     page_size: int = Field(PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_BY_BRAND_MAX_PAGE_SIZE, description="페이지당 항목 수")
 
 
 class ProductFilterRequest(BaseModel):
     """상품 필터링 요청"""
-    brands: Optional[List[str]] = Field(None, description="브랜드 리스트 (OR 조건)")
-    product_categories: Optional[List[str]] = Field(None, description="상품 카테고리 리스트 (OR 조건)")
-    exclusive_target: Optional[str] = Field(None, description="전용 제품")
-    skin_type: Optional[List[str]] = Field(None, description="피부 타입 (OR 조건)")
-    concerns: Optional[List[str]] = Field(None, description="고민 (OR 조건)")
-    preferred_colors: Optional[List[str]] = Field(None, description="선호 색상 (OR 조건)")
-    preferred_ingredients: Optional[List[str]] = Field(None, description="선호 성분 (OR 조건)")
-    avoided_ingredients: Optional[List[str]] = Field(None, description="기피 성분 (제외 조건)")
-    preferred_scents: Optional[List[str]] = Field(None, description="선호 향 (OR 조건)")
-    lifestyle_values: Optional[List[str]] = Field(None, description="가치관 (OR 조건)")
-    personal_color: Optional[str] = Field(None, description="퍼스널 컬러")
+    brands: Optional[List[str]] = Field(None, max_length=50, description="브랜드 리스트 (OR 조건)")
+    product_categories: Optional[List[str]] = Field(None, max_length=50, description="상품 카테고리 리스트 (OR 조건)")
+    exclusive_target: Optional[str] = Field(None, max_length=200, description="전용 제품")
+    skin_type: Optional[List[str]] = Field(None, max_length=50, description="피부 타입 (OR 조건)")
+    concerns: Optional[List[str]] = Field(None, max_length=50, description="고민 (OR 조건)")
+    preferred_colors: Optional[List[str]] = Field(None, max_length=50, description="선호 색상 (OR 조건)")
+    preferred_ingredients: Optional[List[str]] = Field(None, max_length=50, description="선호 성분 (OR 조건)")
+    avoided_ingredients: Optional[List[str]] = Field(None, max_length=50, description="기피 성분 (제외 조건)")
+    preferred_scents: Optional[List[str]] = Field(None, max_length=50, description="선호 향 (OR 조건)")
+    lifestyle_values: Optional[List[str]] = Field(None, max_length=50, description="가치관 (OR 조건)")
+    personal_color: Optional[str] = Field(None, max_length=50, description="퍼스널 컬러")
     shade_number: Optional[int] = Field(None, description="셰이드 번호")
     page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
     page_size: int = Field(PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, ge=1, le=PRODUCTS_FILTER_MAX_PAGE_SIZE, description="페이지당 항목 수")
@@ -206,11 +206,11 @@ class PersonaListResponse(BaseModel):
 
 class ProductSearchQueryCreate(BaseModel):
     """페르소나 검색 쿼리 저장 요청"""
-    persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
-    need: str = Field(..., description="니즈 쿼리", examples=["탈모 케어 샴푸"])
-    preference: str = Field(..., description="선호도 쿼리", examples=["자연 성분 샴푸"])
-    retrieval: str = Field(..., description="검색 쿼리", examples=["탈모 두피 케어 샴푸 추천"])
-    persona: str = Field(..., description="페르소나 쿼리", examples=["민감 두피 남성"])
+    persona_id: str = Field(..., max_length=20, description="페르소나 ID", examples=["PERSONA_001"])
+    need: str = Field(..., max_length=1_000, description="니즈 쿼리", examples=["탈모 케어 샴푸"])
+    preference: str = Field(..., max_length=1_000, description="선호도 쿼리", examples=["자연 성분 샴푸"])
+    retrieval: str = Field(..., max_length=1_000, description="검색 쿼리", examples=["탈모 두피 케어 샴푸 추천"])
+    persona: str = Field(..., max_length=1_000, description="페르소나 쿼리", examples=["민감 두피 남성"])
 
 
 class ProductSearchQueryGetRequest(BaseModel):
@@ -541,11 +541,11 @@ def _to_product_detail(p) -> ProductDetailResponse:
 
 @router.get("/products", response_model=ProductListResponse, summary="상품 목록 조회 (필터/페이지네이션)")
 async def list_products(
-    search: Optional[str] = None,
-    brand: Optional[str] = None,
-    category: Optional[str] = None,
-    tag: Optional[str] = None,
-    sub_tag: Optional[str] = None,
+    search: Optional[str] = Query(None, max_length=200),
+    brand: Optional[str] = Query(None, max_length=100),
+    category: Optional[str] = Query(None, max_length=200),
+    tag: Optional[str] = Query(None, max_length=200),
+    sub_tag: Optional[str] = Query(None, max_length=200),
     min_price: Optional[int] = Query(None, ge=0, le=10_000_000),
     max_price: Optional[int] = Query(None, ge=0, le=10_000_000),
     min_discount: Optional[int] = Query(None, ge=0, le=100),

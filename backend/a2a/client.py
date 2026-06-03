@@ -8,6 +8,7 @@ from langchain_core.messages import BaseMessage
 from .models import DataPart, Message, Task, TaskSendRequest
 from .serialization import serialize_messages
 from app.config.settings import settings
+from app.core.context import get_request_id
 from app.core.logging import get_logger
 from app.core.http_client_registry import register
 
@@ -58,12 +59,17 @@ class A2AClient:
         last_exc: Exception | None = None
         attempt_errors: list[str] = []
 
+        extra_headers: dict[str, str] = {}
+        if rid := get_request_id():
+            extra_headers["X-Request-ID"] = rid
+
         for attempt in range(settings.a2a_max_retries):
             try:
                 resp = await self.http_client.post(
                     f"{self.base_url}/tasks/send",
                     json=req.model_dump(),
                     timeout=timeout,
+                    headers=extra_headers,
                 )
                 resp.raise_for_status()
                 try:

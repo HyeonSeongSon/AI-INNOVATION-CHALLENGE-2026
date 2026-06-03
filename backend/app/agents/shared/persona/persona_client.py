@@ -2,6 +2,8 @@ from typing import Dict, Any, Optional
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....config.settings import settings
+from ....core.auth import UserContext
+from ....core.auth_utils import create_user_assertion
 from ....core.http_client_registry import register
 import httpx
 
@@ -26,15 +28,9 @@ class PersonaClient:
 
     def _make_user_assertion(self, user_id: str) -> str:
         """user_id를 database 엔드포인트용 X-User-Assertion JWT로 직렬화."""
-        import time
-        from jose import jwt as jose_jwt
-        payload = {
-            "iss": "api-gateway",
-            "aud": "internal",
-            "user_id": user_id,
-            "exp": int(time.time()) + 300,
-        }
-        return jose_jwt.encode(payload, settings.internal_token, algorithm="HS256")
+        return create_user_assertion(
+            UserContext(user_id=user_id, role="user", auth_method="jwt")
+        )
 
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:

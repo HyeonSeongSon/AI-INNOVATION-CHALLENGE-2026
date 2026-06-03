@@ -8,7 +8,6 @@ import json
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -29,7 +28,7 @@ if not _INTERNAL_TOKEN:
 if len(_INTERNAL_TOKEN) < 32:
     raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
 
-_SKIP_PATHS = {"/", "/health"}
+_SKIP_PATHS = {"/", "/health", "/ready"}
 _MAX_BODY_BYTES = 10 * 1024 * 1024  # 10MB
 
 
@@ -104,18 +103,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# InternalTokenMiddleware는 CORS보다 먼저 등록 (인증 먼저 체크)
 app.add_middleware(InternalTokenMiddleware)
 app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
-
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(db_router)
 app.include_router(conversations_router)
