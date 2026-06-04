@@ -17,6 +17,7 @@ from core.pagination import (
     PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE, PRODUCTS_BY_TAG_MAX_PAGE_SIZE,
     PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE, PRODUCTS_BY_BRAND_MAX_PAGE_SIZE,
     PRODUCTS_FILTER_DEFAULT_PAGE_SIZE, PRODUCTS_FILTER_MAX_PAGE_SIZE,
+    encode_persona_cursor, decode_persona_cursor,
 )
 
 # 라우터 생성
@@ -46,6 +47,7 @@ class PersonaListRequest(BaseModel):
     role: Optional[str] = Field(None, description="요청자 역할 ('admin'이면 전체 조회)")
     page: int = Field(1, ge=1, le=10000, description="페이지 번호 (1부터 시작)")
     page_size: int = Field(PERSONAS_LIST_DEFAULT_PAGE_SIZE, ge=1, le=PERSONAS_LIST_MAX_PAGE_SIZE, description="페이지당 항목 수")
+    after_cursor: Optional[str] = Field(None, description="커서 기반 다음 페이지 커서 (base64url)")
 
 
 class PersonaCreate(BaseModel):
@@ -202,6 +204,8 @@ class PersonaListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    next_cursor: Optional[str] = None
+    has_next: bool = False
 
 
 class ProductSearchQueryCreate(BaseModel):
@@ -313,8 +317,18 @@ async def list_personas(
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ):
-    from sqlalchemy import or_
+    from sqlalchemy import or_, and_
 
+    # after_cursor 파싱
+    cursor_ts = None
+    cursor_id = None
+    if request.after_cursor:
+        try:
+            cursor_ts, cursor_id = decode_persona_cursor(request.after_cursor)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid cursor format")
+
+    # access control 필터
     query = db.query(Persona)
     role = resolve_role(db, x_user_id)
     if role != "admin":
@@ -322,10 +336,39 @@ async def list_personas(
             or_(Persona.user_id == x_user_id, Persona.user_id.is_(None))
         )
 
-    page_size = min(request.page_size, PERSONAS_LIST_MAX_PAGE_SIZE)
+    # 전체 건수 (커서 적용 전)
     total = query.count()
+
+    # keyset 필터 (커서가 있을 때만)
+    if cursor_ts is not None:
+        query = query.filter(
+            or_(
+                Persona.persona_created_at < cursor_ts,
+                and_(
+                    Persona.persona_created_at == cursor_ts,
+                    Persona.persona_id < cursor_id,
+                ),
+            )
+        )
+
+    # 정렬 + limit (has_next 감지를 위해 +1)
+    page_size = min(request.page_size, PERSONAS_LIST_MAX_PAGE_SIZE)
+    rows = (
+        query
+        .order_by(Persona.persona_created_at.desc(), Persona.persona_id.desc())
+        .limit(page_size + 1)
+        .all()
+    )
+    has_next = len(rows) > page_size
+    personas = rows[:page_size]
+
+    # next_cursor 생성
+    next_cursor: Optional[str] = None
+    if has_next and personas:
+        last = personas[-1]
+        next_cursor = encode_persona_cursor(last.persona_created_at, last.persona_id)
+
     total_pages = (total + page_size - 1) // page_size
-    personas = query.order_by(Persona.persona_created_at.desc()).offset((request.page - 1) * page_size).limit(page_size).all()
 
     email_map: dict[str, str] = {}
     if role == "admin":
@@ -381,6 +424,8 @@ async def list_personas(
         page=request.page,
         page_size=page_size,
         total_pages=total_pages,
+        next_cursor=next_cursor,
+        has_next=has_next,
     )
 
 

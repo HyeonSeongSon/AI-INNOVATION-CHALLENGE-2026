@@ -34,8 +34,9 @@ services:
     <<: *opensearch-resources
     volumes:
       - opensearch-data1:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
     expose:
-      - "9200"
       - "9600"
     healthcheck: *opensearch-healthcheck
     networks:

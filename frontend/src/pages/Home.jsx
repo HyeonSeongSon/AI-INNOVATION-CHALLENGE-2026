@@ -320,14 +320,14 @@ export default function Home() {
         const response = await pipelineApi.post('/personas/list', {
           user_id: user.role === 'admin' ? undefined : user.id,
           role: user.role,
+          page_size: 5,
         });
 
-        // 백엔드 응답 구조에 따라 데이터 추출 (배열인지, 객체 안의 배열인지 확인)
-        const data = Array.isArray(response.data) ? response.data : (response.data.personas || []);
+        const data = Array.isArray(response.data) ? response.data : (response.data.items || []);
 
         setPersonaStats({
-          count: data.length,
-          list: data.slice(0, 5)
+          count: response.data.total ?? data.length,
+          list: data,
         });
       } catch (error) {
         console.error("페르소나 데이터 로드 실패:", error);

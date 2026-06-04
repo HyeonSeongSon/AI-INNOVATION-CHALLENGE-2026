@@ -41,7 +41,7 @@ class OpenSearchHybridClient:
             if not self.client.ping():
                 raise exceptions.ConnectionError("OpenSearch에 연결할 수 없습니다.")
             logger.info("opensearch_connected")
-        except exceptions.OpenSearchException as e:
+        except Exception as e:
             logger.error("opensearch_init_failed", error_type=type(e).__name__)
             self.client = None
 

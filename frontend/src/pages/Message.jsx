@@ -407,8 +407,9 @@ export default function Message() {
         const response = await pipelineApi.post('/personas/list', {
           user_id: user?.role === 'admin' ? undefined : user?.id,
           role: user?.role,
+          page_size: 200,
         });
-        const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
+        const rawData = Array.isArray(response.data) ? response.data : response.data.items || [];
         const pData = rawData.map(p => ({
           ...p,
           persona_id: p.persona_id || p.id,

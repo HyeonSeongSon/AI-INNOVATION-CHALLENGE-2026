@@ -359,8 +359,12 @@ export default function PersonaManager() {
   const isAdmin = user?.role === 'admin';
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [cursorStack, setCursorStack] = useState([null]); // null = 첫 페이지
+  const [pageIndex, setPageIndex] = useState(0);
 
-  const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // 검색 쿼리 모달
@@ -381,12 +385,14 @@ export default function PersonaManager() {
   const { addToast } = useToast();
 
   /* 목록 로드 */
-  const fetchPersonas = async () => {
+  const fetchPersonas = async (cursor = null) => {
     setLoading(true);
     try {
       const response = await pipelineApi.post('/personas/list', {
         user_id: user?.role === 'admin' ? undefined : user?.id,
         role: user?.role,
+        page_size: PAGE_SIZE,
+        after_cursor: cursor ?? undefined,
       });
       const rawData = Array.isArray(response.data) ? response.data : response.data.items || [];
       const formatted = rawData.map(p => ({
@@ -399,6 +405,9 @@ export default function PersonaManager() {
         },
       }));
       setPersonas(formatted);
+      setTotal(response.data.total ?? 0);
+      setHasNext(response.data.has_next ?? false);
+      setNextCursor(response.data.next_cursor ?? null);
     } catch (err) {
       const status = err?.response?.status;
       const detail = err?.response?.data?.detail;
@@ -410,7 +419,14 @@ export default function PersonaManager() {
     }
   };
 
-  useEffect(() => { fetchPersonas(); }, []);
+  /* 첫 페이지로 리셋 후 재로드 (생성/삭제 후 호출) */
+  const refreshPersonas = () => {
+    setCursorStack([null]);
+    setPageIndex(0);
+    fetchPersonas(null);
+  };
+
+  useEffect(() => { fetchPersonas(null); }, []);
 
   useEffect(() => {
     const openId = location.state?.openPersonaId;
@@ -419,17 +435,31 @@ export default function PersonaManager() {
     if (target) handleRowClick(target);
   }, [personas, location.state?.openPersonaId]);
 
-  /* 페이지네이션 */
-  const totalPages = Math.max(1, Math.ceil(personas.length / PAGE_SIZE));
-  const pagedPersonas = personas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  /* 페이지 이동 핸들러 */
+  const handleNextPage = () => {
+    if (!hasNext || !nextCursor) return;
+    const newStack = [...cursorStack.slice(0, pageIndex + 1), nextCursor];
+    setCursorStack(newStack);
+    setPageIndex(pageIndex + 1);
+    setSelectedIds(new Set());
+    fetchPersonas(nextCursor);
+  };
+
+  const handlePrevPage = () => {
+    if (pageIndex <= 0) return;
+    const newIndex = pageIndex - 1;
+    setPageIndex(newIndex);
+    setSelectedIds(new Set());
+    fetchPersonas(cursorStack[newIndex]);
+  };
 
   /* 체크박스 */
-  const allChecked = pagedPersonas.length > 0 && pagedPersonas.every(p => selectedIds.has(p.id));
-  const someChecked = pagedPersonas.some(p => selectedIds.has(p.id));
+  const allChecked = personas.length > 0 && personas.every(p => selectedIds.has(p.id));
+  const someChecked = personas.some(p => selectedIds.has(p.id));
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(pagedPersonas.map(p => p.id)));
+      setSelectedIds(new Set(personas.map(p => p.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -451,7 +481,7 @@ export default function PersonaManager() {
     try {
       await pipelineApi.delete('/personas', { data: { ids: [...selectedIds] } });
       setSelectedIds(new Set());
-      await fetchPersonas();
+      refreshPersonas();
       addToast(`${selectedIds.size}개 삭제되었습니다.`, 'info');
     } catch (err) {
       console.error('삭제 실패:', err);
@@ -476,7 +506,7 @@ export default function PersonaManager() {
     setIsCreating(true);
     try {
       await api.post('/pipeline/personas/create-from-text', { text: personaText });
-      await fetchPersonas();
+      refreshPersonas();
       addToast('페르소나 생성 완료!', 'success');
       setShowTextModal(false);
       setPersonaText('');
@@ -581,7 +611,7 @@ export default function PersonaManager() {
             }
             if (event.type === 'done') {
               setFileProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
-              await fetchPersonas();
+              refreshPersonas();
               setIsFileCreating(false);
               return;
             }
@@ -608,7 +638,7 @@ export default function PersonaManager() {
         <h1>
           <User size={22} color="#6B4DFF" />
           페르소나 관리
-          <TotalBadge>총 {personas.length}개</TotalBadge>
+          <TotalBadge>총 {total}개</TotalBadge>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <FileButton onClick={() => { setShowFileModal(true); setFileProgress(null); setUploadFile(null); }}>
@@ -655,10 +685,10 @@ export default function PersonaManager() {
             <tbody>
               {loading ? (
                 <EmptyRow><td colSpan={isAdmin ? 8 : 7}>불러오는 중...</td></EmptyRow>
-              ) : pagedPersonas.length === 0 ? (
+              ) : personas.length === 0 ? (
                 <EmptyRow><td colSpan={isAdmin ? 8 : 7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
               ) : (
-                pagedPersonas.map(p => (
+                personas.map(p => (
                   <Tr
                     key={p.id}
                     $selected={selectedIds.has(p.id)}
@@ -704,16 +734,16 @@ export default function PersonaManager() {
         {/* 페이지네이션 */}
         <Pagination>
           <span style={{ color: '#AAA', fontSize: 12 }}>
-            {personas.length > 0
-              ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, personas.length)} / ${personas.length}`
+            {total > 0
+              ? `${pageIndex * PAGE_SIZE + 1}–${pageIndex * PAGE_SIZE + personas.length} / ${total}`
               : ''}
           </span>
-          <PageBtn onClick={() => { setPage(p => p - 1); setSelectedIds(new Set()); }} disabled={page <= 1}>
+          <PageBtn onClick={handlePrevPage} disabled={pageIndex <= 0}>
             <ChevronLeft /> 이전
           </PageBtn>
-          <CurrentPage>{page}</CurrentPage>
-          <span style={{ color: '#AAA' }}>/ {totalPages}</span>
-          <PageBtn onClick={() => { setPage(p => p + 1); setSelectedIds(new Set()); }} disabled={page >= totalPages}>
+          <CurrentPage>{pageIndex + 1}</CurrentPage>
+          <span style={{ color: '#AAA' }}>/ {Math.ceil(total / PAGE_SIZE) || 1}</span>
+          <PageBtn onClick={handleNextPage} disabled={!hasNext}>
             다음 <ChevronRight />
           </PageBtn>
         </Pagination>
