@@ -34,10 +34,31 @@ configure_logging(
 logger = get_logger("main")
 
 
+def _seed_admin_if_needed() -> None:
+    email = settings.admin_seed_email.strip()
+    password = settings.admin_seed_password
+    if not email or not password:
+        return
+
+    from app.core.database import SessionLocal
+    from app.core.models import User
+    from app.core.security import hash_password
+
+    with SessionLocal() as db:
+        if db.query(User).filter(User.email == email).first():
+            logger.info("admin_seed_skipped", reason="already_exists")
+            return
+        db.add(User(email=email, password_hash=hash_password(password), role="admin"))
+        db.commit()
+
+    logger.info("admin_seeded")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.core.rate_limiter import PostgresRateLimiter
     from app.core.database import SessionLocal
+    _seed_admin_if_needed()
     app.state.auth_provider = get_auth_provider()
     _auth_log = logger.warning if settings.auth_mode == "api_key" else logger.info
     _auth_log("auth_mode_active", auth_mode=settings.auth_mode)

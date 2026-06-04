@@ -1,0 +1,6 @@
+aws_region   = "ap-northeast-2"
+project_name = "ai-innovation"
+
+# GitHub 저장소 정보 — OIDC 신뢰 조건에 사용
+github_org  = "your-github-username-or-org"   # 예: "son"
+github_repo = "AI-INNOVATION-CHALLENGE-2026"

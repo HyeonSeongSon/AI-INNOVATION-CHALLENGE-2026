@@ -237,6 +237,10 @@ class Settings(BaseSettings):
     llm_temperature_vision: float = 0.0
     llm_temperature_document: float = 0.7
 
+    # Admin seed — 최초 배포 시 admin 계정 자동 생성, 이후 Secrets Manager 삭제로 비활성화
+    admin_seed_email: str = ""
+    admin_seed_password: str = ""
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_allowed_origins(cls, v: object) -> object:
