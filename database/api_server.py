@@ -14,6 +14,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 load_dotenv()
 
+from core.logging import configure_logging, RequestLoggingMiddleware
+
+configure_logging()
+
 from routers.api_endpoints import router as db_router
 from routers.conversations_router import router as conversations_router
 from routers.generated_messages_router import router as generated_messages_router
@@ -105,6 +109,7 @@ app = FastAPI(
 
 app.add_middleware(InternalTokenMiddleware)
 app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(db_router)
 app.include_router(conversations_router)

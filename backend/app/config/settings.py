@@ -189,6 +189,7 @@ class Settings(BaseSettings):
 
     # SSE keepalive & file upload
     sse_keepalive_timeout: float = 25.0
+    sse_stream_max_seconds: int = 7320  # upload_job_max_seconds(7200) + 120s 버퍼
     max_upload_bytes: int = 52428800  # 50 * 1024 * 1024
 
     # Chat request body size limit (미들웨어에서 강제 적용)

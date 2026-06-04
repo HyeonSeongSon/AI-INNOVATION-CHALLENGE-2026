@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -34,10 +35,17 @@ async def create_persona_from_text_tool(
     llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
 
     try:
-        structured_persona = await generate_structured_persona_info(human_messages, llm)
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(human_messages, llm),
+            generate_search_query(human_messages, llm),
+        )
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
-        raw_queries = await generate_search_query(human_messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        try:
+            await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        except Exception:
+            logger.warning("compensating_delete", persona_id=persona_id)
+            await persona_client.delete_persona(persona_id, user_id=user_id)
+            raise
 
         summary = (
             f"**페르소나 등록 완료**\n\n"

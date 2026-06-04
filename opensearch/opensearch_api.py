@@ -11,6 +11,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from typing import Annotated, Dict, Literal, Optional, List, Union
 import logging
 import os
+import sys
+import structlog
 from dotenv import load_dotenv
 from opensearch_hybrid import OpenSearchHybridClient
 
@@ -18,10 +20,30 @@ from opensearch_hybrid import OpenSearchHybridClient
 load_dotenv()
 
 # 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
+_formatter = structlog.stdlib.ProcessorFormatter(
+    processor=structlog.processors.JSONRenderer(ensure_ascii=False),
+)
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(_formatter)
+_root = logging.getLogger()
+_root.handlers = []
+_root.addHandler(_handler)
+_root.setLevel(logging.INFO)
+
+logger = structlog.get_logger("opensearch_api")
 
 _INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
 if not _INTERNAL_TOKEN:
@@ -336,21 +358,22 @@ def get_opensearch_client() -> OpenSearchHybridClient:
     """OpenSearch 클라이언트 싱글톤"""
     global opensearch_client
     if opensearch_client is None:
-        opensearch_client = OpenSearchHybridClient()
-        if not opensearch_client.client:
+        candidate = OpenSearchHybridClient()
+        if not candidate.client:
             raise HTTPException(status_code=500, detail="OpenSearch 클라이언트 초기화 실패")
+        opensearch_client = candidate
     return opensearch_client
 
 
 @app.on_event("startup")
 async def startup_event():
     """서버 시작 시 OpenSearch 클라이언트 초기화"""
-    logging.info("FastAPI 서버 시작 중...")
+    logger.info("server_starting")
     try:
         get_opensearch_client()
-        logging.info("OpenSearch 클라이언트 초기화 완료")
+        logger.info("opensearch_client_initialized")
     except Exception as e:
-        logging.error(f"서버 시작 중 오류 발생: {e}")
+        logger.error("startup_failed", error_type=type(e).__name__)
 
 
 @app.get("/")
@@ -378,7 +401,7 @@ async def health_check():
         else:
             return {"status": "unhealthy", "opensearch": "disconnected"}
     except Exception:
-        logging.error("health_check_failed", exc_info=True)
+        logger.error("health_check_failed", exc_info=True)
         return {"status": "unhealthy"}
 
 
@@ -394,7 +417,7 @@ async def get_product_by_id(
     - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     """
     try:
-        logging.info(f"Product ID 조회 요청 - product_id: {product_id}")
+        logger.info("product_lookup_requested", product_id=product_id)
 
         # OpenSearch 클라이언트 가져오기
         client = get_opensearch_client()
@@ -429,7 +452,7 @@ async def get_product_by_id(
         # 첫 번째 결과 반환
         document = hits[0].get("_source", {})
 
-        logging.info(f"Product ID 조회 성공 - product_id: {product_id}")
+        logger.info("product_lookup_succeeded", product_id=product_id)
 
         return {
             "success": True,
@@ -440,7 +463,7 @@ async def get_product_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error("product_id_lookup_failed", exc_info=True)
+        logger.error("product_id_lookup_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="조회 중 오류가 발생했습니다."
@@ -459,7 +482,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
     - **top_k**: 반환할 결과 개수 (기본값: 3, 최대: 100)
     """
     try:
-        logging.info(f"Product ID 검색 요청 - 쿼리: '{request.query}', product_ids: {len(request.product_ids)}개")
+        logger.info("search_by_product_ids_requested", query=request.query, product_ids_count=len(request.product_ids))
 
         # OpenSearch 클라이언트 가져오기
         client = get_opensearch_client()
@@ -473,7 +496,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
 
         # 벡터 임베딩 생성
         query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
-        logging.info(f"쿼리 임베딩 생성 완료: 차원={len(query_vector)}")
+        logger.info("query_embedding_created", dimension=len(query_vector))
 
         # Product ID 필터링 쿼리 구성
         query_body = {
@@ -563,7 +586,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
                 문서=source.get("문서")
             ))
 
-        logging.info(f"검색 완료 - 결과: {len(results)}개")
+        logger.info("search_by_product_ids_completed", result_count=len(results))
 
         return SearchResponse(
             success=True,
@@ -574,7 +597,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error("search_by_product_ids_failed", exc_info=True)
+        logger.error("search_by_product_ids_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -591,7 +614,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
     - **top_k**: 반환할 결과 개수 (기본값: 3)
     """
     try:
-        logging.info(f"유사 문장 검색 요청 - 인덱스: '{request.index_name}', 쿼리: '{request.query}'")
+        logger.info("search_similar_requested", index_name=request.index_name, query=request.query)
 
         client = get_opensearch_client()
 
@@ -630,7 +653,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
                 source=source
             ))
 
-        logging.info(f"유사 문장 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_similar_completed", result_count=len(results))
 
         return SimilarSentenceResponse(
             success=True,
@@ -641,7 +664,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         )
 
     except Exception as e:
-        logging.error("search_similar_sentences_failed", exc_info=True)
+        logger.error("search_similar_sentences_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -654,7 +677,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
     score와 product_id만 반환
     """
     try:
-        logging.info(f"combined_vector 검색 요청 - 쿼리: '{request.query}', product_ids: {len(request.product_ids)}개")
+        logger.info("search_combined_vector_requested", query=request.query, product_ids_count=len(request.product_ids))
 
         client = get_opensearch_client()
 
@@ -680,7 +703,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"combined_vector 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_combined_vector_completed", result_count=len(results))
 
         return CombinedSearchResponse(
             success=True,
@@ -690,7 +713,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error("search_by_combined_vector_failed", exc_info=True)
+        logger.error("search_by_combined_vector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -705,9 +728,11 @@ async def search_by_field(request: FieldSearchRequest):
     - persona    → bm25_fields: [target_tags, target_user],       vector_field: target_user_vector
     """
     try:
-        logging.info(
-            f"by-field 검색 요청 - 쿼리: '{request.query}', "
-            f"필드: {request.bm25_fields}, product_ids: {len(request.product_ids)}개"
+        logger.info(
+            "search_by_field_requested",
+            query=request.query,
+            bm25_fields=request.bm25_fields,
+            product_ids_count=len(request.product_ids),
         )
 
         client = get_opensearch_client()
@@ -734,7 +759,7 @@ async def search_by_field(request: FieldSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"by-field 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_by_field_completed", result_count=len(results))
 
         return FieldSearchResponse(
             success=True,
@@ -745,7 +770,7 @@ async def search_by_field(request: FieldSearchRequest):
         )
 
     except Exception as e:
-        logging.error("search_by_field_failed", exc_info=True)
+        logger.error("search_by_field_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -758,9 +783,11 @@ async def search_multivector(request: MultiVectorSearchRequest):
     aggregation: "max" (기본) | "topk_avg"
     """
     try:
-        logging.info(
-            f"multivector 검색 요청 - 쿼리: '{request.query}', "
-            f"인덱스: {request.index_name}, product_ids: {len(request.product_ids)}개"
+        logger.info(
+            "search_multivector_requested",
+            query=request.query,
+            index_name=request.index_name,
+            product_ids_count=len(request.product_ids),
         )
 
         client = get_opensearch_client()
@@ -783,7 +810,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"multivector 검색 완료 - 결과: {len(results)}개 상품")
+        logger.info("search_multivector_completed", result_count=len(results))
 
         return MultiVectorSearchResponse(
             success=True,
@@ -794,7 +821,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
         )
 
     except Exception as e:
-        logging.error("search_multivector_failed", exc_info=True)
+        logger.error("search_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -853,13 +880,13 @@ async def index_multivector(request: IndexMultivectorRequest):
 
         has_failure = any(v > 0 for v in failed_counts.values())
         if has_failure:
-            logging.warning(
+            logger.warning(
                 "index_multivector_partial_failure",
                 product_id=request.product_id,
                 failed_counts=failed_counts,
             )
         else:
-            logging.info(
+            logger.info(
                 "index_multivector_complete",
                 product_id=request.product_id,
                 indexed_counts=indexed_counts,
@@ -874,7 +901,7 @@ async def index_multivector(request: IndexMultivectorRequest):
         )
 
     except Exception as e:
-        logging.error("index_multivector_failed", exc_info=True)
+        logger.error("index_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="색인 중 오류가 발생했습니다.")
 
 
@@ -889,7 +916,7 @@ if __name__ == "__main__":
     # 프로덕션 환경에서는 reload 비활성화 및 workers 추가
     is_production = environment == "production"
 
-    logging.info(f"FastAPI 서버 시작: {host}:{port} (환경: {environment})")
+    logger.info("server_started", host=host, port=port, environment=environment)
 
     if is_production:
         # 프로덕션: 멀티 워커, reload 비활성화

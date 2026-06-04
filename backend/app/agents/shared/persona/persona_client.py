@@ -146,6 +146,25 @@ class PersonaClient:
             logger.error("persona_save_failed", error_type=type(e).__name__)
             raise
 
+    @traced(name="delete_persona", run_type="tool")
+    async def delete_persona(self, persona_id: str, user_id: str | None = None) -> None:
+        """페르소나 삭제 (보상 트랜잭션용). 연관 검색 쿼리도 CASCADE 삭제됨."""
+        try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
+            response = await self.http_client.request(
+                "DELETE",
+                f"{self.db_api_url}/api/personas",
+                json={"ids": [persona_id]},
+                headers=extra_headers,
+            )
+            response.raise_for_status()
+            logger.info("persona_deleted", persona_id=persona_id)
+        except Exception as e:
+            logger.error("persona_delete_failed", persona_id=persona_id, error_type=type(e).__name__)
+            raise
+
     @traced(name="save_product_search_query", run_type="tool")
     async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any], user_id: str | None = None) -> Dict[str, int]:
         """생성한 상품 검색 쿼리를 DB에 저장"""

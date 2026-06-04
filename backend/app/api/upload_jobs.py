@@ -46,25 +46,31 @@ async def create_job(job_type: str, total: int, creator_user_id: str) -> UploadJ
     assert _pool is not None, "upload_jobs pool not initialized"
 
     async with _pool.connection() as conn:
-        row = await conn.execute(
-            """
-            SELECT COUNT(*) FROM upload_jobs
-            WHERE creator_user_id = %s AND status IN ('pending', 'running')
-            """,
-            (creator_user_id,),
-        )
-        (active,) = await row.fetchone()
-        if active >= settings.max_active_jobs_per_user:
-            return None
+        async with conn.transaction():
+            # 같은 creator_user_id 요청을 직렬화하여 TOCTOU 경쟁 조건 방지
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (creator_user_id,),
+            )
+            row = await conn.execute(
+                """
+                SELECT COUNT(*) FROM upload_jobs
+                WHERE creator_user_id = %s AND status IN ('pending', 'running')
+                """,
+                (creator_user_id,),
+            )
+            (active,) = await row.fetchone()
+            if active >= settings.max_active_jobs_per_user:
+                return None
 
-        job_id = str(uuid.uuid4())
-        await conn.execute(
-            """
-            INSERT INTO upload_jobs (job_id, job_type, creator_user_id, status, total)
-            VALUES (%s, %s, %s, 'pending', %s)
-            """,
-            (job_id, job_type, creator_user_id, total),
-        )
+            job_id = str(uuid.uuid4())
+            await conn.execute(
+                """
+                INSERT INTO upload_jobs (job_id, job_type, creator_user_id, status, total)
+                VALUES (%s, %s, %s, 'pending', %s)
+                """,
+                (job_id, job_type, creator_user_id, total),
+            )
 
     return UploadJob(
         job_id=job_id,

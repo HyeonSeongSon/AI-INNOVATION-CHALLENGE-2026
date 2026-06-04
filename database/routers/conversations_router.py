@@ -4,7 +4,6 @@ Claude UI 스타일 대화 세션 목록 조회/수정/삭제
 """
 
 import uuid
-import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 
@@ -13,10 +12,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from core.logging import get_logger
 from core.models import Conversation, ConversationMessage
 from routers.auth_utils import get_request_user_id, resolve_role
 
-logger = logging.getLogger("conversations_api")
+logger = get_logger("conversations_api")
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
@@ -77,7 +77,7 @@ def create_conversation(
     )
     db.add(conv)
     db.commit()
-    logger.info("conversation_created", extra={"conv_id": new_id})
+    logger.info("conversation_created", conv_id=new_id)
     return {"id": new_id, "thread_id": new_id}
 
 
@@ -159,7 +159,7 @@ def update_messages(
     conv.last_active_at = datetime.now(timezone.utc)
     db.commit()
 
-    logger.info("conversation_messages_updated", extra={"conv_id": conv_id})
+    logger.info("conversation_messages_updated", conv_id=conv_id)
     return {"status": "ok"}
 
 
@@ -180,5 +180,5 @@ def delete_conversation(
     db.delete(conv)
     db.commit()
 
-    logger.info("conversation_deleted", extra={"conv_id": conv_id})
+    logger.info("conversation_deleted", conv_id=conv_id)
     return {"status": "ok"}

@@ -2,10 +2,12 @@ from opensearchpy import OpenSearch, exceptions, helpers
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 from typing import Optional, Dict
-import logging
+import structlog
 import json
 import os
 import math
+
+logger = structlog.get_logger("opensearch_hybrid")
 
 load_dotenv()
 
@@ -19,8 +21,6 @@ class OpenSearchHybridClient:
             if not password:
                 raise ValueError("환경 변수 OPENSEARCH_ADMIN_PASSWORD가 설정되지 않았습니다. .env 파일에 패스워드를 설정해주세요.")
 
-            logging.info(f"OpenSearch 연결 시도 중... (비밀번호 길이: {len(password)})")
-
             host = os.getenv("OPENSEARCH_HOST")
             if not host:
                 raise ValueError("환경 변수 OPENSEARCH_HOST가 설정되지 않았습니다. .env 파일에 호스트를 설정해주세요.")
@@ -31,21 +31,21 @@ class OpenSearchHybridClient:
 
             port = int(port_str)
 
-            logging.info(f"OpenSearch 연결 대상: {host}:{port}")
+            logger.info("opensearch_connecting", host=host, port=port)
 
             self.client = OpenSearch(
                 hosts=[{"host": host, "port": port}],
                 timeout=30,
             )
-            
+
             if not self.client.ping():
                 raise exceptions.ConnectionError("OpenSearch에 연결할 수 없습니다.")
-            logging.info("OpenSearch에 성공적으로 연결되었습니다.")
+            logger.info("opensearch_connected")
         except exceptions.OpenSearchException as e:
-            logging.error(f"OpenSearch 클라이언트 초기화 중 오류 발생: {e}")
+            logger.error("opensearch_init_failed", error_type=type(e).__name__)
             self.client = None
 
-        self.model = self._embeddings_model()
+        self.model = self._embeddings_model() if self.client is not None else None
 
     def _embeddings_model(self):
         """
@@ -53,7 +53,7 @@ class OpenSearchHybridClient:
         """
         model = SentenceTransformer("nlpai-lab/KURE-v1")
         vec_dim = len(model.encode("dummy_text"))
-        print(f"모델 차원: {vec_dim}")
+        logger.debug("embeddings_model_loaded", dimension=vec_dim)
         return model
     
     def create_index_with_mapping(self, index_name: str, mapping: dict) -> bool:
@@ -61,19 +61,19 @@ class OpenSearchHybridClient:
         지정한 매핑으로 인덱스를 생성합니다.
         """
         if not self.client:
-            logging.error("클라이언트가 초기화되지 않아 인덱스를 생성할 수 없습니다.")
+            logger.error("client_not_initialized", method="create_index")
             return False
         try:
             if not self.client.indices.exists(index=index_name):
                 self.client.indices.create(index=index_name, body=mapping)
-                logging.info(f"'{index_name}' 인덱스를 매핑과 함께 생성했습니다.")
+                logger.info("index_created", index=index_name)
                 return True
-            logging.info(f"'{index_name}' 인덱스가 이미 존재합니다.")
+            logger.info("index_exists", index=index_name)
             return True
         except exceptions.RequestError as e:
-            logging.error(f"인덱스 생성 중 오류 발생 (잘못된 매핑): {e}")
+            logger.error("index_create_failed", index=index_name, error_type=type(e).__name__)
         except exceptions.OpenSearchException as e:
-            logging.error(f"인덱스 생성 중 예상치 못한 오류 발생: {e}")
+            logger.error("index_create_error", index=index_name, error_type=type(e).__name__)
         return False
 
     def bulk_index_documents(self, index_name: str, documents: list[dict], refresh: bool = False) -> bool:
@@ -81,7 +81,7 @@ class OpenSearchHybridClient:
         주어진 인덱스에 여러 문서를 bulk로 색인합니다.
         """
         if not self.client:
-            logging.error("클라이언트가 초기화되지 않아 문서를 색인할 수 없습니다.")
+            logger.error("client_not_initialized", method="bulk_index")
             return False
 
         actions = [
@@ -91,10 +91,10 @@ class OpenSearchHybridClient:
 
         try:
             success, failed = helpers.bulk(self.client, actions, refresh=refresh)
-            logging.info(f"Bulk 작업 완료: 성공 {success}건, 실패 {len(failed)}건")
+            logger.info("bulk_indexed", success=success, failed=len(failed))
             return not failed
         except exceptions.OpenSearchException as e:
-            logging.error(f"Bulk 색인 중 예상치 못한 오류 발생: {e}")
+            logger.error("bulk_index_failed", error_type=type(e).__name__)
             return False
     
     def delete_index(self, index_name: str) -> None:
@@ -102,14 +102,14 @@ class OpenSearchHybridClient:
         인덱스를 삭제합니다.
         """
         if not self.client:
-            logging.error("클라이언트가 초기화되지 않아 인덱스를 삭제할 수 없습니다.")
+            logger.error("client_not_initialized", method="delete_index")
             return
         try:
             if self.client.indices.exists(index=index_name):
                 self.client.indices.delete(index=index_name)
-                logging.info(f"'{index_name}' 인덱스를 삭제했습니다.")
+                logger.info("index_deleted", index=index_name)
         except exceptions.OpenSearchException as e:
-            logging.error(f"인덱스 삭제 중 예상치 못한 오류 발생: {e}")
+            logger.error("index_delete_failed", index=index_name, error_type=type(e).__name__)
 
     def create_search_pipeline(self,
                                pipeline_id: str = "hybrid-minmax-pipeline", 
@@ -124,12 +124,10 @@ class OpenSearchHybridClient:
                 url=f"/_search/pipeline/{pipeline_id}",
                 body=pipeline_body
             )
-            print(f"✅ Search pipeline '{pipeline_id}' 생성/업데이트 완료")
-            print(f"응답: {response}")
+            logger.info("pipeline_created", pipeline_id=pipeline_id)
             return True
         except Exception as e:
-            print(f"❌ Search pipeline 생성 실패: {e}")
-            logging.error(f"Search pipeline 생성 오류: {e}")
+            logger.error("pipeline_create_failed", pipeline_id=pipeline_id, error_type=type(e).__name__)
             return False
         
     def delete_search_pipeline(self, pipeline_id: str = "hybrid-minmax-pipeline"):
@@ -141,10 +139,10 @@ class OpenSearchHybridClient:
                 method="DELETE",
                 url=f"/_search/pipeline/{pipeline_id}"
             )
-            print(f"🗑️ Search pipeline '{pipeline_id}' 삭제 완료")
+            logger.info("pipeline_deleted", pipeline_id=pipeline_id)
             return True
         except Exception as e:
-            print(f"❌ Search pipeline 삭제 실패: {e}")
+            logger.error("pipeline_delete_failed", pipeline_id=pipeline_id, error_type=type(e).__name__)
             return False
     
     def search_with_pipeline(self,
@@ -165,44 +163,24 @@ class OpenSearchHybridClient:
         Returns:
             List[Dict]: 검색 결과
         """
-        print(f"\n=== Search Pipeline 기반 하이브리드 검색 시작 ===")
-        print(f"Pipeline ID: {pipeline_id}")
-        print(f"Query: {query_text}")
+        logger.debug("hybrid_search_started", pipeline_id=pipeline_id)
 
         if query_body is None:
-            logging.error("query_body가 None입니다. 검색을 실행할 수 없습니다.")
+            logger.error("search_aborted_no_query_body")
             return []
 
         try:
-            # Search pipeline 파라미터 설정
             params = {"search_pipeline": pipeline_id}
-
-            # 검색 실행
             response = self.client.search(index=index_name, body=query_body, params=params)
 
-            # 결과 처리
             hits = response.get("hits", {}).get("hits", [])
-            results = []
+            results = [{"score": hit["_score"], "source": hit["_source"]} for hit in hits]
 
-            print(f"✅ Search pipeline 검색 완료: {len(hits)}개 결과")
-
-            for i, hit in enumerate(hits):
-                result = {
-                    "score": hit["_score"],
-                    "source": hit["_source"]
-                }
-                results.append(result)
-
-                # 결과 출력
-                source = hit["_source"]
-                print(f"\n{i+1}. Pipeline 점수: {hit['_score']:.6f}")
-                print(f"   product_id: {source.get('product_id', 'N/A')}")
-
+            logger.debug("hybrid_search_done", hits=len(hits))
             return results
-            
+
         except Exception as e:
-            print(f"❌ Search pipeline 검색 오류: {e}")
-            logging.error(f"Search pipeline 검색 상세 오류: {e}")
+            logger.error("search_pipeline_error", error_type=type(e).__name__, exc_info=True)
             return []
         
     def _create_combined_query_body(

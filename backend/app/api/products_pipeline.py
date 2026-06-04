@@ -114,12 +114,19 @@ def _parse_file_to_records(filename: str, content: bytes) -> List[Dict[str, Any]
         return [_normalize_record(dict(row)) for row in reader]
 
     if name_lower.endswith(".xlsx"):
+        import zipfile
+
         try:
             import openpyxl
         except ImportError as e:
             raise ValueError("XLSX 파일 처리를 지원하지 않습니다. 관리자에게 문의해주세요.") from e
-        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        except (openpyxl.utils.exceptions.InvalidFileException, zipfile.BadZipFile) as e:
+            raise ValueError("손상되었거나 지원하지 않는 XLSX 파일입니다.") from e
         ws = wb.active
+        if ws is None:
+            raise ValueError("XLSX 파일에 활성 시트가 없습니다.")
         headers = [cell.value for cell in ws[1]]
         records = []
         for row in ws.iter_rows(min_row=2, values_only=True):
@@ -250,13 +257,18 @@ async def _stream_job_events(job: UploadJob):
     재연결을 지원하는 SSE 이벤트 스트림 (PostgreSQL polling).
     Phase A: 기존 이벤트 즉시 replay → Phase B: 0.5초 간격으로 새 이벤트 polling.
     sse_keepalive_timeout초마다 keepalive 코멘트를 전송해 프록시 타임아웃을 방지한다.
+    sse_stream_max_seconds 경과 시 error 이벤트를 전송하고 종료해 orphan 연결을 방지한다.
     """
     last_id = 0
     keepalive_ticks = 0
     keepalive_interval = max(1, int(settings.sse_keepalive_timeout / 0.5))
     first = True
+    deadline = asyncio.get_event_loop().time() + settings.sse_stream_max_seconds
 
     while True:
+        if asyncio.get_event_loop().time() >= deadline:
+            yield f"data: {json.dumps({'type': 'error', 'detail': '스트림 최대 시간이 초과됐습니다.'}, ensure_ascii=False)}\n\n"
+            return
         if not first:
             await asyncio.sleep(0.5)
         first = False
