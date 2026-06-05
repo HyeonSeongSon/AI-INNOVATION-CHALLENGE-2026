@@ -184,3 +184,4 @@ systemctl start opensearch-api
 log "OpenSearch server setup complete."
 log "  OpenSearch:     systemctl status opensearch"
 log "  OpenSearch API: systemctl status opensearch-api"
+touch /var/log/user-data-complete

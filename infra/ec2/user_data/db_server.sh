@@ -138,3 +138,4 @@ systemctl start db-api
 log "DB server setup complete."
 log "  PostgreSQL: systemctl status postgresql"
 log "  DB API:     systemctl status db-api"
+touch /var/log/user-data-complete
