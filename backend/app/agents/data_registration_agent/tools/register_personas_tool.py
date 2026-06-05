@@ -19,16 +19,23 @@ from ....core.logging import get_logger
 from ..state import DataRegistrationState
 
 logger = get_logger("register_personas_tool")
-_semaphore = asyncio.Semaphore(5)
+_semaphore = asyncio.Semaphore(settings.upload_persona_concurrency)
 
 
-async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
+async def _process_one(index: int, record: dict, llm, persona_client, user_id: str | None = None) -> dict:
     try:
         messages = [HumanMessage(content=json.dumps(record, ensure_ascii=False, indent=2))]
-        structured_persona = await generate_structured_persona_info(messages, llm)
-        persona_id = await persona_client.save_persona(structured_persona)
-        raw_queries = await generate_search_query(messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries)
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(messages, llm),
+            generate_search_query(messages, llm),
+        )
+        persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
+        try:
+            await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        except Exception:
+            logger.warning("compensating_delete", index=index, persona_id=persona_id)
+            await persona_client.delete_persona(persona_id, user_id=user_id)
+            raise
         return {
             "index": index,
             "success": True,
@@ -36,7 +43,7 @@ async def _process_one(index: int, record: dict, llm, persona_client) -> dict:
             "persona_name": structured_persona.get("name"),
         }
     except Exception as e:
-        logger.error("persona_record_failed", index=index, error=str(e))
+        logger.error("persona_record_failed", index=index, error_type=type(e).__name__)
         return {"index": index, "success": False, "error": "페르소나 생성 중 오류가 발생했습니다."}
 
 
@@ -48,12 +55,13 @@ async def register_personas_tool(
 ) -> Command:
     """페르소나 파일을 일괄 등록합니다. 페르소나 레코드(이름, 나이, 피부타입 등)가 포함된 파일일 때 호출하세요."""
     persona_client = config["configurable"]["services"].persona_client
+    user_id = config.get("configurable", {}).get("user_id")
     records = state.get("file_records") or []
-    llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
 
     async def _bounded(i: int, rec: dict):
         async with _semaphore:
-            return await _process_one(i, rec, llm, persona_client)
+            return await _process_one(i, rec, llm, persona_client, user_id=user_id)
 
     results = await asyncio.gather(*[_bounded(i, r) for i, r in enumerate(records)])
 

@@ -65,7 +65,7 @@ async def parser_node(state: RecommendProductState, config: RunnableConfig) -> D
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("parser_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("parser_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",
@@ -91,7 +91,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
         messages = state.get("messages")
         parsed_data = state.get("parsed_data")
         model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-        query_llm = get_llm(model, temperature=0.3)
+        query_llm = get_llm(model, temperature=settings.llm_temperature_persona)
 
         persona_id = parsed_data.get("persona_id")
         has_persona_info = parsed_data.get("has_persona_info", True)
@@ -108,7 +108,8 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             source = "generated"
 
         if resolved_persona_id:
-            search_queries = await recommender.get_product_search_queries(resolved_persona_id)
+            user_id = config.get("configurable", {}).get("user_id")
+            search_queries = await recommender.get_product_search_queries(resolved_persona_id, user_id=user_id)
 
             if search_queries is None:
                 logger.warning(
@@ -130,8 +131,9 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
                 generate_search_query(messages[-1:], query_llm)
             )
 
-            resolved_persona_id = await recommender.persona_client.save_persona(structured_persona)
-            await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries)
+            user_id = config.get("configurable", {}).get("user_id")
+            resolved_persona_id = await recommender.persona_client.save_persona(structured_persona, user_id=user_id)
+            await recommender.persona_client.save_product_search_query(resolved_persona_id, raw_queries, user_id=user_id)
 
             search_queries = {
                 "user_need_query": raw_queries["need"],
@@ -155,7 +157,7 @@ async def get_search_query_node(state: RecommendProductState, config: RunnableCo
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("get_search_query_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("get_search_query_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",
@@ -197,6 +199,22 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
             for p in recommended_products
         ]
 
+        if not recommended_products:
+            logger.info(
+                "recommend_products_empty",
+                user_message=f"[{node_name}] 조건에 맞는 추천 상품이 없습니다.",
+            )
+            return {
+                **base,
+                "messages": [AIMessage(content="조건에 맞는 추천 상품을 찾지 못했습니다.", name="recommend_product_agent")],
+                "recommended_products": [],
+                "status": "completed",
+                "end_time": _now_iso(),
+                "duration_ms": None,
+                "intermediate": {**state.get("intermediate", {}), "recommended_products": []},
+                "logs": logger.get_user_logs(),
+            }
+
         product_summary = "\n".join(
             f"- [TOP{i+1}] [상품ID: {p.get('product_id')}] [{p.get('brand')}] {p.get('product_name')} ({p.get('sub_tag')}): {p.get('product_comment')}"
             for i, p in enumerate(recommended_products)
@@ -225,7 +243,7 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
             "logs": logger.get_user_logs(),
         }
     except Exception as e:
-        logger.error("recommend_products_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("recommend_products_error", user_message=f"[{node_name}] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             **base,
             "status": "failed",

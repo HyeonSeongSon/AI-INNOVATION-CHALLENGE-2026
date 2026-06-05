@@ -19,7 +19,10 @@ class ProductClient:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_default),
+                headers={"X-Internal-Token": settings.internal_token},
+            )
         return self._http_client
 
     async def aclose(self) -> None:
@@ -48,15 +51,16 @@ class ProductClient:
         try:
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/products/filter",
-                json=filters,
+                json={**filters, "page": 1, "page_size": 500},
             )
             response.raise_for_status()
-            products = response.json()
+            data = response.json()
+            products = data["items"]
             logger.info("products_filtered", product_count=len(products), filters=filters)
             return products
 
         except Exception as e:
-            logger.error("products_filter_failed", error=str(e), exc_info=True)
+            logger.error("products_filter_failed", error_type=type(e).__name__, exc_info=True)
             raise
         
     @traced(name="search_combined_vector", run_type="retriever")
@@ -85,8 +89,8 @@ class ProductClient:
             response = await self.http_client.post(
                 f"{self.vector_db_api_url}/api/search/combined",
                 json={
-                    "index_name": "product_index_v3",
-                    "pipeline_id": "hybrid-minmax-pipeline",
+                    "index_name": settings.opensearch_product_index,
+                    "pipeline_id": settings.opensearch_hybrid_pipeline,
                     "product_ids": product_ids,
                     "query": retrieval_query,
                     "bm25_fields": ["search_tags.text", "search_phrases"],
@@ -102,7 +106,7 @@ class ProductClient:
             return api_response
 
         except Exception as e:
-            logger.error("search_by_combined_vector.failed", error=str(e), exc_info=True)
+            logger.error("search_by_combined_vector.failed", error_type=type(e).__name__, exc_info=True)
             raise
 
     @traced(name="search_opensearch", run_type="retriever")
@@ -146,8 +150,8 @@ class ProductClient:
                     "bm25_fields": bm25_fields,
                     "vector_field": vector_field,
                     "product_ids": product_ids,
-                    "index_name": "product_index_v3",
-                    "pipeline_id": "hybrid-minmax-pipeline",
+                    "index_name": settings.opensearch_product_index,
+                    "pipeline_id": settings.opensearch_hybrid_pipeline,
                     "top_k": top_k,
                 },
             )
@@ -158,7 +162,7 @@ class ProductClient:
             logger.error(
                 "search_by_field.failed",
                 bm25_fields=bm25_fields,
-                error=str(e),
+                error_type=type(e).__name__,
                 exc_info=True,
             )
             raise
@@ -231,13 +235,15 @@ class ProductClient:
             "persona": persona_result,
         }
 
-    _V4_INDICES = {
-        "combined":       "product_v4_combined",
-        "function_desc":  "product_v4_function_desc",
-        "attribute_desc": "product_v4_attribute_desc",
-        "target_user":    "product_v4_target_user",
-        "spec_feature":   "product_v4_spec_feature",
-    }
+    @staticmethod
+    def _get_v4_indices() -> dict[str, str]:
+        return {
+            "combined":       settings.opensearch_v4_combined_index,
+            "function_desc":  settings.opensearch_v4_function_desc_index,
+            "attribute_desc": settings.opensearch_v4_attribute_desc_index,
+            "target_user":    settings.opensearch_v4_target_user_index,
+            "spec_feature":   settings.opensearch_v4_spec_feature_index,
+        }
 
     async def _search_multivector(
         self,
@@ -265,7 +271,7 @@ class ProductClient:
             logger.error(
                 "search_multivector.failed",
                 index_name=index_name,
-                error=str(e),
+                error_type=type(e).__name__,
                 exc_info=True,
             )
             raise
@@ -295,13 +301,13 @@ class ProductClient:
         combined_result, spec_result = await asyncio.gather(
             self._search_multivector(
                 query=retrieval_query,
-                index_name=self._V4_INDICES["combined"],
+                index_name=self._get_v4_indices()["combined"],
                 product_ids=product_ids,
                 top_k=top_k,
             ),
             self._search_multivector(
                 query=retrieval_query,
-                index_name=self._V4_INDICES["spec_feature"],
+                index_name=self._get_v4_indices()["spec_feature"],
                 product_ids=product_ids,
                 top_k=top_k,
             ),
@@ -344,19 +350,19 @@ class ProductClient:
         need_result, preference_result, persona_result = await asyncio.gather(
             self._search_multivector(
                 query=queries["user_need_query"],
-                index_name=self._V4_INDICES["function_desc"],
+                index_name=self._get_v4_indices()["function_desc"],
                 product_ids=product_ids,
                 top_k=top_k,
             ),
             self._search_multivector(
                 query=queries["user_preference_query"],
-                index_name=self._V4_INDICES["attribute_desc"],
+                index_name=self._get_v4_indices()["attribute_desc"],
                 product_ids=product_ids,
                 top_k=top_k,
             ),
             self._search_multivector(
                 query=queries["persona"],
-                index_name=self._V4_INDICES["target_user"],
+                index_name=self._get_v4_indices()["target_user"],
                 product_ids=product_ids,
                 top_k=top_k,
             ),
@@ -418,7 +424,7 @@ class ProductClient:
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                logger.error("get_products_detail_from_db.failed", product_id=product_id, error=str(e))
+                logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__, exc_info=True)
                 return None
 
         results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])

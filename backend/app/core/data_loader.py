@@ -34,7 +34,7 @@ def get_brand_tones() -> Dict[str, Any]:
                 _brand_tones = yaml.safe_load(f) or {}
             logger.info("brand_tones_loaded", path=str(path))
         except Exception as e:
-            logger.error("brand_tones_load_failed", path=str(path), error=str(e))
+            logger.error("brand_tones_load_failed", path=str(path), error_type=type(e).__name__)
             raise
     return _brand_tones
 
@@ -49,7 +49,7 @@ def get_forbidden_keywords() -> Dict[str, Any]:
                 _forbidden_keywords = json.load(f)
             logger.info("forbidden_keywords_loaded", path=str(path))
         except Exception as e:
-            logger.error("forbidden_keywords_load_failed", path=str(path), error=str(e))
+            logger.error("forbidden_keywords_load_failed", path=str(path), error_type=type(e).__name__)
             raise
     return _forbidden_keywords
 
@@ -82,7 +82,7 @@ def get_categories() -> List[str]:
             _categories = data["sub_tags"]
             logger.info("categories_loaded", path=str(path), count=len(_categories))
         except Exception as e:
-            logger.error("categories_load_failed", path=str(path), error=str(e))
+            logger.error("categories_load_failed", path=str(path), error_type=type(e).__name__)
             raise
     return _categories
 

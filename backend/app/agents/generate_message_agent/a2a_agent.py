@@ -33,13 +33,11 @@ async def send_task(request: TaskSendRequest, req: Request):
         {},
     )
 
-    messages = deserialize_messages(data.get("messages", []))
-    subgraph_input = {
-        "messages": messages,
-        **({"active_persona_id": data["active_persona_id"]} if data.get("active_persona_id") else {}),
-    }
+    configurable: dict = {"thread_id": request.sessionId or request.id, "services": req.app.state.services}
+    if data.get("user_id"):
+        configurable["user_id"] = data["user_id"]
     config = {
-        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "configurable": configurable,
         "recursion_limit": settings.langgraph_recursion_limit,
     }
 
@@ -47,11 +45,15 @@ async def send_task(request: TaskSendRequest, req: Request):
                  active_persona_id=data.get("active_persona_id"))
 
     try:
+        messages = deserialize_messages(data.get("messages", []))
+        subgraph_input = {
+            "messages": messages,
+            **({"active_persona_id": data["active_persona_id"]} if data.get("active_persona_id") else {}),
+        }
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
-        agent_status = result.get("status")
-        status = TaskStatus.COMPLETED if agent_status == "completed" else TaskStatus.FAILED
+        status = TaskStatus.COMPLETED  # 정상 실행은 항상 COMPLETED; FAILED는 except 블록에서만
 
         _logger.info("a2a_task_completed", task_id=request.id, status=status)
 
@@ -66,12 +68,13 @@ async def send_task(request: TaskSendRequest, req: Request):
                     "messages": serialize_messages(result.get("messages", [])),
                     "logs": result.get("logs", []),
                     "status": result.get("status"),
+                    "error": result.get("error"),
                 },
             }],
         )
 
     except Exception as e:
-        _logger.error("a2a_task_failed", task_id=request.id, error=str(e), exc_info=True)
+        _logger.error("a2a_task_failed", task_id=request.id, error_type=type(e).__name__, exc_info=True)
         return Task(
             id=request.id,
             sessionId=request.sessionId,

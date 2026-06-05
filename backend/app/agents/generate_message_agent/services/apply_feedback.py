@@ -21,7 +21,7 @@ class MessageOutput(BaseModel):
 
 class ApplyFeedback:
     def __init__(self):
-        self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=0.5)
+        self.llm = get_llm(model_name=settings.chatgpt_model_name, temperature=settings.llm_temperature_creative)
         self._product_client = ProductClient()
 
     def _extract_feedback(self, quality_check: Dict[str, Any]) -> str:
@@ -180,10 +180,11 @@ class ApplyFeedback:
             result: MessageOutput = await ainvoke_with_timeout(structured_llm, prompt_messages)
             improved = {"title": result.title, "message": result.message}
         except Exception as e:
-            logger.warning(
+            logger.error(
                 "apply_feedback_structured_output_failed",
                 product_id=product_id,
-                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             return {**task, "_feedback_skipped": True}
 

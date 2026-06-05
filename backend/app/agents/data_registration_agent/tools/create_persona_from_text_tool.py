@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -28,15 +29,23 @@ async def create_persona_from_text_tool(
     """자연어로 설명된 페르소나를 구조화하여 DB에 등록합니다.
     사용자가 페르소나 특성(나이, 성별, 직업, 피부타입, 고민 등)을 텍스트로 설명했을 때 호출하세요."""
     persona_client = config["configurable"]["services"].persona_client
+    user_id = config.get("configurable", {}).get("user_id")
     # HumanMessage만 추출 — AIMessage(tool_calls)가 섞이면 OpenAI API 400 에러 발생
     human_messages = [m for m in state.get("messages", []) if isinstance(m, HumanMessage)]
-    llm = get_llm(settings.chatgpt_model_name, temperature=0.3)
+    llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
 
     try:
-        structured_persona = await generate_structured_persona_info(human_messages, llm)
-        persona_id = await persona_client.save_persona(structured_persona)
-        raw_queries = await generate_search_query(human_messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries)
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(human_messages, llm),
+            generate_search_query(human_messages, llm),
+        )
+        persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
+        try:
+            await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        except Exception:
+            logger.warning("compensating_delete", persona_id=persona_id)
+            await persona_client.delete_persona(persona_id, user_id=user_id)
+            raise
 
         summary = (
             f"**페르소나 등록 완료**\n\n"
@@ -45,8 +54,8 @@ async def create_persona_from_text_tool(
         )
         logger.info("create_persona_from_text_done", persona_id=persona_id, name=structured_persona.get("name"))
     except Exception as e:
-        logger.error("create_persona_from_text_failed", error=str(e))
-        summary = f"**페르소나 등록 실패**\n\n{e}"
+        logger.error("create_persona_from_text_failed", error_type=type(e).__name__, exc_info=True)
+        summary = "**페르소나 등록 실패**\n\n페르소나 등록 처리 중 오류가 발생했습니다."
 
     return Command(
         update={

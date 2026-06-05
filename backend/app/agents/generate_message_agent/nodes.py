@@ -39,7 +39,7 @@ def _parse_message(raw) -> Dict[str, Any]:
         if isinstance(parsed, dict) and "title" in parsed:
             return parsed
     except Exception as e:
-        _logger.debug("message_json_parse_failed", error=str(e))
+        _logger.debug("message_json_parse_failed", error_type=type(e).__name__)
     return {"title": "", "message": content}
 
 
@@ -97,7 +97,7 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
             update["active_persona_id"] = result.persona_id
         return update
     except Exception as e:
-        logger.error("router_error", user_message="[router] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        logger.error("router_error", user_message="[router] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return {
             "status": "failed",
             "error": "라우팅 중 오류가 발생했습니다.",
@@ -111,7 +111,7 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
     generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    message_llm = get_llm(model, temperature=0.7)
+    message_llm = get_llm(model, temperature=settings.llm_temperature_generator)
 
     tasks = state.get("tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
@@ -122,14 +122,15 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         task_count=len(tasks),
     )
 
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
         tasks = await generator.get_product_info(tasks)
         tasks = await generator.get_brand_tone(tasks)
         tasks = await generator.get_crm_prompt(tasks, persona_info=persona_info)
         tasks = await generator.generate_crm_message(tasks, message_llm)
     except Exception as e:
-        agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return Command(
             goto="output_node",
             update={
@@ -170,14 +171,15 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     checker = services.checker
     agent_logger = AgentLogger(state, node_name="quality_check_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    judge_llm = get_llm(model, temperature=0)
+    judge_llm = get_llm(model, temperature=settings.llm_temperature_classifier)
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
     except Exception as e:
-        agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[quality_check] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None
 
     agent_logger.info(
@@ -203,7 +205,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
                 "quality_check_task_error",
                 user_message=f"[quality_check] 태스크 검사 실패 (product_id={task['product_id']})",
                 product_id=task["product_id"],
-                error=str(e),
+                error_type=type(e).__name__,
             )
             quality_check = {"passed": False, "failed_stage": "quality_check_error", "failure_reason": "품질 검사 중 오류가 발생했습니다."}
         checked_tasks.append({**task, "quality_check": quality_check})
@@ -226,7 +228,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
 async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
     agent_logger = AgentLogger(state, node_name="message_feedback_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    feedback_llm = get_llm(model, temperature=0.5)
+    feedback_llm = get_llm(model, temperature=settings.llm_temperature_creative)
 
     generated_tasks = state.get("generated_tasks") or []
     failed_task_ids = set(state.get("failed_task_ids") or [])
@@ -251,10 +253,11 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
     services = config["configurable"]["services"]
     applier = services.applier
     generator = services.generator
+    user_id = config.get("configurable", {}).get("user_id")
     try:
-        persona_info = await generator.get_persona_info(persona_id) if persona_id else None
+        persona_info = await generator.get_persona_info(persona_id, user_id=user_id) if persona_id else None
     except Exception as e:
-        agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error=str(e))
+        agent_logger.warning("persona_fetch_failed_fallback", user_message="[feedback] 페르소나 조회 실패, 미사용으로 진행합니다.", error_type=type(e).__name__)
         persona_info = None
 
     try:
@@ -285,7 +288,7 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             )
             updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
     except Exception as e:
-        agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error=str(e), exc_info=True)
+        agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
         return Command(
             goto="output_node",
             update={

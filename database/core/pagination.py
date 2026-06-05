@@ -1,0 +1,30 @@
+import base64
+import json
+import os
+from datetime import datetime
+
+PERSONAS_LIST_DEFAULT_PAGE_SIZE: int = int(os.getenv("PERSONAS_LIST_DEFAULT_PAGE_SIZE", "100"))
+PERSONAS_LIST_MAX_PAGE_SIZE: int     = int(os.getenv("PERSONAS_LIST_MAX_PAGE_SIZE", "200"))
+
+PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE: int = int(os.getenv("PRODUCTS_BY_TAG_DEFAULT_PAGE_SIZE", "100"))
+PRODUCTS_BY_TAG_MAX_PAGE_SIZE: int     = int(os.getenv("PRODUCTS_BY_TAG_MAX_PAGE_SIZE", "200"))
+
+PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE: int = int(os.getenv("PRODUCTS_BY_BRAND_DEFAULT_PAGE_SIZE", "100"))
+PRODUCTS_BY_BRAND_MAX_PAGE_SIZE: int     = int(os.getenv("PRODUCTS_BY_BRAND_MAX_PAGE_SIZE", "200"))
+
+PRODUCTS_FILTER_DEFAULT_PAGE_SIZE: int = int(os.getenv("PRODUCTS_FILTER_DEFAULT_PAGE_SIZE", "500"))
+PRODUCTS_FILTER_MAX_PAGE_SIZE: int     = int(os.getenv("PRODUCTS_FILTER_MAX_PAGE_SIZE", "1000"))
+
+
+def encode_persona_cursor(ts: datetime, persona_id: str) -> str:
+    payload = json.dumps({"ts": ts.isoformat(), "id": persona_id}, separators=(",", ":"))
+    return base64.urlsafe_b64encode(payload.encode()).rstrip(b"=").decode()
+
+
+def decode_persona_cursor(cursor: str) -> tuple[datetime, str]:
+    padding = "=" * (-len(cursor) % 4)
+    try:
+        data = json.loads(base64.urlsafe_b64decode(cursor + padding))
+        return datetime.fromisoformat(data["ts"]), data["id"]
+    except Exception as e:
+        raise ValueError(f"Invalid cursor: {e}") from e

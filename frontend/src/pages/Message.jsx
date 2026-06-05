@@ -12,14 +12,44 @@ import {
 } from 'lucide-react';
 
 // API 및 Context
-import api, { pipelineApi, dbApi } from '../api';
+import api, { pipelineApi } from '../api';
 import { useChat } from '../context/ChatContext';
+import { useAuth } from '../context/AuthContext';
 
 // 브랜드 / 카테고리 데이터
 import brandsData from '../data/brands.json';
 import categoriesData from '../data/categories.json';
 
-const USER_ID = 'son';
+const NODE_STATUS = {
+  supervisor:              '요청 분석 중...',
+  search_agent:            '데이터 검색 중...',
+  recommend_product_agent: '상품 추천 중...',
+  generate_message_agent:  '메시지 생성 중...',
+  data_registration_agent: '데이터 등록 중...',
+};
+
+async function* parseSSE(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { yield JSON.parse(line.slice(6)); }
+          catch { /* 파싱 실패 무시 */ }
+        }
+      }
+    }
+  } finally {
+    reader.cancel();
+  }
+}
 
 /* --- [1] 스타일 컴포넌트 --- */
 const Container = styled.div` display: flex; height: calc(100vh - 100px); gap: 24px; max-width: 1400px; margin: 0 auto; `;
@@ -235,6 +265,9 @@ export default function Message() {
   const { convId } = useParams();
   const navigate = useNavigate();
 
+  // Auth
+  const { user } = useAuth();
+
   // ChatContext — 대화 목록 + in-flight 상태 관리
   const { saveMessages, loadConversations, activeConvs, setPendingConv, clearPendingConv } = useChat();
 
@@ -265,7 +298,7 @@ export default function Message() {
         try {
           const wb = XLSX.read(e.target.result, { type: 'array' });
           resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
-        } catch (err) { reject(new Error(`Excel 파싱 실패: ${err.message}`)); }
+        } catch (err) { reject(new Error('Excel 파일을 읽을 수 없습니다.')); }
       };
       reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
       reader.readAsArrayBuffer(file);
@@ -298,7 +331,7 @@ export default function Message() {
       if (records.length === 0) { alert('파일에 데이터가 없습니다.'); return; }
       if (records.length > 50) { alert(`최대 50개까지 업로드 가능합니다. 현재: ${records.length}개`); return; }
       setUploadedFile({ name: file.name, records });
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert('파일을 처리할 수 없습니다. 지원 형식(CSV, XLSX, JSONL)을 확인해주세요.'); }
   };
 
   const [personas, setPersonas] = useState([]);
@@ -353,9 +386,9 @@ export default function Message() {
     // (clearPendingConv 후 effect 재실행 시 중복 로드 방지)
     if (loadedFromActive.current) return;
 
-    // DB에서 로드
+    // DB에서 로드 (포트 8005 — JWT 쿠키 인증)
     setIsConvLoading(true);
-    dbApi.get(`/conversations/${convId}`)
+    api.get(`/conversations/${convId}`)
       .then(res => {
         setMessages(res.data.messages || []);
         setThreadId(res.data.thread_id || null);
@@ -371,8 +404,12 @@ export default function Message() {
     loadConversations();
     const fetchPersonas = async () => {
       try {
-        const response = await pipelineApi.post('/personas/list');
-        const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
+        const response = await pipelineApi.post('/personas/list', {
+          user_id: user?.role === 'admin' ? undefined : user?.id,
+          role: user?.role,
+          page_size: 200,
+        });
+        const rawData = Array.isArray(response.data) ? response.data : response.data.items || [];
         const pData = rawData.map(p => ({
           ...p,
           persona_id: p.persona_id || p.id,
@@ -399,7 +436,7 @@ export default function Message() {
     if (chatInputRef.current) chatInputRef.current.style.height = '36px';
 
     const userMsg    = { id: Date.now(),     role: 'user', text };
-    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true, statusText: '처리 중...' };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
 
@@ -410,9 +447,8 @@ export default function Message() {
 
     try {
       if (!targetConvId) {
-        // 새 대화: DB에 레코드 미리 생성 → convId 확보
-        const created = await dbApi.post('/conversations', {
-          user_id: USER_ID,
+        // 새 대화: DB에 레코드 미리 생성 → convId 확보 (포트 8005 — JWT 쿠키 인증)
+        const created = await api.post('/conversations', {
           session_id: currentSessionId,
           title: text.slice(0, 40),
         });
@@ -429,13 +465,58 @@ export default function Message() {
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await api.post('/marketing/chat/v2', {
-        user_input: text,
-        session_id: currentSessionId,
-        conversation_id: targetConvId,
-      }, { headers: { 'X-User-Id': USER_ID } });
+      const response = await fetch('/api/marketing/chat/v2/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user?.id },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_input: text,
+          session_id: currentSessionId,
+          conversation_id: targetConvId,
+        }),
+      });
+      if (!response.ok) throw new Error('stream_request_failed');
 
-      const result = response.data;
+      let result = null;
+      let accStreamingText = '';
+      for await (const event of parseSSE(response)) {
+        if (event.type === 'node_start') {
+          const label = NODE_STATUS[event.node] || '처리 중...';
+          const updatedMessages = messagesWithLoading.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          );
+          setPendingConv(targetConvId, updatedMessages, true);
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'text_chunk') {
+          accStreamingText += event.content;
+          const currentText = accStreamingText;
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+          ));
+          setPendingConv(targetConvId,
+            messagesWithLoading.map(m =>
+              m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+            ),
+            true
+          );
+        } else if (event.type === 'text_done') {
+          const hasTitle = accStreamingText.startsWith('## ');
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id
+              ? { ...m, streamingDone: true, text: accStreamingText, isGenerated: hasTitle }
+              : m
+          ));
+        } else if (event.type === 'result') {
+          result = event;
+        } else if (event.type === 'done') {
+          break;
+        } else if (event.type === 'error') {
+          throw new Error('agent_error');
+        }
+      }
+      if (!result) throw new Error('no_result');
 
       const mappedProducts = (result.recommended_products || []).map(p => ({
         id: p.product_id,
@@ -471,15 +552,14 @@ export default function Message() {
       };
       const finalMessages = [...messagesWithUser, aiMsg];
 
-      await saveMessages(targetConvId, finalMessages);
+      setPendingConv(targetConvId, finalMessages, false);
       setThreadId(result.thread_id || null);
       setSessionId(result.session_id || null);
-
-      setPendingConv(targetConvId, finalMessages, false);
+      saveMessages(targetConvId, finalMessages).catch(e => console.error("메시지 저장 실패:", e));
 
     } catch (error) {
       console.error("채팅 전송 실패:", error);
-      const errMsg = error.response?.data?.detail || error.message;
+      const errMsg = error.response?.data?.detail || '서버와의 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
       const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `오류가 발생했습니다: ${errMsg}` };
       if (targetConvId) {
         const errMessages = [...messagesWithUser, errAiMsg];
@@ -506,47 +586,94 @@ export default function Message() {
     if (chatInputRef.current) chatInputRef.current.style.height = '36px';
 
     const userMsg    = { id: Date.now(),     role: 'user', text: userMsgText };
-    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true };
+    const loadingMsg = { id: Date.now() + 1, role: 'ai',  text: '처리 중...', isLoading: true, statusText: '처리 중...' };
 
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setIsChatLoading(true);
 
-    const messagesWithUser = [...messagesRef.current, userMsg, loadingMsg];
+    const messagesWithUser    = [...messagesRef.current, userMsg];
+    const messagesWithLoading = [...messagesWithUser, loadingMsg];
     const currentSessionId = sessionId || `sess_${crypto.randomUUID()}`;
     let targetConvId = convId;
 
     try {
       if (!targetConvId) {
-        const created = await dbApi.post('/conversations', {
-          user_id: USER_ID, session_id: currentSessionId, title: userMsgText.slice(0, 40),
+        const created = await api.post('/conversations', {
+          session_id: currentSessionId, title: userMsgText.slice(0, 40),
         });
         targetConvId = created.data.id;
         await loadConversations();
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
         navigate(`/message/${targetConvId}`, { replace: true });
       } else {
-        setPendingConv(targetConvId, messagesWithUser, true);
+        setPendingConv(targetConvId, messagesWithLoading, true);
         await saveMessages(targetConvId, messagesWithUser);
       }
 
-      const response = await api.post('/marketing/chat/v2', {
-        user_input: typedText || fileLabel,
-        session_id: currentSessionId,
-        conversation_id: targetConvId,
-        file_records: records,
-      }, { headers: { 'X-User-Id': USER_ID } });
+      const response = await fetch('/api/marketing/chat/v2/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': user?.id },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_input: typedText || fileLabel,
+          session_id: currentSessionId,
+          conversation_id: targetConvId,
+          file_records: records,
+        }),
+      });
+      if (!response.ok) throw new Error('stream_request_failed');
 
-      const result = response.data;
+      let result = null;
+      let accStreamingText = '';
+      for await (const event of parseSSE(response)) {
+        if (event.type === 'node_start') {
+          const label = NODE_STATUS[event.node] || '처리 중...';
+          const updatedMessages = messagesWithLoading.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          );
+          setPendingConv(targetConvId, updatedMessages, true);
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, statusText: label } : m
+          ));
+        } else if (event.type === 'text_chunk') {
+          accStreamingText += event.content;
+          const currentText = accStreamingText;
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+          ));
+          setPendingConv(targetConvId,
+            messagesWithLoading.map(m =>
+              m.id === loadingMsg.id ? { ...m, streamingText: currentText } : m
+            ),
+            true
+          );
+        } else if (event.type === 'text_done') {
+          const hasTitle = accStreamingText.startsWith('## ');
+          setMessages(prev => prev.map(m =>
+            m.id === loadingMsg.id
+              ? { ...m, streamingDone: true, text: accStreamingText, isGenerated: hasTitle }
+              : m
+          ));
+        } else if (event.type === 'result') {
+          result = event;
+        } else if (event.type === 'done') {
+          break;
+        } else if (event.type === 'error') {
+          throw new Error('agent_error');
+        }
+      }
+      if (!result) throw new Error('no_result');
+
       const aiText = result.messages?.[0]?.content || result.messages?.[0]?.text || '처리가 완료되었습니다.';
 
       const aiMsg = { id: Date.now() + 2, role: 'ai', text: aiText };
       const finalMessages = [...messagesWithUser.filter(m => !m.isLoading), aiMsg];
-      await saveMessages(targetConvId, finalMessages);
       setPendingConv(targetConvId, finalMessages, false);
+      saveMessages(targetConvId, finalMessages).catch(e => console.error("메시지 저장 실패:", e));
 
     } catch (error) {
-      const errMsg = error.response?.data?.detail || error.message;
+      const errMsg = error.response?.data?.detail || '서버와의 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
       const errAiMsg = { id: Date.now() + 2, role: 'ai', text: `파일 처리 오류: ${errMsg}` };
       const errMessages = [...messagesWithUser.filter(m => !m.isLoading), errAiMsg];
       if (targetConvId) {
@@ -570,10 +697,28 @@ export default function Message() {
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
               {msg.isLoading ? (
-                <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
-                  <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                  처리 중...
-                </div>
+                msg.streamingText ? (
+                  <div className="bubble">
+                    <MarkdownBody>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                          )
+                        }}
+                      >
+                        {msg.streamingText}
+                      </ReactMarkdown>
+                    </MarkdownBody>
+                    {!msg.streamingDone && <span className="streaming-cursor" />}
+                  </div>
+                ) : (
+                  <div className="bubble" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888' }}>
+                    <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    {msg.statusText || '처리 중...'}
+                  </div>
+                )
               ) : msg.text && (
                 <div className="bubble">
                   {msg.role === 'ai' ? (

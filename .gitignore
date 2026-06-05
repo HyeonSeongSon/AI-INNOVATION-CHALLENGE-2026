@@ -37,3 +37,10 @@ venv.bak/
 # IDE-specific files
 .vscode/
 .claude/
+
+# Terraform — 시크릿 포함 파일은 절대 커밋 금지
+infra/**/terraform.tfvars
+infra/**/.terraform/
+infra/**/.terraform.lock.hcl
+infra/**/terraform.tfstate
+infra/**/terraform.tfstate.backup

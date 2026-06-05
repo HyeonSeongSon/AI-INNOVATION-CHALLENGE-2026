@@ -7,6 +7,7 @@ import {
 
 import { useToast } from '../components/Toast';
 import api, { pipelineApi } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -354,10 +355,16 @@ function formatDate(dt) {
 
 export default function PersonaManager() {
   const location = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [cursorStack, setCursorStack] = useState([null]); // null = 첫 페이지
+  const [pageIndex, setPageIndex] = useState(0);
 
-  const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // 검색 쿼리 모달
@@ -378,11 +385,16 @@ export default function PersonaManager() {
   const { addToast } = useToast();
 
   /* 목록 로드 */
-  const fetchPersonas = async () => {
+  const fetchPersonas = async (cursor = null) => {
     setLoading(true);
     try {
-      const response = await pipelineApi.post('/personas/list');
-      const rawData = Array.isArray(response.data) ? response.data : response.data.personas || [];
+      const response = await pipelineApi.post('/personas/list', {
+        user_id: user?.role === 'admin' ? undefined : user?.id,
+        role: user?.role,
+        page_size: PAGE_SIZE,
+        after_cursor: cursor ?? undefined,
+      });
+      const rawData = Array.isArray(response.data) ? response.data : response.data.items || [];
       const formatted = rawData.map(p => ({
         ...p,
         id: p.persona_id || p.id,
@@ -393,15 +405,28 @@ export default function PersonaManager() {
         },
       }));
       setPersonas(formatted);
+      setTotal(response.data.total ?? 0);
+      setHasNext(response.data.has_next ?? false);
+      setNextCursor(response.data.next_cursor ?? null);
     } catch (err) {
-      console.warn('페르소나 목록 로드 실패:', err);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      console.error('페르소나 목록 로드 실패:', status, detail, err);
+      addToast(`페르소나 목록 로드 실패 (${status ?? 'network'})${detail ? ': ' + detail : ''}`, 'error');
       setPersonas([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchPersonas(); }, []);
+  /* 첫 페이지로 리셋 후 재로드 (생성/삭제 후 호출) */
+  const refreshPersonas = () => {
+    setCursorStack([null]);
+    setPageIndex(0);
+    fetchPersonas(null);
+  };
+
+  useEffect(() => { fetchPersonas(null); }, []);
 
   useEffect(() => {
     const openId = location.state?.openPersonaId;
@@ -410,17 +435,31 @@ export default function PersonaManager() {
     if (target) handleRowClick(target);
   }, [personas, location.state?.openPersonaId]);
 
-  /* 페이지네이션 */
-  const totalPages = Math.max(1, Math.ceil(personas.length / PAGE_SIZE));
-  const pagedPersonas = personas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  /* 페이지 이동 핸들러 */
+  const handleNextPage = () => {
+    if (!hasNext || !nextCursor) return;
+    const newStack = [...cursorStack.slice(0, pageIndex + 1), nextCursor];
+    setCursorStack(newStack);
+    setPageIndex(pageIndex + 1);
+    setSelectedIds(new Set());
+    fetchPersonas(nextCursor);
+  };
+
+  const handlePrevPage = () => {
+    if (pageIndex <= 0) return;
+    const newIndex = pageIndex - 1;
+    setPageIndex(newIndex);
+    setSelectedIds(new Set());
+    fetchPersonas(cursorStack[newIndex]);
+  };
 
   /* 체크박스 */
-  const allChecked = pagedPersonas.length > 0 && pagedPersonas.every(p => selectedIds.has(p.id));
-  const someChecked = pagedPersonas.some(p => selectedIds.has(p.id));
+  const allChecked = personas.length > 0 && personas.every(p => selectedIds.has(p.id));
+  const someChecked = personas.some(p => selectedIds.has(p.id));
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(pagedPersonas.map(p => p.id)));
+      setSelectedIds(new Set(personas.map(p => p.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -442,7 +481,7 @@ export default function PersonaManager() {
     try {
       await pipelineApi.delete('/personas', { data: { ids: [...selectedIds] } });
       setSelectedIds(new Set());
-      await fetchPersonas();
+      refreshPersonas();
       addToast(`${selectedIds.size}개 삭제되었습니다.`, 'info');
     } catch (err) {
       console.error('삭제 실패:', err);
@@ -467,94 +506,130 @@ export default function PersonaManager() {
     setIsCreating(true);
     try {
       await api.post('/pipeline/personas/create-from-text', { text: personaText });
-      await fetchPersonas();
+      refreshPersonas();
       addToast('페르소나 생성 완료!', 'success');
       setShowTextModal(false);
       setPersonaText('');
     } catch (error) {
-      const errMsg = error.response?.data?.detail
-        ? (typeof error.response.data.detail === 'string' ? error.response.data.detail : JSON.stringify(error.response.data.detail))
-        : error.message;
+      const errMsg = typeof error.response?.data?.detail === 'string'
+        ? error.response.data.detail
+        : '페르소나 생성 중 오류가 발생했습니다.';
       addToast(`생성 실패: ${errMsg}`, 'error');
     } finally {
       setIsCreating(false);
     }
   };
 
-  /* 파일로 페르소나 생성 (SSE 스트리밍) */
+  /* 파일로 페르소나 생성 — 2단계: Phase 1 즉시 job_id 반환, Phase 2 SSE 스트리밍 */
   const handleCreateFromFile = async () => {
     if (!uploadFile) return addToast('파일을 선택해주세요.', 'error');
     setIsFileCreating(true);
     setFileProgress(null);
 
+    const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8005/api';
     const formData = new FormData();
     formData.append('file', uploadFile);
 
+    // Phase 1: 파일 업로드 → job_id 즉시 수신
+    let jobId;
     try {
-      const response = await fetch('http://localhost:8005/api/pipeline/personas/create-from-file', {
+      const res = await fetch(`${BASE}/pipeline/personas/create-from-file/upload`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: response.statusText }));
-        addToast(`생성 실패: ${err.detail || response.statusText}`, 'error');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        addToast(`생성 실패: ${typeof err.detail === 'string' ? err.detail : '서버 오류가 발생했습니다.'}`, 'error');
+        setIsFileCreating(false);
         return;
       }
+      const data = await res.json();
+      jobId = data.job_id;
+      setFileProgress({ total: data.total, current: 0, done: false, succeeded: 0, failed: 0, results: [] });
+    } catch {
+      addToast('파일 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'error');
+      setIsFileCreating(false);
+      return;
+    }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+    // Phase 2: SSE 스트리밍 (재연결 시 skipCount로 replay 이벤트 중복 처리 방지)
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+    let skipCount = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const response = await fetch(`${BASE}/pipeline/personas/jobs/${jobId}/stream`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          addToast('스트리밍 연결에 실패했습니다.', 'error');
+          break;
+        }
 
-        const chunks = buffer.split('\n\n');
-        buffer = chunks.pop();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let seenCount = 0; // 이번 연결에서 읽은 이벤트 수 (replay 포함)
 
-        for (const chunk of chunks) {
-          const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
-          if (!dataLine) continue;
-          let event;
-          try {
-            event = JSON.parse(dataLine.slice(6));
-          } catch {
-            continue;
-          }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
 
-          if (event.type === 'error') {
-            addToast(`생성 실패: ${event.detail}`, 'error');
-            return;
-          }
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop();
 
-          if (event.type === 'progress') {
-            setFileProgress(prev => ({
-              total: event.total,
-              current: event.current,
-              done: false,
-              succeeded: (prev?.succeeded ?? 0) + (event.success ? 1 : 0),
-              failed: (prev?.failed ?? 0) + (event.success ? 0 : 1),
-              results: [...(prev?.results ?? []), {
-                name: event.name,
-                success: event.success,
-                error: event.error,
-              }],
-            }));
-          }
+          for (const chunk of chunks) {
+            if (chunk.startsWith(':')) continue; // keepalive 스킵
+            const dataLine = chunk.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+            let event;
+            try { event = JSON.parse(dataLine.slice(6)); } catch { continue; }
 
-          if (event.type === 'done') {
-            setFileProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
-            await fetchPersonas();
+            // 재연결 시 서버가 replay한 이미 처리한 이벤트 스킵
+            if (seenCount < skipCount) { seenCount++; continue; }
+            seenCount++;
+            skipCount = seenCount; // 다음 재연결 시 이 지점부터 재개
+
+            if (event.type === 'error') {
+              addToast(`생성 실패: ${event.detail}`, 'error');
+              setIsFileCreating(false);
+              return;
+            }
+            if (event.type === 'progress') {
+              setFileProgress(prev => ({
+                total: event.total,
+                current: event.current,
+                done: false,
+                succeeded: (prev?.succeeded ?? 0) + (event.success ? 1 : 0),
+                failed: (prev?.failed ?? 0) + (event.success ? 0 : 1),
+                results: [...(prev?.results ?? []), { name: event.name, success: event.success, error: event.error }],
+              }));
+            }
+            if (event.type === 'done') {
+              setFileProgress(prev => ({ ...prev, done: true, succeeded: event.succeeded, failed: event.failed }));
+              refreshPersonas();
+              setIsFileCreating(false);
+              return;
+            }
           }
         }
+        break; // 스트림 정상 종료
+      } catch {
+        // skipCount는 이미 마지막으로 처리한 이벤트 이후 값으로 유지됨
+        attempt++;
+        if (attempt > MAX_RETRIES) break;
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
       }
-    } catch (error) {
-      addToast(`생성 실패: ${error.message}`, 'error');
-    } finally {
-      setIsFileCreating(false);
     }
+
+    if (attempt > MAX_RETRIES) {
+      addToast('연결이 끊겼습니다. 작업은 백그라운드에서 계속됩니다.', 'error');
+    }
+    setIsFileCreating(false);
   };
 
   return (
@@ -563,7 +638,7 @@ export default function PersonaManager() {
         <h1>
           <User size={22} color="#6B4DFF" />
           페르소나 관리
-          <TotalBadge>총 {personas.length}개</TotalBadge>
+          <TotalBadge>총 {total}개</TotalBadge>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <FileButton onClick={() => { setShowFileModal(true); setFileProgress(null); setUploadFile(null); }}>
@@ -603,16 +678,17 @@ export default function PersonaManager() {
                 <Th style={{ width: 120, minWidth: 120 }}>페르소나 ID</Th>
                 <Th style={{ width: 500, minWidth: 400 }}>고민</Th>
                 <Th>요약</Th>
-                <Th style={{ width: 120, minWidth: 120 }}>등록일</Th>
+                {isAdmin && <Th style={{ width: 140, minWidth: 140 }}>등록자</Th>}
+                <Th style={{ width: 100, minWidth: 100 }}>등록일</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={7}>불러오는 중...</td></EmptyRow>
-              ) : pagedPersonas.length === 0 ? (
-                <EmptyRow><td colSpan={7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>불러오는 중...</td></EmptyRow>
+              ) : personas.length === 0 ? (
+                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
               ) : (
-                pagedPersonas.map(p => (
+                personas.map(p => (
                   <Tr
                     key={p.id}
                     $selected={selectedIds.has(p.id)}
@@ -640,6 +716,11 @@ export default function PersonaManager() {
                     <TruncatedTd>
                       <ClampedText>{p.aiAnalysis?.reasoning || '-'}</ClampedText>
                     </TruncatedTd>
+                    {isAdmin && (
+                      <Td style={{ color: '#6b7280', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.created_by_email || '-'}
+                      </Td>
+                    )}
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDate(p.persona_created_at)}
                     </Td>
@@ -653,16 +734,16 @@ export default function PersonaManager() {
         {/* 페이지네이션 */}
         <Pagination>
           <span style={{ color: '#AAA', fontSize: 12 }}>
-            {personas.length > 0
-              ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, personas.length)} / ${personas.length}`
+            {total > 0
+              ? `${pageIndex * PAGE_SIZE + 1}–${pageIndex * PAGE_SIZE + personas.length} / ${total}`
               : ''}
           </span>
-          <PageBtn onClick={() => { setPage(p => p - 1); setSelectedIds(new Set()); }} disabled={page <= 1}>
+          <PageBtn onClick={handlePrevPage} disabled={pageIndex <= 0}>
             <ChevronLeft /> 이전
           </PageBtn>
-          <CurrentPage>{page}</CurrentPage>
-          <span style={{ color: '#AAA' }}>/ {totalPages}</span>
-          <PageBtn onClick={() => { setPage(p => p + 1); setSelectedIds(new Set()); }} disabled={page >= totalPages}>
+          <CurrentPage>{pageIndex + 1}</CurrentPage>
+          <span style={{ color: '#AAA' }}>/ {Math.ceil(total / PAGE_SIZE) || 1}</span>
+          <PageBtn onClick={handleNextPage} disabled={!hasNext}>
             다음 <ChevronRight />
           </PageBtn>
         </Pagination>

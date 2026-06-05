@@ -73,11 +73,6 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
-    print(f"✅ Database initialized: {db_config.database}")
-
-
 def drop_all_tables():
     Base.metadata.drop_all(bind=engine)
     print(f"⚠️  All tables dropped from: {db_config.database}")

@@ -68,6 +68,9 @@ class Persona(Base):
     # AI 요약
     persona_summary = Column(Text)
 
+    # 생성자
+    user_id = Column(String(100), nullable=True, index=True)
+
     # 타임스탬프
     persona_created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

@@ -1,0 +1,207 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # OIDC 토큰 발급 필수
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  PROJECT_NAME: ai-innovation
+
+jobs:
+  # ────────────────────────────────────────────
+  # Job 1: Docker 이미지 빌드 → ECR 푸시
+  # ────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build backend image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -f backend/Dockerfile \
+            -t $REGISTRY/$PROJECT_NAME-backend:$TAG \
+            -t $REGISTRY/$PROJECT_NAME-backend:latest \
+            .
+
+      # 5개 서비스가 동일한 이미지를 공유 — 각 ECR 레포에 푸시
+      - name: Push to all ECR repositories
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          SERVICES="backend crm recommend generate data-registration"
+          for SERVICE in $SERVICES; do
+            docker tag \
+              $REGISTRY/$PROJECT_NAME-backend:$TAG \
+              $REGISTRY/$PROJECT_NAME-$SERVICE:$TAG
+            docker tag \
+              $REGISTRY/$PROJECT_NAME-backend:$TAG \
+              $REGISTRY/$PROJECT_NAME-$SERVICE:latest
+            docker push $REGISTRY/$PROJECT_NAME-$SERVICE:$TAG
+            docker push $REGISTRY/$PROJECT_NAME-$SERVICE:latest
+          done
+
+  # ────────────────────────────────────────────
+  # Job 2: Terraform apply (인프라 + ECS 배포)
+  # ────────────────────────────────────────────
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Get AWS Account ID
+        id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init
+        working-directory: infra/ec2
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/ec2
+        run: terraform apply -auto-approve
+        env:
+          # ── 인프라 설정 ──
+          TF_VAR_aws_region:    ${{ env.AWS_REGION }}
+          TF_VAR_environment:   production
+          TF_VAR_ecr_registry:  "${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          TF_VAR_ecr_image_tag: ${{ github.sha }}
+
+          # ── 시크릿 (GitHub Secrets에서 주입) ──
+          TF_VAR_postgres_password:    ${{ secrets.POSTGRES_PASSWORD }}
+          TF_VAR_internal_token:       ${{ secrets.INTERNAL_TOKEN }}
+          TF_VAR_jwt_secret:           ${{ secrets.JWT_SECRET }}
+          TF_VAR_openai_api_key:       ${{ secrets.OPENAI_API_KEY }}
+          TF_VAR_anthropic_api_key:    ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_allowed_origins:      ${{ secrets.ALLOWED_ORIGINS }}
+          TF_VAR_chatgpt_model_name:   ${{ vars.CHATGPT_MODEL_NAME }}
+          TF_VAR_parser_model_name:    ${{ vars.PARSER_MODEL_NAME }}
+
+          # ── Admin 시드 (최초 배포 시만 설정, 이후 GitHub Secrets에서 삭제) ──
+          TF_VAR_admin_seed_email:     ${{ secrets.ADMIN_SEED_EMAIL }}
+          TF_VAR_admin_seed_password:  ${{ secrets.ADMIN_SEED_PASSWORD }}
+
+      - name: Export EC2 instance IDs
+        id: tf-outputs
+        working-directory: infra/ec2
+        run: |
+          echo "db_instance_id=$(terraform output -raw db_ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "opensearch_instance_id=$(terraform output -raw opensearch_ec2_instance_id)" >> $GITHUB_OUTPUT
+
+    outputs:
+      db_instance_id:         ${{ steps.tf-outputs.outputs.db_instance_id }}
+      opensearch_instance_id: ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
+
+  # ────────────────────────────────────────────
+  # Job 3: 데이터 서비스 코드 패키징 → S3 업로드
+  # build-and-push와 병렬 실행 가능하나, terraform이 S3 버킷을 먼저 생성해야 하므로
+  # terraform job 이후에 실행 (S3 버킷 생성 보장)
+  # ────────────────────────────────────────────
+  package-data-services:
+    name: Package & Upload Data Services
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package & upload Database API
+        run: |
+          tar -czf /tmp/database.tar.gz -C database .
+          aws s3 cp /tmp/database.tar.gz s3://${{ env.PROJECT_NAME }}-deploy/database.tar.gz
+
+      - name: Package & upload OpenSearch API
+        run: |
+          tar -czf /tmp/opensearch.tar.gz -C opensearch .
+          aws s3 cp /tmp/opensearch.tar.gz s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz
+
+  # ────────────────────────────────────────────
+  # Job 4: SSM Run Command로 EC2에 최신 코드 배포 + 서비스 재시작
+  # ────────────────────────────────────────────
+  deploy-data-services:
+    name: Deploy Data Services via SSM
+    runs-on: ubuntu-latest
+    needs: [terraform, package-data-services]
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to DB EC2 via SSM
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ needs.terraform.outputs.db_instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":[
+              "aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/database.tar.gz /tmp/database.tar.gz",
+              "tar -xzf /tmp/database.tar.gz -C /opt/db-api",
+              "/opt/db-api/venv/bin/pip install -q -r /opt/db-api/requirements.txt",
+              "chown -R ubuntu:ubuntu /opt/db-api",
+              "systemctl restart db-api"
+            ]}' \
+            --output text --query "Command.CommandId")
+          echo "SSM Command ID (db): $COMMAND_ID"
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ needs.terraform.outputs.db_instance_id }}"
+
+      - name: Deploy to OpenSearch EC2 via SSM
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ needs.terraform.outputs.opensearch_instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":[
+              "aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz /tmp/opensearch.tar.gz",
+              "tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
+              "/opt/opensearch-api/venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
+              "chown -R ubuntu:ubuntu /opt/opensearch-api",
+              "systemctl restart opensearch-api"
+            ]}' \
+            --output text --query "Command.CommandId")
+          echo "SSM Command ID (opensearch): $COMMAND_ID"
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ needs.terraform.outputs.opensearch_instance_id }}"

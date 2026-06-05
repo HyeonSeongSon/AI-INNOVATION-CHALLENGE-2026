@@ -1,3 +1,4 @@
+from operator import add
 from typing import Any, Dict, List, Optional, Literal
 from typing_extensions import TypedDict
 from typing import Annotated
@@ -49,7 +50,7 @@ class BaseState(TypedDict, total=False):
     # -------------------------
     error: Optional[str]            # 에러 메시지
     error_details: Optional[Dict[str, Any]]  # 에러 발생 노드 정보
-    logs: List[str]                 # 실행 로그
+    logs: Annotated[List[str], add]  # 실행 로그
 
     # -------------------------
     # 타이밍 / 성능

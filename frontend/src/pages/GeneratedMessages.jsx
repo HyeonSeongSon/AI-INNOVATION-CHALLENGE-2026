@@ -2,9 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FileText, Search, RotateCcw, ChevronLeft, ChevronRight, X, Trash2, Copy, Check } from 'lucide-react';
-import { dbApi } from '../api';
+import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
-const USER_ID = 'son';
 const LIMIT = 20;
 
 // ============================================================
@@ -497,6 +497,8 @@ function formatDateTime(dt) {
 
 export default function GeneratedMessages() {
   const location = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const [filterOptions, setFilterOptions] = useState({ brands: [], product_tags: [], purposes: [] });
   const [filters, setFilters] = useState({ brand: '', sub_tag: '', purpose: '', start_date: '', end_date: '' });
@@ -521,12 +523,12 @@ export default function GeneratedMessages() {
         Object.entries(filterParams).filter(([, v]) => v)
       );
       const params = {
-        user_id: USER_ID,
+        ...(user?.role !== 'admin' && { user_id: user?.id }),
         limit: LIMIT,
         offset: (targetPage - 1) * LIMIT,
         ...cleanParams,
       };
-      const res = await dbApi.get('/generated-messages', { params });
+      const res = await api.get('/generated-messages', { params });
       setMessages(res.data.items || []);
       setTotal(res.data.total || 0);
     } catch (err) {
@@ -534,16 +536,17 @@ export default function GeneratedMessages() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // 페이지 진입 시 필터 옵션 + 전체 데이터 초기 로드
   useEffect(() => {
-    dbApi.get('/generated-messages/filter-options', { params: { user_id: USER_ID } })
+    if (!user) return;
+    api.get('/generated-messages/filter-options', { params: user.role !== 'admin' ? { user_id: user.id } : {} })
       .then(res => setFilterOptions(res.data))
       .catch(err => console.error('필터 옵션 로드 실패:', err));
 
     doFetch({}, 1);
-  }, [doFetch]);
+  }, [doFetch, user]);
 
   // Home에서 넘어온 메시지가 있으면 모달 자동 오픈
   useEffect(() => {
@@ -603,7 +606,7 @@ export default function GeneratedMessages() {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`선택한 ${selectedIds.size}개의 메시지를 삭제하시겠습니까?`)) return;
     try {
-      await dbApi.delete('/generated-messages', { data: { ids: [...selectedIds] } });
+      await api.delete('/generated-messages', { data: { ids: [...selectedIds] } });
       setSelectedIds(new Set());
       doFetch(committedRef.current, page);
     } catch (err) {
@@ -705,21 +708,22 @@ export default function GeneratedMessages() {
                     onClick={e => e.stopPropagation()}
                   />
                 </CheckTh>
-                <Th>생성일시</Th>
-                <Th>상품명</Th>
-                <Th>브랜드</Th>
-                <Th>카테고리</Th>
-                <Th>목적</Th>
-                <Th>제목</Th>
+                <Th style={{ width: 160, minWidth: 160 }}>생성일시</Th>
+                {isAdmin && <Th style={{ width: 140, minWidth: 140 }}>등록자</Th>}
+                <Th style={{ width: 300, minWidth: 200 }}>상품명</Th>
+                <Th style={{ width: 100, minWidth: 100 }}>브랜드</Th>
+                <Th style={{ width: 100, minWidth: 100 }}>카테고리</Th>
+                <Th style={{ width: 160, minWidth: 160 }}>목적</Th>
+                <Th style={{ width: 300, minWidth: 300 }}>제목</Th>
                 <Th>내용</Th>
-                <Th>품질점수</Th>
+                <Th style={{ width: 80, minWidth: 80 }}>품질점수</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={9}>조회 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조회 중...</td></EmptyRow>
               ) : messages.length === 0 ? (
-                <EmptyRow><td colSpan={9}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
               ) : (
                 messages.map(msg => (
                   <Tr
@@ -737,6 +741,11 @@ export default function GeneratedMessages() {
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDateTime(msg.created_at)}
                     </Td>
+                    {isAdmin && (
+                      <Td style={{ color: '#6b7280', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {msg.created_by_email || '-'}
+                      </Td>
+                    )}
                     <TruncatedTd style={{ maxWidth: 160 }}>{msg.product_name || '-'}</TruncatedTd>
                     <Td>{msg.brand ? <TagBadge>{msg.brand}</TagBadge> : '-'}</Td>
                     <Td>

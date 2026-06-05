@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { User, Lock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Container = styled.div`
   display: flex;
-  justify-content: center; /* 여기가 _ 가 아니라 - 이어야 합니다! */
+  justify-content: center;
   align-items: center;
-  width: 100vw;            /* 가로를 화면 꽉 차게 설정 */
-  height: 100vh;           /* 세로를 화면 꽉 차게 설정 */
+  width: 100vw;
+  height: 100vh;
   background-color: #F5F6FA;
 `;
 
@@ -44,15 +45,15 @@ const InputWrapper = styled.div`
 
 const Input = styled.input`
   width: 100%;
-  padding: 12px 12px 12px 40px; /* 아이콘 공간 확보 */
-  border: 1px solid #E0E0E0;
+  padding: 12px 12px 12px 40px;
+  border: 1px solid ${({ $hasError }) => ($hasError ? '#FF5252' : '#E0E0E0')};
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
 
   &:focus {
-    border-color: #7C4DFF; /* 포커스 시 보라색 */
+    border-color: ${({ $hasError }) => ($hasError ? '#FF5252' : '#7C4DFF')};
   }
 
   &::placeholder {
@@ -68,42 +69,60 @@ const IconWrapper = styled.div`
   color: #AAA;
   display: flex;
   align-items: center;
-  
+
   svg {
     width: 18px;
     height: 18px;
   }
 `;
 
+const ErrorMessage = styled.p`
+  font-size: 13px;
+  color: #FF5252;
+  text-align: left;
+  margin-top: -12px;
+`;
+
 const LoginButton = styled.button`
   width: 100%;
   padding: 14px;
   margin-top: 10px;
-  background-color: #7C4DFF; /* 이미지의 보라색 버튼 */
+  background-color: ${({ disabled }) => (disabled ? '#B0BEC5' : '#7C4DFF')};
   color: white;
   font-size: 16px;
   font-weight: bold;
   border: none;
   border-radius: 8px;
-  cursor: pointer;
+  cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
   transition: background-color 0.2s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background-color: #651FFF;
   }
 `;
 
 export default function Login() {
-  const navigate = useNavigate(); // 페이지 이동을 도와주는 훅
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
-    // 지금은 무조건 홈으로 이동 (나중에 실제 로그인 로직 추가 가능)
-    if (id && password) {
-      navigate('/'); 
-    } else {
-      alert('아이디와 비밀번호를 입력해주세요.');
+  const handleLogin = async () => {
+    if (!id || !password) {
+      setError('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    setError('');
+    setIsLoading(true);
+    try {
+      await login(id, password);
+      navigate('/');
+    } catch {
+      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -117,27 +136,31 @@ export default function Login() {
 
         <InputWrapper>
           <IconWrapper><User /></IconWrapper>
-          <Input 
-            type="text" 
-            placeholder="ID" 
+          <Input
+            type="text"
+            placeholder="이메일"
             value={id}
-            onChange={(e) => setId(e.target.value)}
+            $hasError={!!error}
+            onChange={(e) => { setId(e.target.value); setError(''); }}
           />
         </InputWrapper>
 
         <InputWrapper>
           <IconWrapper><Lock /></IconWrapper>
-          <Input 
-            type="password" 
-            placeholder="password" 
+          <Input
+            type="password"
+            placeholder="비밀번호"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
+            $hasError={!!error}
+            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
           />
         </InputWrapper>
 
-        <LoginButton onClick={handleLogin}>
-          LOGIN
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+
+        <LoginButton onClick={handleLogin} disabled={isLoading}>
+          {isLoading ? '로그인 중...' : 'LOGIN'}
         </LoginButton>
       </LoginBox>
     </Container>

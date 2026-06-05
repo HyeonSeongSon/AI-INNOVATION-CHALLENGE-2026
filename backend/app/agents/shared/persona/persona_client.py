@@ -2,6 +2,8 @@ from typing import Dict, Any, Optional
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....config.settings import settings
+from ....core.auth import UserContext
+from ....core.auth_utils import create_user_assertion
 from ....core.http_client_registry import register
 import httpx
 
@@ -18,20 +20,33 @@ class PersonaClient:
     def http_client(self) -> httpx.AsyncClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_default),
+                headers={"X-Internal-Token": settings.internal_token},
+            )
         return self._http_client
+
+    def _make_user_assertion(self, user_id: str) -> str:
+        """user_id를 database 엔드포인트용 X-User-Assertion JWT로 직렬화."""
+        return create_user_assertion(
+            UserContext(user_id=user_id, role="user", auth_method="jwt")
+        )
 
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
 
     @traced(name="get_persona_info", run_type="tool")
-    async def get_persona_info(self, persona_id: str) -> Dict[str, Any]:
+    async def get_persona_info(self, persona_id: str, user_id: str | None = None) -> Dict[str, Any]:
         """페르소나 정보 조회"""
         try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas/get",
                 json={"persona_id": persona_id},
+                headers=extra_headers,
             )
             response.raise_for_status()
             api_data = response.json()
@@ -72,16 +87,20 @@ class PersonaClient:
             return persona_info
 
         except Exception as e:
-            logger.error("persona_fetch_failed", persona_id=persona_id, error=str(e), exc_info=True)
+            logger.error("persona_fetch_failed", persona_id=persona_id, error_type=type(e).__name__, exc_info=True)
             raise
 
     @traced(name="get_existing_product_search_query", run_type="tool")
-    async def get_existing_product_search_query(self, persona_id: str) -> Optional[Dict[str, Any]]:
+    async def get_existing_product_search_query(self, persona_id: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         """DB에서 기존에 생성한 상품 검색 쿼리 조회 (가장 최신 결과 1개)"""
         try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/product-search-queries/get",
                 json={"persona_id": persona_id},
+                headers=extra_headers,
             )
             response.raise_for_status()
             results = response.json()
@@ -95,19 +114,24 @@ class PersonaClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
-            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_queries_fetch_failed", persona_id=persona_id, error_type=type(e).__name__)
             raise
         
     @traced(name="save_persona", run_type="tool")
-    async def save_persona(self, persona_data: Dict[str, Any]) -> str:
+    async def save_persona(self, persona_data: Dict[str, Any], user_id: str | None = None) -> str:
         """페르소나 정보를 DB에 저장하고 persona_id 반환"""
         try:
+            payload = {**persona_data}
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/personas",
-                json=persona_data,
+                json=payload,
+                headers=extra_headers,
             )
             response.raise_for_status()
             result = response.json()
@@ -116,23 +140,46 @@ class PersonaClient:
             return persona_id
 
         except httpx.HTTPStatusError as e:
-            logger.error("persona_save_failed", status_code=e.response.status_code, error=str(e))
+            logger.error("persona_save_failed", status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("persona_save_failed", error=str(e))
+            logger.error("persona_save_failed", error_type=type(e).__name__)
+            raise
+
+    @traced(name="delete_persona", run_type="tool")
+    async def delete_persona(self, persona_id: str, user_id: str | None = None) -> None:
+        """페르소나 삭제 (보상 트랜잭션용). 연관 검색 쿼리도 CASCADE 삭제됨."""
+        try:
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
+            response = await self.http_client.request(
+                "DELETE",
+                f"{self.db_api_url}/api/personas",
+                json={"ids": [persona_id]},
+                headers=extra_headers,
+            )
+            response.raise_for_status()
+            logger.info("persona_deleted", persona_id=persona_id)
+        except Exception as e:
+            logger.error("persona_delete_failed", persona_id=persona_id, error_type=type(e).__name__)
             raise
 
     @traced(name="save_product_search_query", run_type="tool")
-    async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any]) -> Dict[str, int]:
+    async def save_product_search_query(self, persona_id: str, search_queries: Dict[str, Any], user_id: str | None = None) -> Dict[str, int]:
         """생성한 상품 검색 쿼리를 DB에 저장"""
         try:
             data = {
                 "persona_id": persona_id,
                 **search_queries
             }
+            extra_headers = {}
+            if user_id:
+                extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
             response = await self.http_client.post(
                 f"{self.db_api_url}/api/product-search-queries",
-                json=data
+                json=data,
+                headers=extra_headers,
             )
             response.raise_for_status()
             result = response.json()
@@ -147,8 +194,8 @@ class PersonaClient:
             return query_ids
 
         except httpx.HTTPStatusError as e:
-            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error=str(e))
+            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__)
             raise
         except Exception as e:
-            logger.error("product_search_query_save_failed", persona_id=persona_id, error=str(e))
+            logger.error("product_search_query_save_failed", persona_id=persona_id, error_type=type(e).__name__)
             raise

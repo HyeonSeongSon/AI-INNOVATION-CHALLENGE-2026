@@ -36,10 +36,12 @@ CREATE TABLE IF NOT EXISTS personas (
     avoided_brands TEXT[] DEFAULT ARRAY[]::TEXT[],
     persona_summary TEXT,
     user_input TEXT,
+    user_id VARCHAR(100) NULL DEFAULT NULL,
     persona_created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_personas_persona_id ON personas(persona_id);
+CREATE INDEX idx_personas_user_id ON personas(user_id);
 
 -- ============================================================
 -- 2. 분석 결과 테이블 (analysis_results)

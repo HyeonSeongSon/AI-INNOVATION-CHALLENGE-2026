@@ -1,0 +1,52 @@
+# terraform.tfvars.example
+# 실제 배포 시 이 파일을 복사하여 terraform.tfvars로 사용하세요.
+# terraform.tfvars는 .gitignore에 추가하여 시크릿을 커밋하지 마세요.
+
+# ---- 기본 설정 ----
+aws_region   = "ap-northeast-2"
+environment  = "production"
+project_name = "ai-innovation"
+
+# ---- ECR ----
+# AWS 콘솔 > ECR > 레지스트리 URI 확인
+ecr_registry = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com"
+ecr_image_tag = "latest"
+
+# ---- EC2 ----
+ec2_key_name             = ""           # SSH 키 페어 이름 (없으면 SSM으로 접근)
+db_instance_type         = "t3.medium"
+opensearch_instance_type = "t3.medium"
+ebs_volume_size_gb       = 50
+
+# ---- ECS ----
+ecs_task_cpu             = 512    # 0.5 vCPU
+ecs_task_memory          = 1024   # 1 GB
+ecs_service_desired_count = 1
+
+# ---- ALB ----
+# ACM 인증서 ARN (도메인 연결 시 입력, 없으면 HTTP만 사용)
+alb_ssl_certificate_arn = ""
+
+# ---- 시크릿 (민감 정보 — 반드시 실제 값으로 교체) ----
+# openssl rand -hex 32 로 생성
+postgres_password = "CHANGE_ME_strong_password_here"
+internal_token    = "CHANGE_ME_run_openssl_rand_hex_32"
+jwt_secret        = "CHANGE_ME_run_openssl_rand_hex_32_different_value"
+
+# ---- API 키 ----
+openai_api_key    = "sk-..."
+anthropic_api_key = ""      # Claude 모델 사용 시 입력
+
+# ---- 앱 설정 ----
+chatgpt_model_name = "gpt-5-mini"
+parser_model_name  = "gpt-5-nano"
+
+# CORS — 실제 프론트엔드 도메인으로 교체
+allowed_origins = "https://yourdomain.com"
+
+# ---- Admin 시드 (최초 배포 1회만 사용) ----
+# 값이 설정되면 Secrets Manager 시크릿 2개가 생성되고 ECS 시작 시 admin 계정이 자동 생성됩니다.
+# 시드 완료 후 빈 문자열("")로 교체하고 terraform apply → 시크릿 즉시 삭제됩니다.
+# 비밀번호 조건: 8자 이상, 대문자·소문자·숫자 포함
+admin_seed_email    = ""   # 예: "admin@yourcompany.com"
+admin_seed_password = ""   # 예: "StrongPass1!"

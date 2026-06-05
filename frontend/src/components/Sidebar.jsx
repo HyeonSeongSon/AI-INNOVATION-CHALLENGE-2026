@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
-import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2, Package } from 'lucide-react';
+import { Home, User, MessageSquare, FileText, Settings, Plus, Trash2, Package, LogOut } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { useAuth } from '../context/AuthContext';
 
 /* --- 스타일 컴포넌트 --- */
 const SidebarContainer = styled.div`
@@ -170,6 +171,62 @@ const BottomMenu = styled.div`
   margin-top: auto;
   border-top: 1px solid #E0E0E0;
   padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const UserInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #EBEBF0;
+`;
+
+const UserDetails = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const UserEmail = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const RoleBadge = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ $role }) => ($role === 'admin' ? '#5F4B8B' : '#888')};
+  background: ${({ $role }) => ($role === 'admin' ? '#EDE7FF' : '#F0F0F0')};
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+`;
+
+const LogoutBtn = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  color: #AAA;
+  display: flex;
+  align-items: center;
+  transition: 0.15s;
+  flex-shrink: 0;
+
+  &:hover {
+    color: #ff4d4d;
+    background: #fee;
+  }
+
+  svg { width: 16px; height: 16px; }
 `;
 
 const EmptyConv = styled.div`
@@ -198,23 +255,24 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const { convId } = useParams();
   const { conversations, deleteConversation } = useChat();
+  const { user, logout } = useAuth();
 
   const isMessagePage = location.pathname.startsWith('/message');
+  const isAdmin = user?.role === 'admin';
 
-  const handleNewChat = () => {
-    navigate('/message');
-  };
+  const handleNewChat = () => navigate('/message');
 
-  const handleSelectConv = (conv) => {
-    navigate(`/message/${conv.id}`);
-  };
+  const handleSelectConv = (conv) => navigate(`/message/${conv.id}`);
 
   const handleDelete = (e, targetConvId) => {
     e.stopPropagation();
     deleteConversation(targetConvId);
-    if (targetConvId === convId) {
-      navigate('/message');
-    }
+    if (targetConvId === convId) navigate('/message');
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
 
   return (
@@ -282,6 +340,18 @@ export default function Sidebar() {
         <MenuItem to="/settings" $active={location.pathname === '/settings'}>
           <Settings /> 설정
         </MenuItem>
+
+        {user && (
+          <UserInfo>
+            <UserDetails>
+              <UserEmail title={user.email}>{user.email}</UserEmail>
+              <RoleBadge $role={user.role}>{user.role}</RoleBadge>
+            </UserDetails>
+            <LogoutBtn onClick={handleLogout} title="로그아웃">
+              <LogOut />
+            </LogoutBtn>
+          </UserInfo>
+        )}
       </BottomMenu>
     </SidebarContainer>
   );

@@ -1,22 +1,18 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { dbApi } from '../api';
+import api from '../api';
+import { useAuth } from './AuthContext';
 
 const ChatContext = createContext();
 
-const USER_ID = 'son';
-
 export const ChatProvider = ({ children }) => {
-  // 대화 목록 (사이드바용)
-  const [conversations, setConversations] = useState([]);
+  const { user } = useAuth();
 
-  // In-flight API 상태: Map<convId, { messages: [], isLoading: bool }>
-  // 컴포넌트 언마운트/리마운트에 무관하게 상태 보존 (ChatGPT/Claude 방식)
+  const [conversations, setConversations] = useState([]);
   const [activeConvs, setActiveConvs] = useState(new Map());
 
-  // 대화 목록 로드
   const loadConversations = useCallback(async () => {
     try {
-      const res = await dbApi.get(`/conversations?user_id=${USER_ID}`);
+      const res = await api.get('/conversations');
       setConversations(res.data || []);
       return res.data || [];
     } catch (e) {
@@ -25,16 +21,14 @@ export const ChatProvider = ({ children }) => {
     }
   }, []);
 
-  // 초기 대화 목록 로드
   useEffect(() => {
-    loadConversations();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (user) loadConversations();
+  }, [user, loadConversations]);
 
-  // DB에 메시지 + 제목 저장
   const saveMessages = useCallback(async (convId, msgs, title) => {
     if (!convId) return;
     try {
-      await dbApi.put(`/conversations/${convId}/messages`, {
+      await api.put(`/conversations/${convId}/messages`, {
         messages: msgs,
         title: title || undefined,
       });
@@ -46,12 +40,10 @@ export const ChatProvider = ({ children }) => {
     }
   }, []);
 
-  // 대화 삭제
   const deleteConversation = useCallback(async (convId) => {
     try {
-      await dbApi.delete(`/conversations/${convId}`);
+      await api.delete(`/conversations/${convId}`);
       setConversations(prev => prev.filter(c => c.id !== convId));
-      // in-flight 상태도 정리
       setActiveConvs(prev => {
         const next = new Map(prev);
         next.delete(convId);
@@ -62,12 +54,10 @@ export const ChatProvider = ({ children }) => {
     }
   }, []);
 
-  // API 시작 또는 진행 중 상태 등록/업데이트
   const setPendingConv = useCallback((convId, messages, isLoading = true) => {
     setActiveConvs(prev => new Map(prev).set(convId, { messages, isLoading }));
   }, []);
 
-  // API 완료 후 정리 (컴포넌트가 final state를 반영한 뒤 호출)
   const clearPendingConv = useCallback((convId) => {
     setActiveConvs(prev => {
       const next = new Map(prev);
@@ -93,8 +83,6 @@ export const ChatProvider = ({ children }) => {
 
 export const useChat = () => {
   const context = useContext(ChatContext);
-  if (!context) {
-    throw new Error('useChat must be used within a ChatProvider');
-  }
+  if (!context) throw new Error('useChat must be used within a ChatProvider');
   return context;
 };

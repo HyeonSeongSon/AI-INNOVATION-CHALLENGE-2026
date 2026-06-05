@@ -1,0 +1,217 @@
+"""
+CRM Service — LangGraph 오케스트레이터 + Pipeline SSE (port 8006)
+프론트엔드가 직접 호출하는 에이전트 채팅 및 데이터 등록 파이프라인 서버.
+"""
+
+import asyncio
+import os
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "../app/.env"))
+
+from fastapi import FastAPI, Request
+from starlette.responses import JSONResponse
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
+
+from app.agents.crm_message_agent.crm_message_agent import CRMMessageAgent
+from app.api import marketing_api, products_pipeline, persona_pipeline
+from app.api.upload_jobs import cleanup_expired_jobs, set_pool as set_upload_pool
+from app.core.cleanup import cleanup_old_checkpoints
+from app.config.settings import settings
+from app.core.data_loader import validate_static_configs
+from app.core.body_limit import BodySizeLimitMiddleware, PayloadTooLargeError
+from app.core.internal_auth import InternalTokenMiddleware
+from app.core.logging import configure_logging, get_logger
+from app.core.langsmith_config import configure_langsmith
+from app.core.middleware import RequestLoggingMiddleware
+from app.core.http_client_registry import close_all
+
+configure_logging(
+    log_level=settings.log_level,
+    json_output=True,
+    environment=settings.environment,
+)
+
+logger = get_logger("crm_server")
+
+configure_langsmith()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.agents.shared.persona.persona_client import PersonaClient
+    from app.agents.data_registration_agent.services.product_registration import ProductRegistrationService
+    from app.agents.tools.search_tools import init_search_http_client
+
+    app.state.persona_client = PersonaClient()
+    app.state.registration = ProductRegistrationService()
+    init_search_http_client()
+
+    validate_static_configs()
+
+    async with AsyncConnectionPool(
+        conninfo=settings.postgres_url,
+        min_size=settings.postgres_async_pool_min_size,
+        max_size=settings.postgres_async_pool_max_size,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    ) as pool:
+        await pool.wait()
+        checkpointer = AsyncPostgresSaver(pool)
+        await checkpointer.setup()
+
+        async with pool.connection() as conn:
+            await conn.execute(
+                "ALTER TABLE checkpoints ADD COLUMN IF NOT EXISTS"
+                " created_at TIMESTAMPTZ DEFAULT NOW()"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at"
+                " ON checkpoints(created_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS upload_jobs (
+                    job_id          TEXT PRIMARY KEY,
+                    job_type        TEXT NOT NULL,
+                    creator_user_id TEXT NOT NULL,
+                    status          TEXT NOT NULL DEFAULT 'pending',
+                    total           INTEGER NOT NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS upload_job_events (
+                    id         BIGSERIAL PRIMARY KEY,
+                    job_id     TEXT NOT NULL REFERENCES upload_jobs(job_id) ON DELETE CASCADE,
+                    event_data JSONB NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_upload_job_events_job_id_id
+                ON upload_job_events(job_id, id)
+                """
+            )
+
+        set_upload_pool(pool)
+
+        db_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="db_worker")
+        app.state.db_executor = db_executor
+        app.state.pool = pool
+        app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
+        logger.info("crm_services_initialized")
+
+        async def _upload_cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(settings.cleanup_interval_seconds)
+                try:
+                    removed = await cleanup_expired_jobs(
+                        settings.upload_job_ttl_seconds,
+                        settings.upload_job_done_ttl_seconds,
+                    )
+                    if removed:
+                        logger.info("upload_jobs_cleaned", removed=removed)
+                except Exception:
+                    logger.error("upload_cleanup_failed", exc_info=True)
+
+        async def _checkpoint_cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(86400)  # 24시간마다
+                try:
+                    deleted = await cleanup_old_checkpoints(
+                        pool,
+                        settings.checkpoint_retention_days,
+                        settings.checkpoint_cleanup_batch_size,
+                    )
+                    if deleted:
+                        logger.info("checkpoint_cleanup_done", deleted_threads=deleted)
+                except Exception as e:
+                    logger.warning("checkpoint_cleanup_failed", error_type=type(e).__name__)
+
+        upload_cleanup_task = asyncio.create_task(_upload_cleanup_loop())
+        checkpoint_cleanup_task = asyncio.create_task(_checkpoint_cleanup_loop())
+        logger.info("upload_cleanup_worker_started")
+        logger.info("checkpoint_cleanup_worker_started", retention_days=settings.checkpoint_retention_days)
+
+        yield
+
+        upload_cleanup_task.cancel()
+        checkpoint_cleanup_task.cancel()
+        try:
+            await asyncio.gather(upload_cleanup_task, checkpoint_cleanup_task, return_exceptions=True)
+        except asyncio.CancelledError:
+            pass
+        db_executor.shutdown(wait=False)
+        await close_all()
+
+
+app = FastAPI(
+    title="CRM Service",
+    description="LangGraph CRM 오케스트레이터 + 데이터 등록 파이프라인",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+
+@app.exception_handler(PayloadTooLargeError)
+async def payload_too_large_handler(request: Request, exc: PayloadTooLargeError):
+    return JSONResponse(status_code=413, content={"detail": "요청 본문이 너무 큽니다."})
+
+
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_chat_body_bytes)
+app.add_middleware(InternalTokenMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
+
+app.include_router(marketing_api.router)
+app.include_router(products_pipeline.router)
+app.include_router(persona_pipeline.router)
+
+
+@app.get("/health")
+async def health(req: Request):
+    agent_ok = getattr(req.app.state, "agent_v2", None) is not None
+    pool = getattr(req.app.state, "pool", None)
+    db_ok = False
+    if pool is not None:
+        try:
+            async with pool.connection() as conn:
+                await asyncio.wait_for(
+                    conn.execute("SELECT 1"),
+                    timeout=settings.health_check_db_timeout,
+                )
+            db_ok = True
+        except asyncio.TimeoutError:
+            logger.warning("health_check_db_timeout")
+        except Exception as e:
+            logger.warning("health_check_db_failed", error_type=type(e).__name__)
+
+    overall = "healthy" if (agent_ok and db_ok) else "degraded"
+    return {
+        "status": overall,
+        "services": {
+            "agent": "ok" if agent_ok else "not_initialized",
+            "database": "ok" if db_ok else "unavailable",
+        },
+    }
+
+
+@app.get("/ready")
+async def ready(req: Request):
+    agent_ok = getattr(req.app.state, "agent_v2", None) is not None
+    if not agent_ok:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Agent not ready")
+    return {"status": "ready"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("servers.crm_server:app", host="0.0.0.0", port=8006, reload=True)

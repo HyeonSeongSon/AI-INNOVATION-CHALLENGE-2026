@@ -1,12 +1,17 @@
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolArg
+from langchain_core.runnables import RunnableConfig
 import asyncio
+import functools
 import httpx
+import json
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Annotated, Optional, Literal
 from pydantic import BaseModel, Field
 
 from ...config.settings import settings
-from ...core.http_client_registry import register, replace
+from ...core.auth import UserContext
+from ...core.auth_utils import create_user_assertion
+from ...core.http_client_registry import register
 from .utils.ranking import rank_and_top5
 from .utils.formatters import (
     format_get_all_personas,
@@ -24,16 +29,30 @@ DB_API_BASE_URL = settings.database_api_url + "/api"
 _http_client: Optional[httpx.AsyncClient] = None
 
 
-def _get_http_client() -> httpx.AsyncClient:
+def init_search_http_client() -> None:
     global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
-        register(_http_client)
-    elif _http_client.is_closed:
-        old = _http_client
-        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_default))
-        replace(old, _http_client)
+    _http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(settings.http_timeout_default),
+        headers={"X-Internal-Token": settings.internal_token},
+    )
+    register(_http_client)
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    if _http_client is None or _http_client.is_closed:
+        raise RuntimeError(
+            "Search HTTP client not initialized — "
+            "call init_search_http_client() in lifespan before handling requests"
+        )
     return _http_client
+
+
+def _make_user_assertion(user_id: str | None, role: str) -> str | None:
+    if not user_id:
+        return None
+    return create_user_assertion(
+        UserContext(user_id=user_id, role=role, email="", auth_method="jwt")
+    )
 
 # ============================================================
 # 로컬 데이터 파일 로드 (ToDo: DB에서 호출하도록 변경)
@@ -41,8 +60,8 @@ def _get_http_client() -> httpx.AsyncClient:
 
 _DATA_DIR = Path(__file__).parents[4] / "data"
 
+@functools.lru_cache(maxsize=None)
 def _load_json(filename: str) -> dict:
-    import json
     with open(_DATA_DIR / filename, encoding="utf-8") as f:
         return json.load(f)
 
@@ -52,16 +71,25 @@ def _load_json(filename: str) -> dict:
 # ============================================================
 
 @tool
-async def get_all_personas() -> str:
+async def get_all_personas(config: Annotated[RunnableConfig, InjectedToolArg] = None) -> str:
     """
     데이터베이스에 저장된 모든 페르소나 목록을 조회합니다.
     사용자가 페르소나 목록을 보여달라고 하거나, 어떤 페르소나가 있는지 물어볼 때 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
+    user_id = configurable.get("user_id")
+    role = configurable.get("role", "user")
     try:
         client = _get_http_client()
-        response = await client.post(f"{DB_API_BASE_URL}/personas/list")
+        assertion = _make_user_assertion(user_id, role)
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
+        response = await client.post(
+            f"{DB_API_BASE_URL}/personas/list",
+            json={"page": 1, "page_size": 200},
+            headers=extra_headers,
+        )
         response.raise_for_status()
-        personas = response.json()
+        personas = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -89,10 +117,10 @@ async def get_products_by_tag(tag: str) -> str:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/products/by-tag",
-            json={"tag": tag}
+            json={"tag": tag, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()
+        products = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -119,10 +147,10 @@ async def get_products_by_brand(brand: str) -> str:
         client = _get_http_client()
         response = await client.post(
             f"{DB_API_BASE_URL}/products/by-brand",
-            json={"brand": brand}
+            json={"brand": brand, "page": 1, "page_size": 200}
         )
         response.raise_for_status()
-        products = response.json()
+        products = response.json().get("items", [])
 
     except httpx.HTTPStatusError:
         return "상품 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -138,17 +166,23 @@ async def get_products_by_brand(brand: str) -> str:
 
 
 @tool
-async def get_persona_by_id(persona_id: str) -> str:
+async def get_persona_by_id(persona_id: str, config: Annotated[RunnableConfig, InjectedToolArg] = None) -> str:
     """
     특정 페르소나 ID의 모든 상세 정보를 조회합니다.
     페르소나 ID(예: PERSONA_001)를 알고 있을 때, 해당 페르소나의 전체 프로필을
     확인하고 싶을 때 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
+    user_id = configurable.get("user_id")
+    role = configurable.get("role", "user")
     try:
         client = _get_http_client()
+        assertion = _make_user_assertion(user_id, role)
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/get",
-            json={"persona_id": persona_id}
+            json={"persona_id": persona_id},
+            headers=extra_headers,
         )
         response.raise_for_status()
         p = response.json()
@@ -156,6 +190,8 @@ async def get_persona_by_id(persona_id: str) -> str:
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return f"해당 ID의 페르소나를 찾을 수 없습니다: {persona_id}"
+        if e.response.status_code == 403:
+            return f"해당 페르소나에 접근할 권한이 없습니다: {persona_id}"
         return "페르소나 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
     except httpx.RequestError:
@@ -171,7 +207,7 @@ async def get_all_brands() -> str:
     사용자가 어떤 브랜드가 있는지 물어보거나, get_products_by_brand 호출 전에
     유효한 브랜드명을 확인할 때 사용하세요.
     """
-    brands = (await asyncio.to_thread(_load_json, "brands.json")).get("brands", [])
+    brands = _load_json("brands.json").get("brands", [])
     if not brands:
         return "등록된 브랜드가 없습니다."
     return format_get_all_brands(brands)
@@ -184,7 +220,7 @@ async def get_all_categories() -> str:
     사용자가 어떤 상품 종류가 있는지 물어보거나, get_products_by_tag 호출 전에
     유효한 카테고리명을 확인할 때 사용하세요.
     """
-    categories = (await asyncio.to_thread(_load_json, "category.json")).get("sub_tags", [])
+    categories = _load_json("category.json").get("sub_tags", [])
     if not categories:
         return "등록된 상품 종류가 없습니다."
     return format_get_all_categories(categories)
@@ -196,7 +232,7 @@ async def get_all_message_types() -> str:
     CRM 메시지 생성 시 사용할 수 있는 메시지 타입(목적) 목록과 각 설명을 반환합니다.
     사용자가 어떤 메시지 타입이 있는지 물어볼 때 사용하세요.
     """
-    purposes = (await asyncio.to_thread(_load_json, "purposes.json")).get("purposes", {})
+    purposes = _load_json("purposes.json").get("purposes", {})
     if not purposes:
         return "등록된 메시지 타입이 없습니다."
     return format_get_all_message_types(purposes)
@@ -246,7 +282,7 @@ class PersonaSearchFilter(BaseModel):
             "명시하지 않은 필드는 모두 'all'(AND)."
         )
     )
-    limit: int = Field(10, description="반환할 최대 결과 수 (기본 10, 최대 20)")
+    limit: int = Field(10, ge=1, le=20, description="반환할 최대 결과 수 (기본 10, 최대 20)")
 
 
 @tool(args_schema=PersonaSearchFilter)
@@ -257,6 +293,7 @@ async def search_personas_by_filter(
     preferred_ingredients=None, avoided_ingredients=None,
     occupation=None, beauty_interests=None, shopping_style=None,
     preferred_brands=None, limit=10,
+    config: Annotated[RunnableConfig, InjectedToolArg] = None,
 ) -> str:
     """
     구조화된 조건으로 페르소나를 검색합니다.
@@ -264,6 +301,7 @@ async def search_personas_by_filter(
     선호/기피 성분, 가격 민감도 등 구체적인 속성 조건이 있을 때 사용하세요.
     구체적인 속성 조건이 있을 때 이 함수를 사용하세요.
     """
+    configurable = (config or {}).get("configurable", {})
     f = PersonaSearchFilter(
         gender=gender, age_min=age_min, age_max=age_max,
         skin_type=skin_type, concerns=concerns, personal_color=personal_color,
@@ -275,11 +313,19 @@ async def search_personas_by_filter(
         shopping_style=shopping_style, preferred_brands=preferred_brands,
         limit=limit,
     )
+    payload = {
+        **f.model_dump(),
+        "user_id": configurable.get("user_id"),
+        "role": configurable.get("role", "user"),
+    }
     try:
         client = _get_http_client()
+        assertion = _make_user_assertion(configurable.get("user_id"), configurable.get("role", "user"))
+        extra_headers = {"X-User-Assertion": assertion} if assertion else {}
         response = await client.post(
             f"{DB_API_BASE_URL}/personas/filter",
-            json=f.model_dump()
+            json=payload,
+            headers=extra_headers,
         )
         response.raise_for_status()
         rows = response.json()

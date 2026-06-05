@@ -1,0 +1,26 @@
+# 빌드 컨텍스트 = 리포 루트 (backend/docker-compose.yml의 context: .. 및 CI의 docker build .).
+# backend 이미지만 루트 컨텍스트를 쓰므로(다른 이미지는 각자 디렉터리가 컨텍스트) 여기 규칙은
+# 사실상 backend 빌드에만 적용된다.
+
+# 시크릿 — 이미지에 절대 포함 금지 (핵심: backend/app/.env 누출 방지)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python 캐시
+**/__pycache__/
+**/*.pyc
+
+# VCS / 툴링 캐시
+.git/
+.gitignore
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# backend 이미지가 필요로 하지 않는 큰 디렉터리 (컨텍스트 슬림화)
+# 주의: opensearch/requirements.txt는 Dockerfile이 COPY하므로 opensearch/는 제외하지 않는다.
+frontend/
+infra/
+data/
+**/node_modules/

@@ -1,9 +1,18 @@
+import asyncio
+import hmac
+import json
+import re
+
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import Dict, Optional, List, Union
+from pydantic import BaseModel, Field, AfterValidator
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+from typing import Annotated, Dict, Literal, Optional, List, Union
 import logging
 import os
+import sys
+import structlog
 from dotenv import load_dotenv
 from opensearch_hybrid import OpenSearchHybridClient
 
@@ -11,10 +20,159 @@ from opensearch_hybrid import OpenSearchHybridClient
 load_dotenv()
 
 # 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
+_formatter = structlog.stdlib.ProcessorFormatter(
+    processor=structlog.processors.JSONRenderer(ensure_ascii=False),
+)
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(_formatter)
+_root = logging.getLogger()
+_root.handlers = []
+_root.addHandler(_handler)
+_root.setLevel(logging.INFO)
+
+logger = structlog.get_logger("opensearch_api")
+
+_INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+if not _INTERNAL_TOKEN:
+    raise RuntimeError("INTERNAL_TOKEN 환경변수가 설정되지 않았습니다.")
+if len(_INTERNAL_TOKEN) < 32:
+    raise RuntimeError("INTERNAL_TOKEN은 최소 32자 이상이어야 합니다.")
+_SKIP_PATHS = {"/", "/health", "/ready"}
+_MAX_BODY_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+class _PayloadTooLargeError(Exception):
+    pass
+
+
+class _BodySizeLimitMiddleware:
+    def __init__(self, app: ASGIApp, max_body_bytes: int = _MAX_BODY_BYTES) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        content_length_raw = headers.get(b"content-length")
+        if content_length_raw is not None:
+            try:
+                content_length = int(content_length_raw)
+            except ValueError:
+                content_length = 0
+            if content_length > self.max_body_bytes:
+                await self._send_413(send)
+                return
+
+        total_bytes = 0
+
+        async def limited_receive() -> dict:
+            nonlocal total_bytes
+            message = await receive()
+            if message.get("type") == "http.request":
+                total_bytes += len(message.get("body", b""))
+                if total_bytes > self.max_body_bytes:
+                    raise _PayloadTooLargeError()
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _PayloadTooLargeError:
+            await self._send_413(send)
+
+    @staticmethod
+    async def _send_413(send: Send) -> None:
+        body = json.dumps({"detail": "요청 바디가 너무 큽니다."}).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+ALLOWED_INDEX_NAMES: frozenset[str] = frozenset({
+    "product_index_v3",
+    "forbidden_sentences",
+    "product_v4_combined",
+    "product_v4_function_desc",
+    "product_v4_attribute_desc",
+    "product_v4_target_user",
+    "product_v4_spec_feature",
+})
+
+ALLOWED_PIPELINE_IDS: frozenset[str] = frozenset({
+    "hybrid-minmax-pipeline",
+})
+
+ALLOWED_VECTOR_FIELDS: frozenset[str] = frozenset({
+    "combined_vector",
+    "function_desc_vector",
+    "attribute_desc_vector",
+    "target_user_vector",
+    "spec_feature_vector",
+})
+
+# BM25 필드명: 알파벳·밑줄로 시작, 알파벳·밑줄·숫자로 구성, 선택적으로 boost 접미사(^숫자)
+_BM25_FIELD_RE = re.compile(r'^[a-zA-Z_][a-zA-Z_0-9]*(\^[0-9]+(\.[0-9]+)?)?$')
+
+
+def _validate_index_name(v: str) -> str:
+    if v not in ALLOWED_INDEX_NAMES:
+        raise ValueError(f"허용되지 않는 인덱스 이름입니다: '{v}'")
+    return v
+
+
+def _validate_pipeline_id(v: str) -> str:
+    if v not in ALLOWED_PIPELINE_IDS:
+        raise ValueError(f"허용되지 않는 파이프라인 ID입니다: '{v}'")
+    return v
+
+
+def _validate_bm25_field(v: str) -> str:
+    if not _BM25_FIELD_RE.match(v):
+        raise ValueError(f"유효하지 않은 BM25 필드명입니다: '{v}'")
+    return v
+
+
+def _validate_vector_field(v: str) -> str:
+    if v not in ALLOWED_VECTOR_FIELDS:
+        raise ValueError(f"허용되지 않는 벡터 필드입니다: '{v}'")
+    return v
+
+
+ValidatedIndexName = Annotated[str, AfterValidator(_validate_index_name)]
+ValidatedPipelineId = Annotated[str, AfterValidator(_validate_pipeline_id)]
+ValidatedBm25Field = Annotated[str, AfterValidator(_validate_bm25_field)]
+ValidatedVectorField = Annotated[str, AfterValidator(_validate_vector_field)]
+
+
+class InternalTokenMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path in _SKIP_PATHS:
+            return await call_next(request)
+        token = request.headers.get("X-Internal-Token", "")
+        if not token or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
 
 # FastAPI 앱 초기화
 app = FastAPI(
@@ -23,15 +181,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS 설정
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(InternalTokenMiddleware)
+app.add_middleware(_BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
 
 # OpenSearch 클라이언트 (싱글톤)
 opensearch_client = None
@@ -40,15 +191,15 @@ opensearch_client = None
 # 요청/응답 모델
 class ProductIDSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
-    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
+    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
+    index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 결과 개수 (1-100)")
-    bm25_fields: Optional[List[str]] = Field(
+    bm25_fields: Optional[List[ValidatedBm25Field]] = Field(
         default=None,
         description="BM25 multi_match 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)"
     )
-    vector_field: Optional[str] = Field(
+    vector_field: Optional[ValidatedVectorField] = Field(
         default="combined_vector",
         description="KNN 대상 벡터 필드 (기본: combined_vector)"
     )
@@ -68,7 +219,7 @@ class ProductIDSearchRequest(BaseModel):
 
 
 class SimilarSentenceRequest(BaseModel):
-    index_name: str = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
+    index_name: ValidatedIndexName = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
     query: str = Field(..., description="유사 문장을 찾을 검색 쿼리 텍스트", min_length=1)
     top_k: int = Field(default=3, ge=1, le=100, description="반환할 유사 문장 개수 (기본값: 3)")
 
@@ -132,14 +283,14 @@ class CombinedSearchResponse(BaseModel):
 
 class FieldSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    bm25_fields: List[str] = Field(
+    bm25_fields: List[ValidatedBm25Field] = Field(
         ...,
         description="BM25 multi_match 대상 필드 리스트 (예: ['function_tags', 'function_desc'])"
     )
-    vector_field: str = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
-    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_items=1)
-    index_name: str = Field(default="product_index_v3", description="검색할 인덱스 이름")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
+    vector_field: ValidatedVectorField = Field(..., description="KNN 검색 대상 벡터 필드 (예: function_desc_vector)")
+    product_ids: List[str] = Field(..., description="검색할 product_id 리스트", min_length=1, max_length=500)
+    index_name: ValidatedIndexName = Field(default="product_index_v3", description="검색할 인덱스 이름")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline", description="사용할 search pipeline ID")
     top_k: int = Field(default=50, ge=1, le=200, description="반환할 결과 개수 (1-200)")
 
     class Config:
@@ -171,11 +322,11 @@ class FieldSearchResponse(BaseModel):
 
 class MultiVectorSearchRequest(BaseModel):
     query: str = Field(..., description="검색 쿼리 텍스트", min_length=1)
-    index_name: str = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
-    product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_items=1)
-    top_k: int = Field(default=100, ge=1, le=500, description="반환할 상품 수")
-    aggregation: str = Field(default="max", description="집계 방식: max | topk_avg")
-    pipeline_id: str = Field(default="hybrid-minmax-pipeline")
+    index_name: ValidatedIndexName = Field(..., description="검색 대상 인덱스 (예: product_v4_combined)")
+    product_ids: List[str] = Field(..., description="검색 범위를 제한할 상품 ID 리스트", min_length=1, max_length=500)
+    top_k: int = Field(default=100, ge=1, le=200, description="반환할 상품 수")
+    aggregation: Literal["max", "topk_avg"] = Field(default="max", description="집계 방식")
+    pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline")
 
 
 class MultiVectorSearchResponse(BaseModel):
@@ -188,7 +339,7 @@ class MultiVectorSearchResponse(BaseModel):
 
 class IndexMultivectorRequest(BaseModel):
     product_id: str = Field(..., description="등록할 상품 ID")
-    group: str = Field(..., description="멀티벡터 그룹 (A~G)")
+    group: Literal["A", "B", "C", "D", "E", "F", "G"] = Field(..., description="멀티벡터 그룹")
     multivector: Dict[str, List[str]] = Field(
         ..., description="필드명 → 문장 리스트 (combined, function_desc, attribute_desc, target_user, spec_feature)"
     )
@@ -199,27 +350,30 @@ class IndexMultivectorResponse(BaseModel):
     product_id: str
     indexed_counts: Dict[str, int]
     vectordb_id: Dict[str, List[str]]
+    partial_failure: bool = False
+    failed_counts: Dict[str, int] = {}
 
 
 def get_opensearch_client() -> OpenSearchHybridClient:
     """OpenSearch 클라이언트 싱글톤"""
     global opensearch_client
     if opensearch_client is None:
-        opensearch_client = OpenSearchHybridClient()
-        if not opensearch_client.client:
+        candidate = OpenSearchHybridClient()
+        if not candidate.client:
             raise HTTPException(status_code=500, detail="OpenSearch 클라이언트 초기화 실패")
+        opensearch_client = candidate
     return opensearch_client
 
 
 @app.on_event("startup")
 async def startup_event():
     """서버 시작 시 OpenSearch 클라이언트 초기화"""
-    logging.info("FastAPI 서버 시작 중...")
+    logger.info("server_starting")
     try:
         get_opensearch_client()
-        logging.info("OpenSearch 클라이언트 초기화 완료")
+        logger.info("opensearch_client_initialized")
     except Exception as e:
-        logging.error(f"서버 시작 중 오류 발생: {e}")
+        logger.error("startup_failed", error_type=type(e).__name__)
 
 
 @app.get("/")
@@ -247,22 +401,23 @@ async def health_check():
         else:
             return {"status": "unhealthy", "opensearch": "disconnected"}
     except Exception:
+        logger.error("health_check_failed", exc_info=True)
         return {"status": "unhealthy"}
 
 
 @app.get("/api/product/{product_id}")
 async def get_product_by_id(
     product_id: str,
-    index_name: str = Query(default="product_index", description="검색할 인덱스 이름")
+    index_name: ValidatedIndexName = Query(default="product_index_v3", description="검색할 인덱스 이름")
 ):
     """
     Product ID로 단일 상품 문서 조회
 
     - **product_id**: 조회할 상품 ID (필수)
-    - **index_name**: 검색할 인덱스 이름 (기본값: product_index)
+    - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     """
     try:
-        logging.info(f"Product ID 조회 요청 - product_id: {product_id}")
+        logger.info("product_lookup_requested", product_id=product_id)
 
         # OpenSearch 클라이언트 가져오기
         client = get_opensearch_client()
@@ -280,9 +435,10 @@ async def get_product_by_id(
         }
 
         # 검색 실행
-        response = client.client.search(
+        response = await asyncio.to_thread(
+            client.client.search,
             index=index_name,
-            body=query_body
+            body=query_body,
         )
 
         hits = response.get("hits", {}).get("hits", [])
@@ -296,7 +452,7 @@ async def get_product_by_id(
         # 첫 번째 결과 반환
         document = hits[0].get("_source", {})
 
-        logging.info(f"Product ID 조회 성공 - product_id: {product_id}")
+        logger.info("product_lookup_succeeded", product_id=product_id)
 
         return {
             "success": True,
@@ -307,7 +463,7 @@ async def get_product_by_id(
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Product ID 조회 중 오류 발생: {e}")
+        logger.error("product_id_lookup_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="조회 중 오류가 발생했습니다."
@@ -321,12 +477,12 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
 
     - **query**: 검색 쿼리 텍스트 (필수)
     - **product_ids**: 검색할 product_id 리스트 (필수)
-    - **index_name**: 검색할 인덱스 이름 (기본값: product_index)
+    - **index_name**: 검색할 인덱스 이름 (기본값: product_index_v3)
     - **pipeline_id**: 사용할 search pipeline ID (기본값: hybrid-minmax-pipeline)
     - **top_k**: 반환할 결과 개수 (기본값: 3, 최대: 100)
     """
     try:
-        logging.info(f"Product ID 검색 요청 - 쿼리: '{request.query}', product_ids: {len(request.product_ids)}개")
+        logger.info("search_by_product_ids_requested", query=request.query, product_ids_count=len(request.product_ids))
 
         # OpenSearch 클라이언트 가져오기
         client = get_opensearch_client()
@@ -339,8 +495,8 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
         # 벡터 임베딩 생성
-        query_vector = client.model.encode(request.query).tolist()
-        logging.info(f"쿼리 임베딩 생성 완료: 차원={len(query_vector)}")
+        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+        logger.info("query_embedding_created", dimension=len(query_vector))
 
         # Product ID 필터링 쿼리 구성
         query_body = {
@@ -383,7 +539,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
                                     "knn": {
                                         "content_vector": {
                                             "vector": query_vector,
-                                            "k": request.top_k * 10,
+                                            "k": min(request.top_k * 10, 2000),
                                             "filter": {
                                                 "terms": {
                                                     "product_id": request.product_ids
@@ -403,12 +559,13 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         }
 
         # 검색 실행
-        raw_results = client.search_with_pipeline(
+        raw_results = await asyncio.to_thread(
+            client.search_with_pipeline,
             query_text=request.query,
             pipeline_id=request.pipeline_id,
             index_name=request.index_name,
             query_body=query_body,
-            top_k=request.top_k
+            top_k=request.top_k,
         )
 
         # 결과 포맷팅
@@ -429,7 +586,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
                 문서=source.get("문서")
             ))
 
-        logging.info(f"검색 완료 - 결과: {len(results)}개")
+        logger.info("search_by_product_ids_completed", result_count=len(results))
 
         return SearchResponse(
             success=True,
@@ -440,7 +597,7 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"검색 중 오류 발생: {e}")
+        logger.error("search_by_product_ids_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -457,12 +614,12 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
     - **top_k**: 반환할 결과 개수 (기본값: 3)
     """
     try:
-        logging.info(f"유사 문장 검색 요청 - 인덱스: '{request.index_name}', 쿼리: '{request.query}'")
+        logger.info("search_similar_requested", index_name=request.index_name, query=request.query)
 
         client = get_opensearch_client()
 
         # 쿼리 벡터 생성
-        query_vector = client.model.encode(request.query).tolist()
+        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
 
         query_body = {
             "size": request.top_k,
@@ -479,9 +636,10 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
             }
         }
 
-        response = client.client.search(
+        response = await asyncio.to_thread(
+            client.client.search,
             index=request.index_name,
-            body=query_body
+            body=query_body,
         )
 
         hits = response.get("hits", {}).get("hits", [])
@@ -495,7 +653,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
                 source=source
             ))
 
-        logging.info(f"유사 문장 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_similar_completed", result_count=len(results))
 
         return SimilarSentenceResponse(
             success=True,
@@ -506,7 +664,7 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         )
 
     except Exception as e:
-        logging.error(f"유사 문장 검색 중 오류 발생: {e}")
+        logger.error("search_similar_sentences_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
@@ -519,14 +677,15 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
     score와 product_id만 반환
     """
     try:
-        logging.info(f"combined_vector 검색 요청 - 쿼리: '{request.query}', product_ids: {len(request.product_ids)}개")
+        logger.info("search_combined_vector_requested", query=request.query, product_ids_count=len(request.product_ids))
 
         client = get_opensearch_client()
 
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = client.search_combined(
+        raw_results = await asyncio.to_thread(
+            client.search_combined,
             query_text=request.query,
             product_ids=request.product_ids,
             top_k=request.top_k,
@@ -544,7 +703,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"combined_vector 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_combined_vector_completed", result_count=len(results))
 
         return CombinedSearchResponse(
             success=True,
@@ -554,7 +713,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"combined_vector 검색 중 오류 발생: {e}")
+        logger.error("search_by_combined_vector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -569,9 +728,11 @@ async def search_by_field(request: FieldSearchRequest):
     - persona    → bm25_fields: [target_tags, target_user],       vector_field: target_user_vector
     """
     try:
-        logging.info(
-            f"by-field 검색 요청 - 쿼리: '{request.query}', "
-            f"필드: {request.bm25_fields}, product_ids: {len(request.product_ids)}개"
+        logger.info(
+            "search_by_field_requested",
+            query=request.query,
+            bm25_fields=request.bm25_fields,
+            product_ids_count=len(request.product_ids),
         )
 
         client = get_opensearch_client()
@@ -579,7 +740,8 @@ async def search_by_field(request: FieldSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = client.search_by_field(
+        raw_results = await asyncio.to_thread(
+            client.search_by_field,
             query_text=request.query,
             bm25_fields=request.bm25_fields,
             vector_field=request.vector_field,
@@ -597,7 +759,7 @@ async def search_by_field(request: FieldSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"by-field 검색 완료 - 결과: {len(results)}개")
+        logger.info("search_by_field_completed", result_count=len(results))
 
         return FieldSearchResponse(
             success=True,
@@ -608,7 +770,7 @@ async def search_by_field(request: FieldSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"by-field 검색 중 오류 발생: {e}")
+        logger.error("search_by_field_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -621,9 +783,11 @@ async def search_multivector(request: MultiVectorSearchRequest):
     aggregation: "max" (기본) | "topk_avg"
     """
     try:
-        logging.info(
-            f"multivector 검색 요청 - 쿼리: '{request.query}', "
-            f"인덱스: {request.index_name}, product_ids: {len(request.product_ids)}개"
+        logger.info(
+            "search_multivector_requested",
+            query=request.query,
+            index_name=request.index_name,
+            product_ids_count=len(request.product_ids),
         )
 
         client = get_opensearch_client()
@@ -631,7 +795,8 @@ async def search_multivector(request: MultiVectorSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
         
-        raw_results = client.search_multivector_field(
+        raw_results = await asyncio.to_thread(
+            client.search_multivector_field,
             query_text=request.query,
             index_name=request.index_name,
             product_ids=request.product_ids,
@@ -645,7 +810,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
             for item in raw_results
         ]
 
-        logging.info(f"multivector 검색 완료 - 결과: {len(results)}개 상품")
+        logger.info("search_multivector_completed", result_count=len(results))
 
         return MultiVectorSearchResponse(
             success=True,
@@ -656,7 +821,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
         )
 
     except Exception as e:
-        logging.error(f"multivector 검색 중 오류 발생: {e}")
+        logger.error("search_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
 
 
@@ -673,6 +838,7 @@ async def index_multivector(request: IndexMultivectorRequest):
     try:
         client = get_opensearch_client()
         indexed_counts: Dict[str, int] = {}
+        failed_counts: Dict[str, int] = {}
         vectordb_id: Dict[str, List[str]] = {}
 
         for field in _MULTIVECTOR_FIELD_NAMES:
@@ -682,7 +848,7 @@ async def index_multivector(request: IndexMultivectorRequest):
                 vectordb_id[f"{_INDEX_PREFIX}_{field}"] = []
                 continue
 
-            vectors = client.model.encode(sentences, batch_size=64)
+            vectors = await asyncio.to_thread(client.model.encode, sentences, batch_size=64)
             index_name = f"{_INDEX_PREFIX}_{field}"
             doc_ids: List[str] = []
             bulk_body = []
@@ -701,23 +867,41 @@ async def index_multivector(request: IndexMultivectorRequest):
                     "embedding_model": _EMBEDDING_MODEL_VERSION,
                 })
 
-            response = client.client.bulk(body=bulk_body, refresh=True)
-            failed = [item for item in response.get("items", []) if "error" in item.get("index", {})]
-            indexed_counts[field] = len(doc_ids) - len(failed)
-            vectordb_id[index_name] = doc_ids
+            response = await asyncio.to_thread(client.client.bulk, body=bulk_body, refresh=True)
+            failed_ids = {
+                item["index"]["_id"]
+                for item in response.get("items", [])
+                if "error" in item.get("index", {})
+            }
+            fail_count = len(failed_ids)
+            indexed_counts[field] = len(doc_ids) - fail_count
+            failed_counts[field] = fail_count
+            vectordb_id[index_name] = [d for d in doc_ids if d not in failed_ids]
 
-        logging.info(
-            f"멀티벡터 색인 완료 - product_id: {request.product_id}, counts: {indexed_counts}"
-        )
+        has_failure = any(v > 0 for v in failed_counts.values())
+        if has_failure:
+            logger.warning(
+                "index_multivector_partial_failure",
+                product_id=request.product_id,
+                failed_counts=failed_counts,
+            )
+        else:
+            logger.info(
+                "index_multivector_complete",
+                product_id=request.product_id,
+                indexed_counts=indexed_counts,
+            )
         return IndexMultivectorResponse(
-            success=True,
+            success=not has_failure,
             product_id=request.product_id,
             indexed_counts=indexed_counts,
             vectordb_id=vectordb_id,
+            partial_failure=has_failure,
+            failed_counts=failed_counts,
         )
 
     except Exception as e:
-        logging.error(f"멀티벡터 색인 중 오류: {e}")
+        logger.error("index_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="색인 중 오류가 발생했습니다.")
 
 
@@ -732,7 +916,7 @@ if __name__ == "__main__":
     # 프로덕션 환경에서는 reload 비활성화 및 workers 추가
     is_production = environment == "production"
 
-    logging.info(f"FastAPI 서버 시작: {host}:{port} (환경: {environment})")
+    logger.info("server_started", host=host, port=port, environment=environment)
 
     if is_production:
         # 프로덕션: 멀티 워커, reload 비활성화

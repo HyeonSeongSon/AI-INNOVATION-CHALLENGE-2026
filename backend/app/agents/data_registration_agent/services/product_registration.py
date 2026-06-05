@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import asyncio
 import base64
@@ -5,6 +6,7 @@ import io
 from datetime import datetime
 from uuid import uuid4
 from typing import Union
+from urllib.parse import urlparse
 
 import httpx
 from PIL import Image
@@ -24,35 +26,54 @@ from .category_config import (
     resolve_extra_category,
     PROMPT_BUILDERS as _PROMPT_BUILDERS,
 )
+from ....core.auth import UserContext
+from ....core.auth_utils import create_user_assertion
 from ....core.http_client_registry import register
 from ....core.logging import get_logger
 
 logger = get_logger("product_registration")
 
-# ──────────────────────────────────────────────────────
-# 이미지 처리 상수
-# ──────────────────────────────────────────────────────
-MAX_CHUNK_HEIGHT = 4000
-CHUNK_OVERLAP    = 100
-MAX_CHUNKS       = 10
+_ALLOWED_SCHEMES = {"http", "https"}
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 
+
+def _validate_host_not_internal(host: str) -> None:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return  # 도메인명 — 통과
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+        raise ValueError("내부 IP 범위 접근 불가")
+
+
+def _validate_image_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(f"허용되지 않는 URL 스킴: {parsed.scheme!r}")
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("URL에 호스트가 없습니다")
+    if host in _BLOCKED_HOSTS:
+        raise ValueError("내부 호스트 접근 불가")
+    _validate_host_not_internal(host)
+
+# ──────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────
 # 이미지 유틸
 # ──────────────────────────────────────────────────────
 
 
-
 def _split_image(image: Image.Image) -> list[Image.Image]:
-    """세로 길이가 MAX_CHUNK_HEIGHT를 넘으면 청크로 분할, 아니면 그대로 반환."""
+    """세로 길이가 image_chunk_height_max를 넘으면 청크로 분할, 아니면 그대로 반환."""
     width, height = image.size
-    if height <= MAX_CHUNK_HEIGHT:
+    if height <= settings.image_chunk_height_max:
         return [image]
 
     chunks = []
-    step = MAX_CHUNK_HEIGHT - CHUNK_OVERLAP
+    step = settings.image_chunk_height_max - settings.image_chunk_overlap
     top = 0
-    while top < height and len(chunks) < MAX_CHUNKS:
-        bottom = min(top + MAX_CHUNK_HEIGHT, height)
+    while top < height and len(chunks) < settings.image_max_chunks:
+        bottom = min(top + settings.image_chunk_height_max, height)
         chunks.append(image.crop((0, top, width, bottom)))
         if bottom == height:
             break
@@ -95,7 +116,11 @@ def _parse_llm_json(raw: str) -> dict:
         if raw.startswith("json"):
             raw = raw[4:]
         raw = raw.rsplit("```", 1)[0]
-    return json.loads(raw.strip())
+    try:
+        return json.loads(raw.strip())
+    except json.JSONDecodeError as e:
+        logger.error("llm_json_parse_failed", error_type=type(e).__name__, exc_info=True)
+        raise ValueError("LLM JSON 파싱 실패") from None
 
 
 async def _extract_text_from_chunks(
@@ -126,7 +151,7 @@ async def _extract_text_from_chunks(
     try:
         response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
     except Exception as e:
-        logger.error("extract_text_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        logger.error("extract_text_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
     return response.content
 
@@ -174,7 +199,7 @@ async def _extract_and_classify_from_chunks(
     try:
         response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
     except Exception as e:
-        logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error=str(e), exc_info=True)
+        logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
     return _parse_llm_json(response.content)
 
@@ -191,27 +216,48 @@ class ProductRegistrationService:
 
     def __init__(self, vision_model: str | None = None, document_model: str | None = None):
         self._http_client: httpx.AsyncClient | None = None
+        self._image_http_client: httpx.AsyncClient | None = None
         register(self)
         model = settings.chatgpt_model_name
-        self._vision_llm   = get_llm(vision_model or model,   temperature=0)
-        self._document_llm = get_llm(document_model or model, temperature=0.7)
+        self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision)
+        self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document)
+
+    def _make_user_assertion(self, user_id: str) -> str:
+        return create_user_assertion(
+            UserContext(user_id=user_id, role="user", auth_method="jwt")
+        )
 
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_long))
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_long),
+                headers={"X-Internal-Token": settings.internal_token},
+            )
         return self._http_client
+
+    @property
+    def image_http_client(self) -> httpx.AsyncClient:
+        if self._image_http_client is None or self._image_http_client.is_closed:
+            self._image_http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_long),
+                max_redirects=3,
+            )
+        return self._image_http_client
 
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
+        if self._image_http_client is not None and not self._image_http_client.is_closed:
+            await self._image_http_client.aclose()
 
     async def _download_image(self, url: str) -> Image.Image:
+        _validate_image_url(url)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
             "Referer": "https://www.amoremall.com/",
         }
-        response = await self.http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
+        response = await self.image_http_client.get(url, headers=headers, timeout=settings.http_timeout_long)
         response.raise_for_status()
         return Image.open(io.BytesIO(response.content)).convert("RGB")
 
@@ -368,7 +414,7 @@ class ProductRegistrationService:
                 timeout=settings.llm_document_timeout,
             )
         except Exception as e:
-            logger.error("build_structured_document_failed", main_category=main_category, error=str(e), exc_info=True)
+            logger.error("build_structured_document_failed", main_category=main_category, error_type=type(e).__name__, exc_info=True)
             raise
         return _parse_llm_json(response.content)
 
@@ -407,7 +453,7 @@ class ProductRegistrationService:
             try:
                 response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
             except Exception as e:
-                logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error=str(e), exc_info=True)
+                logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error_type=type(e).__name__, exc_info=True)
                 raise
             result = _parse_llm_json(response.content)
             errors = _validate_multivector(result, group)
@@ -421,7 +467,7 @@ class ProductRegistrationService:
             f"멀티벡터 문서 생성 실패 (그룹 {group}). 오류: {errors}"
         )
 
-    async def register_product(self, record: dict) -> dict:
+    async def register_product(self, record: dict, *, user_id: str | None = None) -> dict:
         """
         JSONL 레코드 1개를 받아 구조화 → 멀티벡터 → DB 저장 → OpenSearch 색인을 수행한다.
 
@@ -516,7 +562,18 @@ class ProductRegistrationService:
             if product_details:
                 product_data["product_details"] = product_details
 
-            # 4. OpenSearch 먼저 색인 → vectordb_id 수집
+            # 4. DB 저장 먼저 (vectordb_id 없이) — DB 트랜잭션이 원자적이므로
+            #    실패 시 자연 롤백. OpenSearch 고아 벡터를 방지하기 위해 순서를 교환.
+            logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
+            r = await self.http_client.post(
+                f"{settings.database_api_url}/api/products",
+                json=product_data,
+                timeout=settings.http_timeout_long,
+            )
+            r.raise_for_status()
+            logger.info("register_product_db_done", product_name=product_name, product_id=product_id)
+
+            # 5. OpenSearch 색인 → vectordb_id 수집
             logger.info(
                 "register_product_opensearch_start",
                 product_name=product_name,
@@ -533,17 +590,30 @@ class ProductRegistrationService:
                 timeout=settings.http_timeout_upload,
             )
             r.raise_for_status()
-            product_data["vectordb_id"] = r.json().get("vectordb_id", {})
+            index_result = r.json()
+            if not index_result.get("success", False):
+                raise RuntimeError("OpenSearch 색인 실패")
+            vectordb_id = index_result.get("vectordb_id", {})
             logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 
-            # 5. DB 저장 (vectordb_id 포함)
-            logger.info("register_product_db_start", product_name=product_name, product_id=product_id)
-            r = await self.http_client.post(
-                f"{settings.database_api_url}/api/products",
-                json=product_data,
-                timeout=settings.http_timeout_long,
-            )
-            r.raise_for_status()
+            # 6. DB에 vectordb_id 업데이트 — 실패해도 상품은 DB에 존재하고 검색 동작함
+            try:
+                extra_headers = {}
+                if user_id:
+                    extra_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
+                r = await self.http_client.patch(
+                    f"{settings.database_api_url}/api/products/{product_id}/vectordb_id",
+                    json={"vectordb_id": vectordb_id},
+                    headers=extra_headers,
+                    timeout=settings.http_timeout_default,
+                )
+                r.raise_for_status()
+            except Exception as patch_err:
+                logger.error(
+                    "register_product_vectordb_id_update_failed",
+                    product_id=product_id,
+                    error_type=type(patch_err).__name__,
+                )
 
             logger.info(
                 "register_product_success",
@@ -559,7 +629,6 @@ class ProductRegistrationService:
                 "register_product_error",
                 product_name=product_name,
                 error_type=type(e).__name__,
-                error=str(e),
                 exc_info=True,
             )
             return {"success": False, "product_name": product_name, "error": "상품 등록 중 오류가 발생했습니다."}

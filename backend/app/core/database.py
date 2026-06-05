@@ -35,10 +35,10 @@ db_config = DatabaseConfig()
 engine = create_engine(
     db_config.database_url,
     echo=False,  # SQL 쿼리 로깅 (개발 시 True로 변경)
-    pool_size=10,  # 커넥션 풀 크기
-    max_overflow=20,  # 최대 오버플로우
-    pool_pre_ping=True,  # 연결 유효성 검사
-    pool_recycle=3600,  # 1시간마다 연결 재사용
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_pool_max_overflow,
+    pool_pre_ping=True,
+    pool_recycle=settings.db_pool_recycle_seconds,
 )
 
 # 세션 팩토리 생성
@@ -81,15 +81,6 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    """
-    데이터베이스 초기화
-    모든 테이블 생성
-    """
-    Base.metadata.create_all(bind=engine)
-    print(f"✅ Database initialized: {db_config.database}")
-
-
 def drop_all_tables():
     """
     모든 테이블 삭제 (주의: 개발 환경에서만 사용)
@@ -113,7 +104,7 @@ def check_connection() -> bool:
         print(f"[OK] Database connection successful: {db_config.host}:{db_config.port}/{db_config.database}")
         return True
     except Exception as e:
-        print(f"[ERROR] Database connection failed: {e}")
+        print(f"[ERROR] Database connection failed: {type(e).__name__}")
         return False
 
 

@@ -156,7 +156,7 @@ class AgentLogger:
         self._step = state.get("step", 0)
 
         # 현재 state에서 사용자 로그 초기화
-        self._user_logs: List[str] = list(state.get("logs", []))
+        self._user_logs: List[str] = []
 
         # structlog 로거 가져오기
         self._slog = get_logger(node_name)
@@ -241,7 +241,6 @@ class AgentLogger:
                 operation=operation,
                 duration_ms=round(duration_ms, 1),
                 error_type=type(e).__name__,
-                error_message=str(e),
                 exc_info=True,
             )
             self._user_logs.append(

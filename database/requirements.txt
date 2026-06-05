@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 sqlalchemy
+alembic>=1.13.0
 psycopg2-binary
 python-dotenv
 pydantic
@@ -9,3 +10,5 @@ langchain-openai
 python-multipart
 httpx
 openpyxl
+python-jose[cryptography]
+structlog

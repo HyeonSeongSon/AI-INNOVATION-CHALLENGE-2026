@@ -26,12 +26,88 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
 import json
+import os
 from datetime import datetime
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from app.core.database import get_db
 from app.core.models import Product
 from sqlalchemy.exc import IntegrityError
+
+# opensearch/.env 로드 (database/.env와 별도)
+_OPENSEARCH_ENV = Path(__file__).parent.parent.parent / "opensearch" / ".env"
+load_dotenv(_OPENSEARCH_ENV)
+
+_V4_INDEX_NAMES = [
+    "product_v4_combined",
+    "product_v4_function_desc",
+    "product_v4_attribute_desc",
+    "product_v4_target_user",
+    "product_v4_spec_feature",
+]
+
+
+def _fetch_v4_vectordb_ids() -> dict[str, dict[str, list[str]]]:
+    """
+    product_v4_* 인덱스 5개를 scroll해서
+    {product_id: {index_name: [doc_id, ...]}} lookup dict 반환.
+
+    OpenSearch 연결 실패 시 빈 dict 반환 (삽입은 vectordb_id=None으로 계속 진행).
+    """
+    try:
+        from opensearchpy import OpenSearch
+    except ImportError:
+        print("[WARN] opensearch-py 패키지 없음 — vectordb_id 미설정")
+        return {}
+
+    host = os.getenv("OPENSEARCH_HOST", "localhost")
+    port = int(os.getenv("OPENSEARCH_PORT", 9200))
+    password = os.getenv("OPENSEARCH_ADMIN_PASSWORD", "")
+
+    try:
+        client = OpenSearch(hosts=[{"host": host, "port": port}], timeout=30)
+        if not client.ping():
+            print("[WARN] OpenSearch 연결 실패 — vectordb_id 미설정")
+            return {}
+    except Exception:
+        print("[WARN] OpenSearch 연결 오류 — vectordb_id 미설정")
+        return {}
+
+    lookup: dict[str, dict[str, list[str]]] = {}
+
+    for index_name in _V4_INDEX_NAMES:
+        if not client.indices.exists(index=index_name):
+            print(f"[WARN] 인덱스 없음: {index_name}")
+            continue
+
+        print(f"  스캔 중: {index_name} ...", end=" ", flush=True)
+        doc_count = 0
+
+        resp = client.search(
+            index=index_name,
+            body={"query": {"match_all": {}}, "_source": ["product_id"]},
+            scroll="2m",
+            size=1000,
+        )
+        scroll_id = resp["_scroll_id"]
+
+        while True:
+            hits = resp["hits"]["hits"]
+            if not hits:
+                break
+            for hit in hits:
+                pid = hit.get("_source", {}).get("product_id")
+                if not pid:
+                    continue
+                lookup.setdefault(pid, {}).setdefault(index_name, []).append(hit["_id"])
+                doc_count += 1
+            resp = client.scroll(scroll_id=scroll_id, scroll="2m")
+
+        client.clear_scroll(scroll_id=scroll_id)
+        print(f"{doc_count}개 문서")
+
+    return lookup
 
 _CATEGORY_CODE: dict[str, str] = {
     "스킨케어": "S", "색조": "C", "헤어": "H", "향수/바디": "F",
@@ -120,6 +196,11 @@ def insert_products_from_jsonl():
 
     print(f"\n총 {len(products_data)}개 상품 로드 완료\n")
 
+    print("OpenSearch product_v4_* 인덱스에서 vectordb_id 수집 중...")
+    vectordb_lookup = _fetch_v4_vectordb_ids()
+    matched = sum(1 for pid in (d.get("product_id") for d in products_data) if pid in vectordb_lookup)
+    print(f"vectordb_id 매칭: {matched}/{len(products_data)}개\n")
+
     success_count = 0
     skip_count = 0
     error_count = 0
@@ -140,9 +221,12 @@ def insert_products_from_jsonl():
                 # 기존 파일은 product_id가 있고, 신규 파일은 없으므로 생성
                 product_id = data.get("product_id") or _make_product_id(category)
 
+                # OpenSearch v4 인덱스에서 수집한 doc ID 맵 (없으면 None)
+                vectordb_id = vectordb_lookup.get(product_id) or None
+
                 product = Product(
                     product_id=product_id,
-                    vectordb_id=data.get("vectordb_id"),        # OpenSearch 색인 후 채워짐
+                    vectordb_id=vectordb_id,
                     product_name=data.get("상품명", ""),
                     brand=data.get("브랜드"),
                     # 카테고리 계층

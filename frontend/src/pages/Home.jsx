@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { MessageSquare, Users, Package, Sparkles, ArrowRight, History, TrendingUp } from 'lucide-react';
-import api, { pipelineApi, dbApi } from '../api';
+import api, { pipelineApi } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 /* --- 스타일 컴포넌트 (기존 유지) --- */
 const PageContainer = styled.div`
@@ -273,6 +274,7 @@ const PersonaMeta = styled.span`
 /* --- 메인 컴포넌트 --- */
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [personaStats, setPersonaStats] = useState({ count: 0, list: [] });
   const [recentMessages, setRecentMessages] = useState([]);
@@ -280,17 +282,21 @@ export default function Home() {
   const [productCount, setProductCount] = useState(null);
 
   useEffect(() => {
-    dbApi.get('/generated-messages', { params: { user_id: 'son', limit: 3 } })
+    if (!user) return;
+    const msgParams = user.role === 'admin'
+      ? { limit: 3 }
+      : { user_id: user.id, limit: 3 };
+    api.get('/generated-messages', { params: msgParams })
       .then(res => {
         setRecentMessages(res.data?.items || []);
         setMessageCount(res.data?.total ?? null);
       })
       .catch(() => {});
 
-    dbApi.get('/products', { params: { page_size: 1 } })
+    api.get('/products', { params: { page_size: 1 } })
       .then(res => setProductCount(res.data?.total ?? null))
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   const handleMessageClick = (item) => {
     navigate('/generated-messages', { state: { openMessage: item } });
@@ -308,16 +314,20 @@ export default function Home() {
 
   // 페르소나 데이터 불러오기 (실제 DB 연동)
   useEffect(() => {
+    if (!user) return;
     const fetchPersonas = async () => {
       try {
-        const response = await pipelineApi.post('/personas/list');
+        const response = await pipelineApi.post('/personas/list', {
+          user_id: user.role === 'admin' ? undefined : user.id,
+          role: user.role,
+          page_size: 5,
+        });
 
-        // 백엔드 응답 구조에 따라 데이터 추출 (배열인지, 객체 안의 배열인지 확인)
-        const data = Array.isArray(response.data) ? response.data : (response.data.personas || []);
+        const data = Array.isArray(response.data) ? response.data : (response.data.items || []);
 
         setPersonaStats({
-          count: data.length,
-          list: data.slice(0, 5)
+          count: response.data.total ?? data.length,
+          list: data,
         });
       } catch (error) {
         console.error("페르소나 데이터 로드 실패:", error);
@@ -325,7 +335,7 @@ export default function Home() {
       }
     };
     fetchPersonas();
-  }, []);
+  }, [user]);
 
   return (
     <PageContainer>

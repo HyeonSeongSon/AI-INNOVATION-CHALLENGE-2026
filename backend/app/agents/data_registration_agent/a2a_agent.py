@@ -33,19 +33,23 @@ async def send_task(request: TaskSendRequest, req: Request):
         {},
     )
 
-    messages = deserialize_messages(data.get("messages", []))
-    subgraph_input = {
-        "messages": messages,
-        "file_records": data.get("file_records"),
-    }
     config = {
-        "configurable": {"thread_id": request.sessionId or request.id, "services": req.app.state.services},
+        "configurable": {
+            "thread_id": request.sessionId or request.id,
+            "services": req.app.state.services,
+            "user_id": data.get("user_id"),
+        },
         "recursion_limit": settings.langgraph_recursion_limit,
     }
 
     _logger.info("a2a_task_received", task_id=request.id, session_id=request.sessionId)
 
     try:
+        messages = deserialize_messages(data.get("messages", []))
+        subgraph_input = {
+            "messages": messages,
+            "file_records": data.get("file_records"),
+        }
         graph = req.app.state.graph
         result = await graph.ainvoke(subgraph_input, config)
 
@@ -63,12 +67,13 @@ async def send_task(request: TaskSendRequest, req: Request):
                     "messages": serialize_messages(result.get("messages", [])),
                     "logs": result.get("logs", []),
                     "status": result.get("status"),
+                    "error": result.get("error"),
                 },
             }],
         )
 
     except Exception as e:
-        _logger.error("a2a_task_failed", task_id=request.id, error=str(e), exc_info=True)
+        _logger.error("a2a_task_failed", task_id=request.id, error_type=type(e).__name__, exc_info=True)
         return Task(
             id=request.id,
             sessionId=request.sessionId,

@@ -8,10 +8,13 @@ from langchain_core.messages import BaseMessage
 from .models import DataPart, Message, Task, TaskSendRequest
 from .serialization import serialize_messages
 from app.config.settings import settings
+from app.core.context import get_request_id
 from app.core.logging import get_logger
 from app.core.http_client_registry import register
 
 _logger = get_logger("a2a_client")
+
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({502, 503, 504})
 
 
 class A2AClient:
@@ -24,14 +27,22 @@ class A2AClient:
     @property
     def http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=settings.a2a_timeout)
+            self._http_client = httpx.AsyncClient(
+                timeout=settings.a2a_timeout,
+                headers={"X-Internal-Token": settings.internal_token or ""},
+            )
         return self._http_client
 
     async def aclose(self) -> None:
         if self._http_client is not None and not self._http_client.is_closed:
             await self._http_client.aclose()
 
-    async def send_task(self, session_id: str, data: dict) -> Task:
+    async def send_task(
+        self,
+        session_id: str,
+        data: dict,
+        timeout: httpx.Timeout | None = None,
+    ) -> Task:
         serialized = {
             k: serialize_messages(v)
                if isinstance(v, list) and v and isinstance(v[0], BaseMessage)
@@ -48,16 +59,42 @@ class A2AClient:
         last_exc: Exception | None = None
         attempt_errors: list[str] = []
 
+        extra_headers: dict[str, str] = {}
+        if rid := get_request_id():
+            extra_headers["X-Request-ID"] = rid
+
         for attempt in range(settings.a2a_max_retries):
             try:
                 resp = await self.http_client.post(
                     f"{self.base_url}/tasks/send",
                     json=req.model_dump(),
+                    timeout=timeout,
+                    headers=extra_headers,
                 )
                 resp.raise_for_status()
-                return Task(**resp.json())
-            except httpx.HTTPStatusError:
-                raise
+                try:
+                    return Task(**resp.json())
+                except Exception as e:
+                    _logger.error("a2a_response_parse_failed", error_type=type(e).__name__, exc_info=True)
+                    raise ValueError("A2A 응답 파싱 실패") from None
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code not in _RETRYABLE_STATUS_CODES:
+                    raise
+                last_exc = e
+                error_type = f"HTTP{e.response.status_code}"
+                attempt_errors.append(f"attempt {attempt + 1}: {error_type}")
+                _logger.warning(
+                    "a2a_send_task_retry",
+                    url=self.base_url,
+                    attempt=attempt + 1,
+                    max_retries=settings.a2a_max_retries,
+                    error_type=error_type,
+                    status_code=e.response.status_code,
+                )
+                if attempt < settings.a2a_max_retries - 1:
+                    await asyncio.sleep(
+                        min(settings.a2a_retry_backoff_base ** attempt, settings.a2a_retry_backoff_max)
+                    )
             except (httpx.RequestError, httpx.TimeoutException) as e:
                 last_exc = e
                 error_type = type(e).__name__
@@ -70,7 +107,9 @@ class A2AClient:
                     error_type=error_type,
                 )
                 if attempt < settings.a2a_max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(
+                        min(settings.a2a_retry_backoff_base ** attempt, settings.a2a_retry_backoff_max)
+                    )
 
         _logger.error(
             "a2a_send_task_all_retries_exhausted",

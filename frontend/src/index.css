@@ -59,6 +59,21 @@ button:focus-visible {
   to   { transform: rotate(360deg); }
 }
 
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: #6B4DFF;
+  margin-left: 1px;
+  border-radius: 1px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.65s step-end infinite;
+}
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
