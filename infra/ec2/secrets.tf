@@ -16,7 +16,7 @@ locals {
 resource "aws_secretsmanager_secret" "admin_seed_email" {
   count                   = local.admin_seed_enabled ? 1 : 0
   name                    = "${var.project_name}/admin-seed-email"
-  description             = "Admin seed 이메일 — 시드 완료 후 삭제"
+  description             = "Admin seed email - delete after seeding"
   recovery_window_in_days = 0
 }
 
@@ -29,7 +29,7 @@ resource "aws_secretsmanager_secret_version" "admin_seed_email" {
 resource "aws_secretsmanager_secret" "admin_seed_password" {
   count                   = local.admin_seed_enabled ? 1 : 0
   name                    = "${var.project_name}/admin-seed-password"
-  description             = "Admin seed 비밀번호 — 시드 완료 후 삭제"
+  description             = "Admin seed password - delete after seeding"
   recovery_window_in_days = 0
 }
 
