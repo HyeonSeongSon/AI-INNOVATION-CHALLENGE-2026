@@ -99,7 +99,8 @@ resource "aws_instance" "opensearch" {
   key_name               = var.ec2_key_name != "" ? var.ec2_key_name : null
 
   user_data = base64encode(templatefile("${path.module}/user_data/opensearch_server.sh", {
-    project_name = var.project_name
+    project_name       = var.project_name
+    OPENSEARCH_VERSION = "2.13.0"
   }))
 
   root_block_device {
