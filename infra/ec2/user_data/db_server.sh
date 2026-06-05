@@ -11,7 +11,7 @@ set -euo pipefail
 PROJECT_NAME="${project_name}"
 POSTGRES_PASSWORD="${postgres_password}"
 DB_API_DIR="/opt/db-api"
-DATA_DISK="/dev/xvdf"
+DATA_DISK=$(lsblk -d -o NAME,SIZE | awk '$2=="50G"{print "/dev/"$1}' | head -1)
 DATA_MOUNT="/data"
 POSTGRES_DB="ai_innovation_db"
 POSTGRES_USER="postgres"

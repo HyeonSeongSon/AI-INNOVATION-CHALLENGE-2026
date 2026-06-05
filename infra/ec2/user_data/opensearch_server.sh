@@ -16,7 +16,7 @@ set -euo pipefail
 PROJECT_NAME="${project_name}"
 OPENSEARCH_VERSION="2.13.0"
 OPENSEARCH_API_DIR="/opt/opensearch-api"
-DATA_DISK="/dev/xvdf"
+DATA_DISK=$(lsblk -d -o NAME,SIZE | awk '$2=="50G"{print "/dev/"$1}' | head -1)
 DATA_MOUNT="/data"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/user-data.log; }
