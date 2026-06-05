@@ -92,15 +92,6 @@ apt-get install -y -qq python3.11 python3.11-venv python3-pip git
 
 mkdir -p "$DB_API_DIR"
 python3.11 -m venv "$DB_API_DIR/venv"
-
-# [방법 A] S3에서 아카이브 다운로드 — GitHub Actions가 푸시한 아카이브를 pull
-aws s3 cp "s3://$PROJECT_NAME-deploy/database.tar.gz" /tmp/database.tar.gz
-tar -xzf /tmp/database.tar.gz -C "$DB_API_DIR"
-
-if [ -f "$DB_API_DIR/requirements.txt" ]; then
-  "$DB_API_DIR/venv/bin/pip" install -q -r "$DB_API_DIR/requirements.txt"
-fi
-
 chown -R ubuntu:ubuntu "$DB_API_DIR"
 
 # ---- 5. systemd 서비스 등록 ----
@@ -133,7 +124,7 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable db-api
-systemctl start db-api
+# 코드는 GitHub Actions SSM 배포에서 설치 후 시작
 
 log "DB server setup complete."
 log "  PostgreSQL: systemctl status postgresql"
