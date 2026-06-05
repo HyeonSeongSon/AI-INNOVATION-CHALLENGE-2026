@@ -296,9 +296,14 @@ resource "aws_service_discovery_service" "crm" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "crm" {
@@ -325,9 +330,14 @@ resource "aws_service_discovery_service" "recommend" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "recommend" {
@@ -354,9 +364,14 @@ resource "aws_service_discovery_service" "generate" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "generate" {
@@ -383,9 +398,14 @@ resource "aws_service_discovery_service" "data_registration" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "data_registration" {
