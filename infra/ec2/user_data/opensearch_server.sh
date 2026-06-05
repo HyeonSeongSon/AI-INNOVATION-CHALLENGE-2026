@@ -28,6 +28,13 @@ apt-get update -qq
 apt-get upgrade -y -qq
 apt-get install -y -qq curl gnupg unzip openjdk-17-jdk python3.11 python3.11-venv python3-pip git
 
+# ---- AWS CLI 설치 ----
+log "Installing AWS CLI..."
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
+
 # ---- 2. EBS 데이터 볼륨 마운트 ----
 log "Mounting data volume $DATA_DISK -> $DATA_MOUNT..."
 if ! blkid "$DATA_DISK" &>/dev/null; then

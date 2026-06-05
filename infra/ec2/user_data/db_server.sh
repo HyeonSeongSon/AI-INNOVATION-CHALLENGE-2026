@@ -78,7 +78,15 @@ sudo -u postgres createdb -O $POSTGRES_USER $POSTGRES_DB 2>/dev/null || true
 
 systemctl reload postgresql
 
-# ---- 4. Python 3.11 + venv 설치 ----
+# ---- 4. AWS CLI 설치 ----
+log "Installing AWS CLI..."
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+apt-get install -y -qq unzip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
+
+# ---- 5. Python 3.11 + venv 설치 ----
 log "Installing Python 3.11..."
 apt-get install -y -qq python3.11 python3.11-venv python3-pip git
 
