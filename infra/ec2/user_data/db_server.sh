@@ -107,7 +107,7 @@ chown -R ubuntu:ubuntu "$DB_API_DIR"
 
 # ---- 5. systemd 서비스 등록 ----
 log "Registering db-api systemd service..."
-cat > /etc/systemd/system/db-api.service <<'UNIT'
+cat > /etc/systemd/system/db-api.service <<UNIT
 [Unit]
 Description=Database API Server (ai-innovation)
 Documentation=https://github.com/ai-innovation-challenge/database
@@ -119,10 +119,13 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/db-api
+Environment=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+Environment=POSTGRES_DB=$POSTGRES_DB
+Environment=POSTGRES_USER=$POSTGRES_USER
+Environment=POSTGRES_HOST=localhost
 ExecStart=/opt/db-api/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8020 --workers 2
 Restart=always
 RestartSec=5
-# 연속 실패 시 재시작 주기를 늘려 플래핑 방지
 StartLimitIntervalSec=120
 StartLimitBurst=5
 StandardOutput=journal
