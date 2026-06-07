@@ -50,12 +50,13 @@ resource "aws_iam_instance_profile" "ec2" {
 # ---- DB EC2 — PostgreSQL 15 + Database API (port 8020) ----
 
 resource "aws_instance" "db" {
-  ami                    = var.ec2_ami
-  instance_type          = var.db_instance_type
-  subnet_id              = aws_subnet.private[0].id
-  vpc_security_group_ids = [aws_security_group.db_ec2.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-  key_name               = var.ec2_key_name != "" ? var.ec2_key_name : null
+  ami                         = var.ec2_ami
+  instance_type               = var.db_instance_type
+  subnet_id                   = aws_subnet.private[0].id
+  vpc_security_group_ids      = [aws_security_group.db_ec2.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  key_name                    = var.ec2_key_name != "" ? var.ec2_key_name : null
+  user_data_replace_on_change = true
 
   user_data = base64encode(templatefile("${path.module}/user_data/db_server.sh", {
     postgres_password = var.postgres_password
@@ -91,12 +92,13 @@ resource "aws_volume_attachment" "db_data" {
 # ---- OpenSearch EC2 — OpenSearch 2.x + OpenSearch API (port 8010) ----
 
 resource "aws_instance" "opensearch" {
-  ami                    = var.ec2_ami
-  instance_type          = var.opensearch_instance_type
-  subnet_id              = aws_subnet.private[0].id
-  vpc_security_group_ids = [aws_security_group.opensearch_ec2.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2.name
-  key_name               = var.ec2_key_name != "" ? var.ec2_key_name : null
+  ami                         = var.ec2_ami
+  instance_type               = var.opensearch_instance_type
+  subnet_id                   = aws_subnet.private[0].id
+  vpc_security_group_ids      = [aws_security_group.opensearch_ec2.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  key_name                    = var.ec2_key_name != "" ? var.ec2_key_name : null
+  user_data_replace_on_change = true
 
   user_data = base64encode(templatefile("${path.module}/user_data/opensearch_server.sh", {
     project_name       = var.project_name
