@@ -16,7 +16,6 @@ set -euo pipefail
 PROJECT_NAME="${project_name}"
 OPENSEARCH_VERSION="2.13.0"
 OPENSEARCH_API_DIR="/opt/opensearch-api"
-DATA_DISK=$(lsblk -d -o NAME,SIZE | awk '$2=="50G"{print "/dev/"$1}' | head -1)
 DATA_MOUNT="/data"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/user-data.log; }
@@ -36,6 +35,18 @@ unzip -q /tmp/awscliv2.zip -d /tmp
 rm -rf /tmp/awscliv2.zip /tmp/aws
 
 # ---- 2. EBS 데이터 볼륨 마운트 ----
+# EBS 연결 완료까지 최대 2분 대기 (EC2 재생성 시 볼륨 연결이 늦을 수 있음)
+log "Waiting for data volume to be attached..."
+DATA_DISK=""
+for i in $(seq 1 24); do
+  DATA_DISK=$(lsblk -d -o NAME,SIZE | awk '$2=="50G"{print "/dev/"$1}' | head -1)
+  [ -n "$DATA_DISK" ] && break
+  sleep 5
+done
+if [ -z "$DATA_DISK" ]; then
+  log "ERROR: No 50GB data volume found after 2 minutes"
+  exit 1
+fi
 log "Mounting data volume $DATA_DISK -> $DATA_MOUNT..."
 if ! blkid "$DATA_DISK" &>/dev/null; then
   mkfs.ext4 -F "$DATA_DISK"
