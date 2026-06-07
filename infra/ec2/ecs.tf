@@ -108,7 +108,7 @@ locals {
     { name = "LOG_LEVEL",            value = "INFO" },
     # TRUSTED_PROXY_IPS: ALB는 VPC 프라이빗 서브넷에서 ECS로 전달
     # ALB가 신뢰 프록시이므로 프라이빗 서브넷 CIDR을 허용
-    { name = "TRUSTED_PROXY_IPS",    value = join(",", var.private_subnet_cidrs) },
+    { name = "TRUSTED_PROXY_IPS",    value = jsonencode(var.private_subnet_cidrs) },
     { name = "TRUSTED_PROXY_COUNT",  value = "1" },
   ]
 
