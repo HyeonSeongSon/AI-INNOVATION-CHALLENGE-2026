@@ -137,7 +137,7 @@ resource "aws_ecs_task_definition" "backend" {
     essential = true
     portMappings = [{ containerPort = 8005, protocol = "tcp" }]
     environment  = concat(local.common_env, local.a2a_env, [
-      { name = "ALLOWED_ORIGINS", value = var.allowed_origins },
+      { name = "ALLOWED_ORIGINS", value = jsonencode(split(",", var.allowed_origins)) },
     ])
     # Secrets Manager — ECS가 태스크 시작 시 주입, 태스크 정의 JSON에 값 미노출
     secrets = local.admin_seed_enabled ? [
