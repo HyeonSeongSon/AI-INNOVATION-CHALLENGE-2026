@@ -74,6 +74,18 @@ variable "ebs_volume_size_gb" {
   default     = 50
 }
 
+variable "db_az" {
+  description = "DB EBS 고정 AZ — EC2 재생성 시 EBS가 다른 AZ로 옮겨지지 않도록 고정"
+  type        = string
+  default     = "ap-northeast-2a"
+}
+
+variable "opensearch_az" {
+  description = "OpenSearch EBS 고정 AZ — EC2 재생성 시 EBS가 다른 AZ로 옮겨지지 않도록 고정"
+  type        = string
+  default     = "ap-northeast-2a"
+}
+
 # ---- ECS ----
 
 variable "ecs_task_cpu" {

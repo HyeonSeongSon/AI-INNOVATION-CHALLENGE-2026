@@ -25,20 +25,27 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# S3 deploy 버킷 읽기 권한 — user_data 및 SSM Run Command로 앱 코드 pull 시 필요
+# S3 deploy 버킷 권한 — 코드 pull(읽기) + OpenSearch 스냅샷(쓰기)
 resource "aws_iam_role_policy" "ec2_s3_deploy" {
   name = "${var.project_name}-ec2-s3-deploy"
   role = aws_iam_role.ec2.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
-      Resource = [
-        aws_s3_bucket.deploy.arn,
-        "${aws_s3_bucket.deploy.arn}/*"
-      ]
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          aws_s3_bucket.deploy.arn,
+          "${aws_s3_bucket.deploy.arn}/*"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.deploy.arn}/opensearch-snapshots/*"
+      }
+    ]
   })
 }
 
@@ -73,20 +80,25 @@ resource "aws_instance" "db" {
 }
 
 # DB 데이터 볼륨 (루트와 분리 — EC2 교체 시에도 데이터 유지)
+# lifecycle.prevent_destroy = true — EC2 재생성 시 EBS 삭제 방지
 resource "aws_ebs_volume" "db_data" {
-  availability_zone = aws_instance.db.availability_zone
+  availability_zone = var.db_az
   size              = var.ebs_volume_size_gb
   type              = "gp3"
   encrypted         = true
 
   tags = { Name = "${var.project_name}-ebs-db-data" }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_volume_attachment" "db_data" {
   device_name  = "/dev/xvdf"
   volume_id    = aws_ebs_volume.db_data.id
   instance_id  = aws_instance.db.id
-  force_detach = false
+  force_detach = true
 }
 
 # ---- OpenSearch EC2 — OpenSearch 2.x + OpenSearch API (port 8010) ----
@@ -116,20 +128,25 @@ resource "aws_instance" "opensearch" {
 }
 
 # OpenSearch 데이터 볼륨
+# lifecycle.prevent_destroy = true — EC2 재생성(user_data_replace_on_change) 시 EBS 삭제 방지
 resource "aws_ebs_volume" "opensearch_data" {
-  availability_zone = aws_instance.opensearch.availability_zone
+  availability_zone = var.opensearch_az
   size              = var.ebs_volume_size_gb
   type              = "gp3"
   encrypted         = true
 
   tags = { Name = "${var.project_name}-ebs-opensearch-data" }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_volume_attachment" "opensearch_data" {
   device_name  = "/dev/xvdf"
   volume_id    = aws_ebs_volume.opensearch_data.id
   instance_id  = aws_instance.opensearch.id
-  force_detach = false
+  force_detach = true
 }
 
 # ---- S3 Deploy 버킷 (앱 코드 아카이브 저장) ----

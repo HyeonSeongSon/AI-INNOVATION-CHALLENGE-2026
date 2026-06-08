@@ -148,9 +148,10 @@ for i in $(seq 1 24); do
   sleep 5
 done
 
-# 한국어 형태소 분석기 + KNN 플러그인 설치
+# 플러그인 설치: 한국어 형태소 분석기 + KNN + S3 스냅샷
 /opt/opensearch/bin/opensearch-plugin install --batch analysis-nori || true
 /opt/opensearch/bin/opensearch-plugin install --batch opensearch-knn || true
+/opt/opensearch/bin/opensearch-plugin install --batch repository-s3 || true
 systemctl restart opensearch
 
 # ---- 7. OpenSearch API 서비스 설치 ----
@@ -158,9 +159,12 @@ log "Installing OpenSearch API server..."
 mkdir -p "$OPENSEARCH_API_DIR"
 # venv는 EBS(/data)에 생성 — 루트 디스크(20GB) 용량 부족 방지
 python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
-# CPU-only torch 사전 설치 — SSM 배포 pip install 시 CUDA 버전(~2GB) 대신 경량 버전 사용
+# CPU-only torch + transformers 4.x 사전 설치
+# - torch: CPU 버전으로 CUDA 2GB 다운로드 방지
+# - transformers==4.41.0: 5.x 설치 시 sentence-transformers와 torch._dynamo 충돌 방지
 "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
 "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+"$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
 chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" "$DATA_MOUNT/opensearch-api-venv"
 
 # ---- 8. OpenSearch API systemd 서비스 등록 ----

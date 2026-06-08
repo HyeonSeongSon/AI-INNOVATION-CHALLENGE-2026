@@ -263,6 +263,7 @@ jobs:
             --parameters '{"commands":[
               "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz /tmp/opensearch.tar.gz",
               "tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
+              "chmod +x /opt/opensearch-api/restore_or_skip.sh /opt/opensearch-api/create_snapshot.sh",
               "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/opensearch-api",
               "systemctl restart opensearch-api"
@@ -286,6 +287,36 @@ jobs:
             fi
             if [ "$i" = "120" ]; then
               echo "ERROR: OpenSearch deploy did not complete within 30 minutes."
+              exit 1
+            fi
+          done
+
+      - name: Restore OpenSearch indices from S3 snapshot if empty
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ needs.terraform.outputs.opensearch_instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 600 \
+            --parameters '{"commands":["/opt/opensearch-api/restore_or_skip.sh"]}' \
+            --output text --query "Command.CommandId")
+          echo "SSM Command ID (restore): $COMMAND_ID"
+          for i in $(seq 1 40); do
+            sleep 15
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ needs.terraform.outputs.opensearch_instance_id }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "Success" ]; then echo "Restore step complete."; break; fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "${{ needs.terraform.outputs.opensearch_instance_id }}" \
+                --query "StandardErrorContent" --output text
+              exit 1
+            fi
+            if [ "$i" = "40" ]; then
+              echo "ERROR: Restore step did not complete within 10 minutes."
               exit 1
             fi
           done
