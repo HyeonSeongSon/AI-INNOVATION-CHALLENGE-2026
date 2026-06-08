@@ -103,6 +103,7 @@ resource "aws_instance" "opensearch" {
   user_data = base64encode(templatefile("${path.module}/user_data/opensearch_server.sh", {
     project_name       = var.project_name
     OPENSEARCH_VERSION = "2.13.0"
+    internal_token     = var.internal_token
   }))
 
   root_block_device {
