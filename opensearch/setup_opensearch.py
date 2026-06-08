@@ -143,21 +143,16 @@ def step_index_v3() -> bool:
     return run_pipeline()
 
 
-def step_index_v4() -> bool:
+def step_index_v4(client) -> bool:
     from index_products_v4_multivector import run_indexing, FIELD_NAMES, INDEX_PREFIX
     logger.info("product_v4_* 색인 시작 (5개 필드 인덱스)...")
     try:
-        run_indexing(recreate_index=True)
+        run_indexing(recreate_index=True, client=client)
     except Exception as e:
         logger.error("product_v4_* 색인 중 오류: %s", type(e).__name__)
         return False
 
-    # run_indexing은 반환값이 없으므로 인덱스 문서 수로 성공 여부 확인
-    from opensearch_hybrid import OpenSearchHybridClient
-    client = OpenSearchHybridClient()
-    if not client.client:
-        return False
-
+    # 동일 client로 문서 수 확인 (추가 인스턴스 생성 없음)
     all_ok = True
     for field in FIELD_NAMES:
         index_name = f"{INDEX_PREFIX}_{field}"
@@ -251,7 +246,7 @@ def main() -> None:
     # Step 3: product_v4_*
     if not args.skip_v4:
         t = time.time()
-        results["product_v4_*"] = step_index_v4()
+        results["product_v4_*"] = step_index_v4(client)
         logger.info("product_v4_* 완료 (%.1f초)", time.time() - t)
 
     print_summary(results, time.time() - start)

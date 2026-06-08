@@ -207,8 +207,9 @@ def index_one_field(
     return success
 
 
-def run_indexing(recreate_index: bool = True):
-    client = OpenSearchHybridClient()
+def run_indexing(recreate_index: bool = True, client: OpenSearchHybridClient = None):
+    if client is None:
+        client = OpenSearchHybridClient()
     if not client.client:
         logging.error("OpenSearch 클라이언트 초기화 실패")
         return
