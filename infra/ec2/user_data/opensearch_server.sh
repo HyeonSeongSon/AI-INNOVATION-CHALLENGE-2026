@@ -188,7 +188,7 @@ Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
 # OpenSearch 완전 기동 후 60초 추가 대기
 # — 재부팅 직후 SSM 에이전트가 메모리를 확보할 시간을 확보합니다
 ExecStartPre=/bin/sleep 60
-ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 2
+ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=120
