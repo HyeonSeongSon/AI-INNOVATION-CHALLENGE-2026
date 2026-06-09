@@ -217,7 +217,7 @@ jobs:
               "/opt/db-api/venv/bin/pip install -q -r /opt/db-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/db-api",
               "for f in $(ls /opt/db-api/init/*.sql 2>/dev/null | sort); do sudo -u postgres psql -d ai_innovation_db -f \"$f\" 2>&1 | grep -v \"already exists\" || true; done",
-              "INTERNAL_TOKEN=$(/usr/local/bin/aws secretsmanager get-secret-value --region ap-northeast-2 --secret-id ${{ env.PROJECT_NAME }}/db-api-internal-token --query SecretString --output text) && printf \"INTERNAL_TOKEN=%s\\nPOSTGRES_HOST=localhost\\nPOSTGRES_DB=ai_innovation_db\\nPOSTGRES_USER=postgres\\n\" \"$INTERNAL_TOKEN\" > /opt/db-api/.env && chmod 600 /opt/db-api/.env",
+              "INTERNAL_TOKEN=$(/usr/local/bin/aws secretsmanager get-secret-value --region ap-northeast-2 --secret-id ${{ env.PROJECT_NAME }}/db-api-internal-token --query SecretString --output text) && printf \"INTERNAL_TOKEN=%s\\nPOSTGRES_HOST=localhost\\nPOSTGRES_DB=ai_innovation_db\\nPOSTGRES_USER=postgres\\n\" \"$INTERNAL_TOKEN\" > /opt/db-api/.env && chmod 600 /opt/db-api/.env && chown ubuntu:ubuntu /opt/db-api/.env",
               "systemctl restart db-api"
             ]}' \
             --output text --query "Command.CommandId")
