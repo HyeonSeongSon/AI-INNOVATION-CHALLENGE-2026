@@ -42,10 +42,13 @@ async def create_persona_from_text_tool(
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         try:
             await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
-        except Exception:
-            logger.warning("compensating_delete", persona_id=persona_id)
-            await persona_client.delete_persona(persona_id, user_id=user_id)
-            raise
+        except Exception as original_exc:
+            logger.warning("compensating_delete", persona_id=persona_id, error_type=type(original_exc).__name__)
+            try:
+                await persona_client.delete_persona(persona_id, user_id=user_id)
+            except Exception:
+                logger.error("compensating_delete_failed", persona_id=persona_id)
+            raise original_exc
 
         summary = (
             f"**페르소나 등록 완료**\n\n"

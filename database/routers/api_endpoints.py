@@ -210,11 +210,11 @@ class PersonaListResponse(BaseModel):
 
 class ProductSearchQueryCreate(BaseModel):
     """페르소나 검색 쿼리 저장 요청"""
-    persona_id: str = Field(..., max_length=20, description="페르소나 ID", examples=["PERSONA_001"])
-    need: str = Field(..., max_length=1_000, description="니즈 쿼리", examples=["탈모 케어 샴푸"])
-    preference: str = Field(..., max_length=1_000, description="선호도 쿼리", examples=["자연 성분 샴푸"])
-    retrieval: str = Field(..., max_length=1_000, description="검색 쿼리", examples=["탈모 두피 케어 샴푸 추천"])
-    persona: str = Field(..., max_length=1_000, description="페르소나 쿼리", examples=["민감 두피 남성"])
+    persona_id: str = Field(..., max_length=50, description="페르소나 ID", examples=["PERSONA_001"])
+    need: str = Field(..., max_length=5_000, description="니즈 쿼리", examples=["탈모 케어 샴푸"])
+    preference: str = Field(..., max_length=5_000, description="선호도 쿼리", examples=["자연 성분 샴푸"])
+    retrieval: str = Field(..., max_length=5_000, description="검색 쿼리", examples=["탈모 두피 케어 샴푸 추천"])
+    persona: str = Field(..., max_length=5_000, description="페르소나 쿼리", examples=["민감 두피 남성"])
 
 
 class ProductSearchQueryGetRequest(BaseModel):

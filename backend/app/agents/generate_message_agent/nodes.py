@@ -316,6 +316,13 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
     failed_task_ids = set(state.get("failed_task_ids") or [])
 
     if not failed_task_ids:
+        if state.get("status") == "failed" and not generated_tasks:
+            logger.info("output_propagate_failure", user_message="[output] 이전 노드 실패로 완료되지 않음")
+            return {
+                "messages": [AIMessage(content="CRM 메시지 생성 중 오류가 발생했습니다. 다시 시도해주세요.", name="generate_message_agent")],
+                "status": "failed",
+                "logs": logger.get_user_logs(),
+            }
         content = _format_generated_tasks(generated_tasks)
         status = "completed"
     else:

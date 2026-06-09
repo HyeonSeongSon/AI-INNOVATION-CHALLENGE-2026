@@ -355,7 +355,7 @@ async def stream_product_job(
     current_user: UserContext = Depends(require_admin_from_headers),
 ) -> StreamingResponse:
     """job_id에 해당하는 상품 등록 진행상황을 SSE로 스트리밍한다. 재연결 시 처음부터 replay된다."""
-    job = get_job(job_id)
+    job = await get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     if job.job_type != "product":
