@@ -217,8 +217,11 @@ jobs:
               "/opt/db-api/venv/bin/pip install -q -r /opt/db-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/db-api",
               "for f in $(ls /opt/db-api/init/*.sql 2>/dev/null | sort); do sudo -u postgres psql -d ai_innovation_db -f \"$f\" 2>&1 | grep -v \"already exists\" || true; done",
-              "printf \"INTERNAL_TOKEN=${{ secrets.INTERNAL_TOKEN }}\\nPOSTGRES_HOST=localhost\\nPOSTGRES_DB=ai_innovation_db\\nPOSTGRES_USER=postgres\\n\" > /opt/db-api/.env && chmod 600 /opt/db-api/.env && chown ubuntu:ubuntu /opt/db-api/.env",
-              "systemctl restart db-api"
+              "printf \"INTERNAL_TOKEN=${{ secrets.INTERNAL_TOKEN }}\\nPOSTGRES_HOST=localhost\\nPOSTGRES_DB=ai_innovation_db\\nPOSTGRES_USER=postgres\\nPOSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}\\n\" > /opt/db-api/.env && chmod 600 /opt/db-api/.env && chown ubuntu:ubuntu /opt/db-api/.env",
+              "systemctl restart db-api",
+              "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz /tmp/data.tar.gz",
+              "mkdir -p /opt/data && tar -xzf /tmp/data.tar.gz -C /opt/ && chown -R ubuntu:ubuntu /opt/data",
+              "sudo -u ubuntu /opt/db-api/venv/bin/python /opt/db-api/seed_products.py"
             ]}' \
             --output text --query "Command.CommandId")
           echo "SSM Command ID (db): $COMMAND_ID"
