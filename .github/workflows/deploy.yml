@@ -156,6 +156,11 @@ jobs:
           tar -czf /tmp/opensearch.tar.gz -C opensearch .
           aws s3 cp /tmp/opensearch.tar.gz s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz
 
+      - name: Package & upload product data files
+        run: |
+          tar -czf /tmp/data.tar.gz -C . data/
+          aws s3 cp /tmp/data.tar.gz s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz
+
   # ────────────────────────────────────────────
   # Job 4: SSM Run Command로 EC2에 최신 코드 배포 + 서비스 재시작
   # ────────────────────────────────────────────
@@ -263,6 +268,8 @@ jobs:
             --parameters '{"commands":[
               "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz /tmp/opensearch.tar.gz",
               "tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
+              "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz /tmp/data.tar.gz",
+              "mkdir -p /opt/data && tar -xzf /tmp/data.tar.gz -C /opt/",
               "chmod +x /opt/opensearch-api/restore_or_skip.sh /opt/opensearch-api/create_snapshot.sh",
               "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/opensearch-api",
