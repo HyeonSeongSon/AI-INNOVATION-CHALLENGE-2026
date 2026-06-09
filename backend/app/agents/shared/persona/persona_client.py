@@ -194,7 +194,7 @@ class PersonaClient:
             return query_ids
 
         except httpx.HTTPStatusError as e:
-            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__)
+            logger.error("product_search_query_save_failed", persona_id=persona_id, status_code=e.response.status_code, error_type=type(e).__name__, response_body=e.response.text[:500])
             raise
         except Exception as e:
             logger.error("product_search_query_save_failed", persona_id=persona_id, error_type=type(e).__name__)
