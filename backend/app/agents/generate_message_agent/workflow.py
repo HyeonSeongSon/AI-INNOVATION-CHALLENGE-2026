@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, START, END
-from .nodes import init_node, router_node, quality_check_node, generate_message_node, message_feedback_node, output_node
+from .nodes import init_node, router_node, quality_check_node, generate_message_node, message_feedback_node, output_node, _MAX_RETRIES
 from .state import GenerateMessageState
 
 def _route_after_router(state: GenerateMessageState) -> str:
@@ -14,6 +14,10 @@ def _route_after_quality_check(state: GenerateMessageState) -> str:
     generated_tasks = state.get("generated_tasks") or []
     unrecoverable = any(
         t.get("quality_check", {}).get("failed_stage") == "product_fetch"
+        or any(
+            r.get("error") == "api_unavailable"
+            for r in t.get("quality_check", {}).get("semantic_check_results", [])
+        )
         for t in generated_tasks
         if t["product_id"] in failed_task_ids
     )
@@ -21,6 +25,14 @@ def _route_after_quality_check(state: GenerateMessageState) -> str:
         return "output_node"
 
     return "message_feedback_node"
+
+
+def _route_after_feedback(state: GenerateMessageState) -> str:
+    """max retries 도달 시 output_node로, 그렇지 않으면 quality_check_node로."""
+    retry_count = state.get("feedback_retry_count", 0)
+    if retry_count >= _MAX_RETRIES:
+        return "output_node"
+    return "quality_check_node"
 
 
 def build_workflow(checkpointer=None):
@@ -50,7 +62,12 @@ def build_workflow(checkpointer=None):
         _route_after_quality_check,
         {"message_feedback_node": "message_feedback_node", "output_node": "output_node"},
     )
-    workflow.add_edge("message_feedback_node", "quality_check_node")
+    # static edge 대신 conditional edge — Command와 static edge 충돌로 인한 무한루프 방지
+    workflow.add_conditional_edges(
+        "message_feedback_node",
+        _route_after_feedback,
+        {"quality_check_node": "quality_check_node", "output_node": "output_node"},
+    )
     workflow.add_edge("output_node", END)
 
     return workflow.compile(checkpointer=checkpointer)

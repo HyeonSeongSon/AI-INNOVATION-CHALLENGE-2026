@@ -39,13 +39,23 @@ router = APIRouter(prefix="/api/pipeline", tags=["Persona Pipeline"])
 # ──────────────────────────────────────────────────────
 
 async def _process_one_text(index: int, text: str, llm, persona_client, user_id: str | None = None) -> Dict[str, Any]:
-    """단일 텍스트로 페르소나 생성 — bulk_persona_node._process_one과 동일한 파이프라인"""
+    """단일 텍스트로 페르소나 생성 — register_personas_tool._process_one과 동일한 파이프라인"""
     try:
         messages = [HumanMessage(content=text)]
-        structured_persona = await generate_structured_persona_info(messages, llm)
+        structured_persona, raw_queries = await asyncio.gather(
+            generate_structured_persona_info(messages, llm),
+            generate_search_query(messages, llm),
+        )
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
-        raw_queries = await generate_search_query(messages, llm)
-        await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        try:
+            await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
+        except Exception as original_exc:
+            logger.warning("compensating_delete", index=index, persona_id=persona_id, error_type=type(original_exc).__name__)
+            try:
+                await persona_client.delete_persona(persona_id, user_id=user_id)
+            except Exception:
+                logger.error("compensating_delete_failed", index=index, persona_id=persona_id)
+            raise original_exc
         return {
             "index": index,
             "success": True,

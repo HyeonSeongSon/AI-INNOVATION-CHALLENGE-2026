@@ -245,10 +245,12 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             user_message=f"품질 검사 최대 재시도 횟수 초과 (status={failure_status})",
             retry_count=retry_count,
         )
-        return Command(
-            goto="output_node",
-            update={"status": failure_status, "failed_task_ids": failed_ids_list},
-        )
+        # 라우팅은 workflow의 conditional edge(_route_after_feedback)가 담당
+        return {
+            "status": failure_status,
+            "failed_task_ids": failed_ids_list,
+            "logs": agent_logger.get_user_logs(),
+        }
 
     services = config["configurable"]["services"]
     applier = services.applier
@@ -289,15 +291,14 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
     except Exception as e:
         agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
-        return Command(
-            goto="output_node",
-            update={
-                "status": "failed",
-                "error": "피드백 적용 중 오류가 발생했습니다.",
-                "error_details": {"node": "message_feedback_node"},
-                "logs": agent_logger.get_user_logs(),
-            },
-        )
+        # feedback_retry_count를 _MAX_RETRIES로 설정 → _route_after_feedback가 output_node로 라우팅
+        return {
+            "status": "failed",
+            "error": "피드백 적용 중 오류가 발생했습니다.",
+            "error_details": {"node": "message_feedback_node"},
+            "feedback_retry_count": _MAX_RETRIES,
+            "logs": agent_logger.get_user_logs(),
+        }
 
     agent_logger.info("feedback_done", user_message="피드백 적용 완료")
 

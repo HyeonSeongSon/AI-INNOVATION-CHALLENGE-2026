@@ -58,12 +58,10 @@ CREATE INDEX idx_analysis_results_persona_id ON analysis_results(persona_id);
 -- ============================================================
 -- 3. 상품 검색 쿼리 테이블 (search_queries)
 -- ============================================================
-CREATE TYPE IF NOT EXISTS query_type_enum AS ENUM (
-    'need',
-    'preference',
-    'retrieval',
-    'persona'
-);
+DO $$ BEGIN
+    CREATE TYPE query_type_enum AS ENUM ('need', 'preference', 'retrieval', 'persona');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS search_queries (
     search_query_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
