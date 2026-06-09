@@ -216,6 +216,7 @@ jobs:
               "tar -xzf /tmp/database.tar.gz -C /opt/db-api",
               "/opt/db-api/venv/bin/pip install -q -r /opt/db-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/db-api",
+              "for f in $(ls /opt/db-api/init/*.sql 2>/dev/null | sort); do sudo -u postgres psql -d ai_innovation_db -f \"$f\" 2>&1 | grep -v \"already exists\" || true; done",
               "systemctl restart db-api"
             ]}' \
             --output text --query "Command.CommandId")
