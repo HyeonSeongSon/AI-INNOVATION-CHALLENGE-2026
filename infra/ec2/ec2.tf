@@ -49,6 +49,20 @@ resource "aws_iam_role_policy" "ec2_s3_deploy" {
   })
 }
 
+# Secrets Manager 읽기 — db-api .env 주입용
+resource "aws_iam_role_policy" "ec2_secrets" {
+  name = "${var.project_name}-ec2-secrets"
+  role = aws_iam_role.ec2.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/*"
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2-profile"
   role = aws_iam_role.ec2.name

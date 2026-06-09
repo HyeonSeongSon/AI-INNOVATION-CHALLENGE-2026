@@ -38,3 +38,19 @@ resource "aws_secretsmanager_secret_version" "admin_seed_password" {
   secret_id     = aws_secretsmanager_secret.admin_seed_password[0].id
   secret_string = var.admin_seed_password
 }
+
+# -----------------------------------------------------------------------
+# DB API Secrets — db-api EC2 서비스용 (INTERNAL_TOKEN)
+# EC2 IAM 역할이 secretsmanager:GetSecretValue ${project_name}/* 권한 보유
+# -----------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "db_api_internal_token" {
+  name                    = "${var.project_name}/db-api-internal-token"
+  description             = "INTERNAL_TOKEN for db-api service on EC2"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "db_api_internal_token" {
+  secret_id     = aws_secretsmanager_secret.db_api_internal_token.id
+  secret_string = var.internal_token
+}
