@@ -331,7 +331,7 @@ async def upload_personas_file(
 
     llm = get_llm(settings.chatgpt_model_name, temperature=settings.llm_temperature_persona)
     persona_client = req.app.state.persona_client
-    job = create_job("persona", len(texts), creator_user_id=current_user.user_id)
+    job = await create_job("persona", len(texts), creator_user_id=current_user.user_id)
     if job is None:
         raise HTTPException(
             status_code=409,

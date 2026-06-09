@@ -334,7 +334,7 @@ async def upload_products_file(
         )
 
     service = request.app.state.registration
-    job = create_job("product", len(records), creator_user_id=current_user.user_id)
+    job = await create_job("product", len(records), creator_user_id=current_user.user_id)
     if job is None:
         raise HTTPException(
             status_code=409,
