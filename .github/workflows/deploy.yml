@@ -116,16 +116,20 @@ jobs:
           TF_VAR_admin_seed_email:     ${{ secrets.ADMIN_SEED_EMAIL }}
           TF_VAR_admin_seed_password:  ${{ secrets.ADMIN_SEED_PASSWORD }}
 
-      - name: Export EC2 instance IDs
+      - name: Export Terraform outputs
         id: tf-outputs
         working-directory: infra/ec2
         run: |
           echo "db_instance_id=$(terraform output -raw db_ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "opensearch_instance_id=$(terraform output -raw opensearch_ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "cloudfront_dist_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$(terraform output -raw frontend_s3_bucket)" >> $GITHUB_OUTPUT
 
     outputs:
       db_instance_id:         ${{ steps.tf-outputs.outputs.db_instance_id }}
       opensearch_instance_id: ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
+      cloudfront_dist_id:     ${{ steps.tf-outputs.outputs.cloudfront_dist_id }}
+      frontend_bucket:        ${{ steps.tf-outputs.outputs.frontend_bucket }}
 
   # ────────────────────────────────────────────
   # Job 3: 데이터 서비스 코드 패키징 → S3 업로드
@@ -327,3 +331,53 @@ jobs:
               exit 1
             fi
           done
+
+  # ────────────────────────────────────────────
+  # Job 5: 프론트엔드 빌드 → S3 업로드 → CloudFront 캐시 무효화
+  # terraform job 완료 후 실행 (CloudFront/S3 리소스 생성 보장)
+  # ────────────────────────────────────────────
+  deploy-frontend:
+    name: Build & Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        run: yarn build
+
+      # index.html: no-cache (항상 최신 진입점 보장)
+      # JS/CSS/assets: 1년 immutable 캐싱 (hash 파일명으로 캐시버스팅)
+      - name: Deploy to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ needs.terraform.outputs.frontend_bucket }}/ \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp frontend/dist/index.html \
+            s3://${{ needs.terraform.outputs.frontend_bucket }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.terraform.outputs.cloudfront_dist_id }} \
+            --paths "/*"
