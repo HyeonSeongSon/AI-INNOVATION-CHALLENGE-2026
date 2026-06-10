@@ -99,9 +99,10 @@ services:
       dockerfile: Dockerfile.api
     container_name: fastapi-search
     working_dir: /app
-    command: python opensearch_api.py
+    command: sh -c "python index_forbidden_sentences.py && python opensearch_api.py"
     volumes:
       - .:/app
+      - ../backend/app/agents/generate_message_agent/data/forbidden_keyword.json:/app/data/forbidden_keyword.json:ro
     expose:
       - "8010"
     env_file:
