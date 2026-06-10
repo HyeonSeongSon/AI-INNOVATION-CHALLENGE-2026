@@ -345,15 +345,23 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
         )
         all_failed = len(failed_task_ids) == len(generated_tasks) and len(generated_tasks) > 0
         status = "failed" if all_failed else "partial_failure"
+        passed_tasks = [t for t in generated_tasks if t["product_id"] not in failed_task_ids]
         if status == "partial_failure":
-            succeeded_content = _format_generated_tasks(
-                [t for t in generated_tasks if t["product_id"] not in failed_task_ids]
-            )
+            succeeded_content = _format_generated_tasks(passed_tasks)
             content = f"{succeeded_content}\n\nCRM 메시지 일부 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
         else:
             content = f"CRM 메시지 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
 
     logger.info("output_done", user_message=f"[output] 완료 (status={status})", status=status)
+
+    if failed_task_ids:
+        # 실패 태스크를 state에서 제거 — CRM 레이어에 passed=False 태스크가 전달되지 않도록
+        return {
+            "messages": [AIMessage(content=content, name="generate_message_agent")],
+            "status": status,
+            "generated_tasks": passed_tasks,
+            "logs": logger.get_user_logs(),
+        }
     return {
         "messages": [AIMessage(content=content, name="generate_message_agent")],
         "status": status,

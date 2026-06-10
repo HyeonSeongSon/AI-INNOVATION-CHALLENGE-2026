@@ -24,14 +24,14 @@ def _route_after_quality_check(state: GenerateMessageState) -> str:
     if unrecoverable:
         return "output_node"
 
+    if state.get("feedback_retry_count", 0) >= _MAX_RETRIES:
+        return "output_node"
+
     return "message_feedback_node"
 
 
 def _route_after_feedback(state: GenerateMessageState) -> str:
-    """max retries 도달 시 output_node로, 그렇지 않으면 quality_check_node로."""
-    retry_count = state.get("feedback_retry_count", 0)
-    if retry_count >= _MAX_RETRIES:
-        return "output_node"
+    """피드백 적용 후 항상 품질 검사 실행 — max retries 종결은 _route_after_quality_check에서 처리."""
     return "quality_check_node"
 
 
