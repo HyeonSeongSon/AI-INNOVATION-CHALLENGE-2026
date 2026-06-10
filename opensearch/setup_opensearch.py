@@ -7,18 +7,15 @@ OpenSearch 서비스 환경 구축 스크립트
 실행 순서:
   0. 환경변수 · 데이터 파일 · 연결 사전 확인
   1. hybrid-minmax-pipeline 생성
-  2. product_index_v3 색인 (7개 카테고리)
-  3. product_v4_* 색인 (5개 필드 인덱스, 멀티벡터)
+  2. product_v4_* 색인 (5개 필드 인덱스, 멀티벡터)
 
 사전 요건:
   - opensearch/.env 에 OPENSEARCH_ADMIN_PASSWORD / OPENSEARCH_HOST /
     OPENSEARCH_PORT / INTERNAL_TOKEN 설정
-  - data/ 디렉토리에 v3_product_data_rewritten_*.jsonl (7개),
-    v4_product_data_*.jsonl (10개) 존재
+  - data/ 디렉토리에 v4_product_data_*.jsonl (10개) 존재
 
 부분 실행 옵션:
   --skip-pipeline   search pipeline 생성 건너뜀
-  --skip-v3         product_index_v3 색인 건너뜀
   --skip-v4         product_v4_* 색인 건너뜀
 """
 
@@ -51,16 +48,6 @@ REQUIRED_ENV_VARS = [
     "OPENSEARCH_HOST",
     "OPENSEARCH_PORT",
     "INTERNAL_TOKEN",
-]
-
-V3_DATA_FILES = [
-    get_absolute_path("data", "v3_product_data_rewritten_skincare.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_beauty_tool.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_color_tone.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_hair.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_living_supplies.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_fragrance_body.jsonl"),
-    get_absolute_path("data", "v3_product_data_rewritten_inner_beauty.jsonl"),
 ]
 
 V4_DATA_FILES = [
@@ -137,12 +124,6 @@ def step_create_pipeline(client) -> bool:
     return ok
 
 
-def step_index_v3() -> bool:
-    from run_indexing_pipeline import run_pipeline
-    logger.info("product_index_v3 색인 시작 (7개 카테고리)...")
-    return run_pipeline()
-
-
 def step_index_v4(client) -> bool:
     from index_products_v4_multivector import run_indexing, FIELD_NAMES, INDEX_PREFIX
     logger.info("product_v4_* 색인 시작 (5개 필드 인덱스)...")
@@ -198,7 +179,6 @@ def print_summary(results: dict[str, bool], elapsed: float) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="OpenSearch 서비스 환경 구축")
     parser.add_argument("--skip-pipeline", action="store_true", help="search pipeline 생성 건너뜀")
-    parser.add_argument("--skip-v3", action="store_true", help="product_index_v3 색인 건너뜀")
     parser.add_argument("--skip-v4", action="store_true", help="product_v4_* 색인 건너뜀")
     args = parser.parse_args()
 
@@ -212,8 +192,6 @@ def main() -> None:
 
     # 사전 확인: 데이터 파일
     data_ok = True
-    if not args.skip_v3:
-        data_ok &= check_data_files(V3_DATA_FILES, "v3")
     if not args.skip_v4:
         data_ok &= check_data_files(V4_DATA_FILES, "v4")
     if not data_ok:
@@ -234,16 +212,7 @@ def main() -> None:
             print_summary(results, time.time() - start)
             sys.exit(1)
 
-    # Step 2: product_index_v3
-    if not args.skip_v3:
-        t = time.time()
-        results["product_index_v3"] = step_index_v3()
-        logger.info("product_index_v3 완료 (%.1f초)", time.time() - t)
-        if not results["product_index_v3"]:
-            print_summary(results, time.time() - start)
-            sys.exit(1)
-
-    # Step 3: product_v4_*
+    # Step 2: product_v4_*
     if not args.skip_v4:
         t = time.time()
         results["product_v4_*"] = step_index_v4(client)
