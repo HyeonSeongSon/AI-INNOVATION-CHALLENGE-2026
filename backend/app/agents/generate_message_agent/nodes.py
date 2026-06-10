@@ -7,8 +7,7 @@ from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger, get_logger
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any, Union
-from langgraph.types import Command
+from typing import Dict, Any
 import json
 
 _MAX_RETRIES = 2
@@ -107,7 +106,7 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
         }
 
 
-async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
+async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
     generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
@@ -131,15 +130,15 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         tasks = await generator.generate_crm_message(tasks, message_llm)
     except Exception as e:
         agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
-        return Command(
-            goto="output_node",
-            update={
-                "status": "failed",
-                "error": "메시지 생성 중 오류가 발생했습니다.",
-                "error_details": {"node": "generate_message_node"},
-                "logs": agent_logger.get_user_logs(),
-            },
-        )
+        # Command(goto="output_node") 대신 plain dict 반환:
+        # static edge generate_message_node → quality_check_node 가 단독 발화하도록 허용.
+        # (Command + static edge 동시 발화 시 output_node 가 두 경로에서 중복 실행되어 LangGraph 예외 발생)
+        return {
+            "status": "failed",
+            "error": "메시지 생성 중 오류가 발생했습니다.",
+            "error_details": {"node": "generate_message_node"},
+            "logs": agent_logger.get_user_logs(),
+        }
 
     generated_tasks = [
         {
@@ -225,7 +224,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     }
 
 
-async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
+async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
     agent_logger = AgentLogger(state, node_name="message_feedback_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     feedback_llm = get_llm(model, temperature=settings.llm_temperature_creative)
