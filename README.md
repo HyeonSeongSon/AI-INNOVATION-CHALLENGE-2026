@@ -134,7 +134,7 @@ ENVIRONMENT=local
 
 ```bash
 cd opensearch
-python setup_pipeline.py
+python setup_opensearch.py
 ```
 
 이 스크립트는 다음 작업을 수행합니다:
@@ -146,7 +146,7 @@ python setup_pipeline.py
 
 ```bash
 cd database
-python setup_pipeline.py
+python scripts/setup_pipeline.py
 ```
 
 이 스크립트는 다음 작업을 수행합니다:
@@ -157,11 +157,17 @@ python setup_pipeline.py
 #### Step 3: Docker Compose 실행
 
 ```bash
-docker compose up
+# 최초 1회 네트워크 생성 필요
+docker network create msa-net
+
+cd opensearch && docker compose up -d
+cd database   && docker compose up -d
+cd backend    && docker compose up
 ```
 
 모든 서비스가 시작됩니다:
-- **Backend API (CRM Agent)**: http://localhost:8005
+- **API Gateway**: http://localhost:8005
+- **Frontend**: http://localhost:3000
 - **Database API**: http://localhost:8020
 - **OpenSearch API**: http://localhost:8010
 - **OpenSearch Dashboards**: http://localhost:5601
@@ -171,64 +177,47 @@ docker compose up
 
 ## API 엔드포인트
 
-### 1. CRM Agent API (Port 8005)
+### 1. API Gateway (Port 8005)
 
-#### POST `/api/crm/generate`
+#### POST `/api/marketing/chat/v2`
 
-CRM 메시지 생성 시작 (1단계)
+CRM 메시지 생성 (단건 응답)
 
 **요청 예시:**
 ```json
 {
-  "user_input": "{\"persona_id\": \"PERSONA_002\", \"purpose\": \"신상품홍보\", \"product_categories\": [\"립스틱\"]}",
-  "thread_id": null
+  "message": "PERSONA_002에게 신상품 립스틱 홍보 메시지 만들어줘",
+  "conversation_id": null
 }
 ```
 
 **응답 예시:**
 ```json
 {
-  "status": "needs_selection",
-  "thread_id": "thread-abc123",
-  "recommended_products": [
-    {
-      "product_id": "PROD001",
-      "product_name": "벨벳 매트 립스틱",
-      "brand": "브랜드A",
-      "sale_price": 25000,
-      "vector_search_score": 0.95
-    }
-  ],
-  "count": 3
-}
-```
-
-#### POST `/api/crm/select-product`
-
-사용자 제품 선택 처리 (2단계)
-
-**요청 예시:**
-```json
-{
-  "thread_id": "thread-abc123",
-  "selected_product_id": "PROD001"
-}
-```
-
-**응답 예시:**
-```json
-{
+  "conversation_id": "conv-abc123",
   "status": "completed",
-  "thread_id": "thread-abc123",
-  "final_message": {
-    "카피문구": "당신을 위한 완벽한 립스틱",
-    "본문": "...",
-    "버튼": "지금 구매하기"
-  }
+  "answer": "...",
+  "logs": ["[Step 1] 상품 검색 중...", "[Step 2] 메시지 생성 중..."]
 }
 ```
 
-#### GET `/api/crm/health`
+#### POST `/api/marketing/chat/v2/stream`
+
+CRM 메시지 생성 (SSE 스트리밍). `text/event-stream` 응답.
+
+이벤트 타입: `node_start` / `token` / `text_chunk` / `text_done` / `log` / `node_end` / `result` / `error` / `done`
+
+#### 인증 관련
+
+| 메서드 | 경로 | 역할 |
+|--------|------|------|
+| POST | `/auth/register` | 회원가입 |
+| POST | `/auth/login` | 로그인 → HttpOnly 쿠키 발급 |
+| POST | `/auth/refresh` | access 토큰 갱신 |
+| POST | `/auth/logout` | 로그아웃 + 쿠키 삭제 |
+| GET  | `/auth/me` | 내 정보 조회 |
+
+#### GET `/health`
 
 헬스 체크
 
@@ -461,62 +450,49 @@ git merge feature/your-feature-name
 
 ```
 AI-INNOVATION-CHALLENGE-2026/
-├── backend/                 # FastAPI 백엔드
+├── backend/                      # FastAPI 백엔드 (5개 마이크로서비스)
+│   ├── main.py                   # API Gateway (port 8005)
+│   ├── servers/                  # 각 서비스 진입점 (8001/8002/8003/8006)
 │   ├── app/
-│   │   ├── api/            # API 라우터
-│   │   └── service/        # 비즈니스 로직
-│   │       ├── agent/      # AI 에이전트
-│   │       └── tools/      # 도구 (제품 추천 등)
-├── database/               # PostgreSQL 관련
-│   ├── api_endpoints.py    # DB API
-│   ├── setup_pipeline.py   # DB 초기화
-│   └── models.py          # SQLAlchemy 모델
-├── opensearch/            # OpenSearch 관련
-│   ├── opensearch_api.py  # OpenSearch API
-│   └── setup_pipeline.py  # OpenSearch 초기화
-└── docker-compose.yml     # Docker Compose 설정
+│   │   ├── api/                  # API 라우터 (auth, crm_proxy, db_proxy 등)
+│   │   ├── agents/               # LangGraph 에이전트 (crm/recommend/generate/data_reg)
+│   │   ├── core/                 # 인프라 (auth, logging, llm_factory 등)
+│   │   └── config/settings.py    # 환경변수 중앙 관리
+│   └── a2a/                      # Agent-to-Agent 내부 통신 프로토콜
+├── database/                     # PostgreSQL + Database API (port 8020)
+│   ├── api_server.py             # Database API 진입점
+│   ├── routers/                  # API 라우터 (personas, products, conversations 등)
+│   ├── core/                     # ORM 모델, DB 설정
+│   ├── init/                     # 초기화 SQL (01~07)
+│   └── scripts/setup_pipeline.py # DB 초기화 스크립트
+├── opensearch/                   # OpenSearch + 검색 API (port 8010)
+│   ├── opensearch_api.py         # OpenSearch API 진입점
+│   ├── opensearch_hybrid.py      # 하이브리드 검색 클라이언트
+│   └── setup_opensearch.py       # 인덱스/파이프라인 초기화 스크립트
+└── frontend/                     # React 19 + Vite 7 (port 3000)
+    └── src/                      # 컴포넌트, 페이지, Context
 ```
 
 ### 주요 워크플로우
 
-#### 1. 제품 추천 워크플로우
+#### CRM 메시지 생성 워크플로우
 
 ```
-사용자 요청
+POST /api/marketing/chat/v2/stream (SSE)
     ↓
-페르소나 정보 조회 (DB API)
+[Gateway] JWT 인증 + Rate Limit 확인
     ↓
-기존 분석 결과 확인 (DB API)
+[CRM Supervisor] LLM이 task_plan 결정
     ↓
-없으면 → 페르소나 분석 수행 (LLM) → DB 저장
+[Recommend Agent :8001]
+  페르소나 검색 쿼리 조회/생성 → OpenSearch 하이브리드 검색
+  → 멀티벡터 retrieval(top-100) → RRF 융합 → top-3 추천
     ↓
-멀티 쿼리 생성 (LLM)
+[Generate Agent :8002]
+  메시지 생성 → 3단계 품질 검사
+  (Rule → Semantic 유사도 → LLM Judge) → 실패 시 피드백 재생성
     ↓
-쿼리 DB 저장
-    ↓
-하이브리드 검색 (OpenSearch)
-    ↓
-상위 3개 제품 반환
-```
-
-#### 2. CRM 메시지 생성 워크플로우
-
-```
-1단계: /api/crm/generate
-    ↓
-LLM이 도구 선택 (Tool Calling)
-    ↓
-recommend_products 실행
-    ↓
-Interrupt 발생 → 제품 목록 반환
-    ↓
-2단계: 사용자가 제품 선택
-    ↓
-/api/crm/select-product
-    ↓
-create_product_message 실행
-    ↓
-최종 CRM 메시지 생성
+[CRM Supervisor] 최종 응답 조합 → SSE done 이벤트
 ```
 
 ---

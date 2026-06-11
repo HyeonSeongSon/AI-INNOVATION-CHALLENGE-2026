@@ -8,13 +8,16 @@ x-opensearch-common-env: &opensearch-common-env
   # bootstrap.memory_lock: true  # along with the memlock settings below, disables swapping
   OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m  # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
   OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD}
-  plugins.security.disabled: true  # 보안 비활성화
+  OPENSEARCH_ADMIN_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD}
+  plugins.security.allow_unsafe_democertificates: "true"
+  plugins.security.allow_default_init_securityindex: "true"
 
 x-opensearch-healthcheck: &opensearch-healthcheck
-  test: ["CMD-SHELL", "curl -f http://localhost:9200 || exit 1"]
+  test: ["CMD-SHELL", "curl -sk -u admin:${OPENSEARCH_ADMIN_PASSWORD} https://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"' || exit 1"]
   interval: 10s
   timeout: 5s
-  retries: 10
+  retries: 15
+  start_period: 60s
 
 x-opensearch-resources: &opensearch-resources
   deploy:
@@ -34,9 +37,8 @@ services:
     <<: *opensearch-resources
     volumes:
       - opensearch-data1:/usr/share/opensearch/data
-    ports:
-      - "9200:9200"
     expose:
+      - "9200"
       - "9600"
     healthcheck: *opensearch-healthcheck
     networks:
@@ -79,10 +81,13 @@ services:
     image: opensearchproject/opensearch-dashboards:3.1.0
     container_name: opensearch-dashboards
     ports:
-      - 5601:5601
+      - "127.0.0.1:5601:5601"
     environment:
-      OPENSEARCH_HOSTS: '["http://opensearch-node1:9200","http://opensearch-node2:9200","http://opensearch-node3:9200"]'
-      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true' # 보안 비활성화
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200","https://opensearch-node3:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'false'
+      OPENSEARCH_USERNAME: admin
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD}
+      OPENSEARCH_SSL_VERIFICATIONMODE: none
     networks:
       - msa-net
     depends_on:

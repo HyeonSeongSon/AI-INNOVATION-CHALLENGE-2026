@@ -642,6 +642,24 @@ async def get_product_by_id(product_id: str, db: Session = Depends(get_db)):
     return _to_product_detail(product)
 
 
+class ProductBulkDeleteRequest(BaseModel):
+    ids: List[str] = Field(..., min_length=1, max_length=100, description="삭제할 상품 ID 목록")
+
+
+@router.delete("/products", summary="상품 일괄 삭제 (admin 전용)")
+async def delete_products_bulk(
+    request: ProductBulkDeleteRequest,
+    x_user_id: str = Depends(get_request_user_id),
+    db: Session = Depends(get_db),
+):
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+    deleted = db.query(Product).filter(Product.product_id.in_(request.ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted}
+
+
 @router.post("/products/by-tag", response_model=ProductListResponse, summary="상품종류(소분류 태그)로 상품 조회")
 async def get_products_by_tag(request: ProductByTagRequest, db: Session = Depends(get_db)):
     page_size = min(request.page_size, PRODUCTS_BY_TAG_MAX_PAGE_SIZE)

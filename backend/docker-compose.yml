@@ -38,7 +38,7 @@ services:
         until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
           echo 'Waiting for fastapi-search...'; sleep 5;
         done &&
-        uvicorn servers.crm_server:app --host 0.0.0.0 --port 8006 --reload
+        uvicorn servers.crm_server:app --host 0.0.0.0 --port 8006
       "
     environment:
       APP_ROOT: /app/app
@@ -73,7 +73,7 @@ services:
         until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
           echo 'Waiting for fastapi-search...'; sleep 5;
         done &&
-        uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001 --reload
+        uvicorn servers.recommend_server:app --host 0.0.0.0 --port 8001
       "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
@@ -95,7 +95,7 @@ services:
         until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
           echo 'Waiting for fastapi-search...'; sleep 5;
         done &&
-        uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002 --reload
+        uvicorn servers.generate_server:app --host 0.0.0.0 --port 8002
       "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020
@@ -117,7 +117,7 @@ services:
         until curl -sf http://fastapi-search:8010/health > /dev/null 2>&1; do
           echo 'Waiting for fastapi-search...'; sleep 5;
         done &&
-        uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003 --reload
+        uvicorn servers.data_registration_server:app --host 0.0.0.0 --port 8003
       "
     environment:
       DATABASE_API_URL: http://ai-innovation-db-api:8020

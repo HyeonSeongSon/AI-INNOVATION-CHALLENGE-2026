@@ -13,7 +13,7 @@ from ..config.settings import settings
 from ..core.auth import UserContext
 from ..core.auth_utils import create_user_assertion
 from ..core.rate_limiter import PostgresRateLimiter
-from .deps import get_conversation_write_limiter, get_current_user, get_persona_delete_limiter
+from .deps import get_conversation_write_limiter, get_current_user, get_persona_delete_limiter, require_admin
 
 router = APIRouter(prefix="/api", tags=["DB Proxy"])
 
@@ -240,5 +240,17 @@ async def proxy_products_list(
 ):
     return await _proxy(
         client, "GET", "/api/products", request,
+        {"X-User-Assertion": create_user_assertion(user)},
+    )
+
+
+@router.delete("/products")
+async def proxy_products_delete(
+    request: Request,
+    user: UserContext = Depends(require_admin),
+    client: httpx.AsyncClient = Depends(get_internal_client),
+):
+    return await _proxy(
+        client, "DELETE", "/api/products", request,
         {"X-User-Assertion": create_user_assertion(user)},
     )

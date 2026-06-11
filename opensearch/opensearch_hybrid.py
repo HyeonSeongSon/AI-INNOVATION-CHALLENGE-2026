@@ -21,6 +21,8 @@ class OpenSearchHybridClient:
             if not password:
                 raise ValueError("환경 변수 OPENSEARCH_ADMIN_PASSWORD가 설정되지 않았습니다. .env 파일에 패스워드를 설정해주세요.")
 
+            user = os.getenv("OPENSEARCH_ADMIN_USER", "admin")
+
             host = os.getenv("OPENSEARCH_HOST")
             if not host:
                 raise ValueError("환경 변수 OPENSEARCH_HOST가 설정되지 않았습니다. .env 파일에 호스트를 설정해주세요.")
@@ -35,6 +37,11 @@ class OpenSearchHybridClient:
 
             self.client = OpenSearch(
                 hosts=[{"host": host, "port": port}],
+                http_auth=(user, password),
+                use_ssl=True,
+                verify_certs=False,
+                ssl_assert_hostname=False,
+                ssl_show_warn=False,
                 timeout=30,
             )
 

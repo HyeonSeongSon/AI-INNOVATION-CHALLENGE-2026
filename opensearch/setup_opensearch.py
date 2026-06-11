@@ -9,6 +9,7 @@ OpenSearch 서비스 환경 구축 스크립트
   1. hybrid-minmax-pipeline 생성
   2. product_index_v3 색인 (7개 카테고리)
   3. product_v4_* 색인 (5개 필드 인덱스, 멀티벡터)
+  4. forbidden_sentences 색인 (금지 표현 문장 KNN 인덱스)
 
 사전 요건:
   - opensearch/.env 에 OPENSEARCH_ADMIN_PASSWORD / OPENSEARCH_HOST /
@@ -20,6 +21,7 @@ OpenSearch 서비스 환경 구축 스크립트
   --skip-pipeline   search pipeline 생성 건너뜀
   --skip-v3         product_index_v3 색인 건너뜀
   --skip-v4         product_v4_* 색인 건너뜀
+  --skip-forbidden  forbidden_sentences 색인 건너뜀
 """
 
 import argparse
@@ -143,6 +145,12 @@ def step_index_v3() -> bool:
     return run_pipeline()
 
 
+def step_index_forbidden_sentences(client) -> bool:
+    from index_forbidden_sentences import run_indexing
+    logger.info("forbidden_sentences 인덱스 색인 시작...")
+    return run_indexing(client=client)
+
+
 def step_index_v4() -> bool:
     from index_products_v4_multivector import run_indexing, FIELD_NAMES, INDEX_PREFIX
     logger.info("product_v4_* 색인 시작 (5개 필드 인덱스)...")
@@ -205,6 +213,7 @@ def main() -> None:
     parser.add_argument("--skip-pipeline", action="store_true", help="search pipeline 생성 건너뜀")
     parser.add_argument("--skip-v3", action="store_true", help="product_index_v3 색인 건너뜀")
     parser.add_argument("--skip-v4", action="store_true", help="product_v4_* 색인 건너뜀")
+    parser.add_argument("--skip-forbidden", action="store_true", help="forbidden_sentences 색인 건너뜀")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -253,6 +262,15 @@ def main() -> None:
         t = time.time()
         results["product_v4_*"] = step_index_v4()
         logger.info("product_v4_* 완료 (%.1f초)", time.time() - t)
+
+    # Step 4: forbidden_sentences
+    if not args.skip_forbidden:
+        t = time.time()
+        results["forbidden_sentences"] = step_index_forbidden_sentences(client)
+        logger.info("forbidden_sentences 완료 (%.1f초)", time.time() - t)
+        if not results["forbidden_sentences"]:
+            print_summary(results, time.time() - start)
+            sys.exit(1)
 
     print_summary(results, time.time() - start)
     sys.exit(0 if all(results.values()) else 1)

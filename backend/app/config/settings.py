@@ -5,10 +5,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_MODEL_PREFIXES: tuple[str, ...] = ("gpt-", "o1", "o3", "o4", "claude-", "gemini-")
 
+_WEAK_SECRET_FRAGMENTS: frozenset[str] = frozenset({
+    "secret", "changeme", "password", "example", "test",
+    "jwt", "token", "internal", "your-secret", "replace",
+    "abcdef", "123456",
+})
+
+
+def _is_weak_secret(value: str) -> bool:
+    lower = value.lower()
+    if any(frag in lower for frag in _WEAK_SECRET_FRAGMENTS):
+        return True
+    if len(set(value)) < 6:
+        return True
+    return False
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).parent.parent / ".env",
+        env_file=[
+            Path(__file__).parent.parent / ".env",
+            Path(__file__).parent.parent / ".env.local",  # 로컬 오버라이드 (없으면 무시)
+        ],
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -277,6 +295,11 @@ class Settings(BaseSettings):
                 "INTERNAL_TOKEN은 최소 32자 이상이어야 합니다. "
                 "'openssl rand -hex 32'로 생성하세요."
             )
+        if _is_weak_secret(self.internal_token):
+            raise ValueError(
+                "INTERNAL_TOKEN에 예측 가능한 패턴이 포함되어 있습니다. "
+                "'openssl rand -hex 32'로 재생성하세요."
+            )
         if self.auth_mode == "api_key" and not self.service_api_key:
             raise ValueError("AUTH_MODE=api_key일 때 SERVICE_API_KEY가 필요합니다.")
         if self.auth_mode == "api_key" and not self.service_api_key_user_id:
@@ -289,6 +312,11 @@ class Settings(BaseSettings):
                 raise ValueError("AUTH_MODE=jwt일 때 JWT_SECRET이 필요합니다.")
             if len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET은 최소 32자 이상이어야 합니다.")
+            if _is_weak_secret(self.jwt_secret):
+                raise ValueError(
+                    "JWT_SECRET에 예측 가능한 패턴이 포함되어 있습니다. "
+                    "'openssl rand -hex 32'로 재생성하세요."
+                )
             if self.jwt_secret == self.internal_token:
                 raise ValueError(
                     "JWT_SECRET과 INTERNAL_TOKEN은 반드시 다른 값이어야 합니다. "
