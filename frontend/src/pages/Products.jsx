@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import styled from 'styled-components';
-import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star, Upload, Sparkles } from 'lucide-react';
+import { Package, Search, RotateCcw, ChevronLeft, ChevronRight, X, ExternalLink, Star, Upload, Sparkles, Trash2 } from 'lucide-react';
 import api from '../api';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
@@ -59,6 +59,8 @@ const RegisterButton = styled.button`
   transition: background 0.15s;
 
   &:hover { background: #F5F0FF; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:disabled:hover { background: white; }
 `;
 
 const PulseRing = styled.div`
@@ -571,6 +573,48 @@ const ExternalLinkBtn = styled.a`
   svg { width: 14px; height: 14px; }
 `;
 
+const DeleteModeButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  background: ${({ $active }) => $active ? '#D93025' : 'white'};
+  color: ${({ $active, $deleteMode }) => $active ? '#fff' : $deleteMode ? '#D93025' : '#888'};
+  border: 1.5px solid ${({ $active, $deleteMode }) => $active || $deleteMode ? '#D93025' : '#CCC'};
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: ${({ $active }) => $active ? '#b8271d' : '#FFF0EF'};
+    border-color: #D93025;
+    color: ${({ $active }) => $active ? '#fff' : '#D93025'};
+  }
+`;
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ConfirmBox = styled.div`
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+`;
+
 const IdText = styled.span`
   font-size: 11px;
   color: #AAA;
@@ -712,6 +756,7 @@ function ProductModal({ product, onClose }) {
             </ExternalLinkBtn>
           </>
         )}
+
       </ModalBox>
     </ModalOverlay>
   );
@@ -752,6 +797,11 @@ export default function Products() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // 삭제 모드 상태
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 상품 등록 모달 상태
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -820,6 +870,37 @@ export default function Products() {
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleSearch();
+  };
+
+  const handleDeleteButtonClick = () => {
+    if (!isDeleteMode) {
+      setIsDeleteMode(true);
+      setSelectedIds(new Set());
+      return;
+    }
+    if (selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await api.delete('/products', { data: { ids: [...selectedIds] } });
+      setShowDeleteConfirm(false);
+      setIsDeleteMode(false);
+      setSelectedIds(new Set());
+      doFetch(committedRef.current, page);
+    } catch {
+      addToast('상품 삭제 중 오류가 발생했습니다.', 'error');
+    }
   };
 
   /* 파일로 상품 등록 — 2단계: Phase 1 즉시 job_id 반환, Phase 2 SSE 스트리밍 */
@@ -947,9 +1028,25 @@ export default function Products() {
           <TotalBadge>총 {total.toLocaleString()}개</TotalBadge>
         </div>
         {isAdmin && (
-          <RegisterButton onClick={() => { setShowRegisterModal(true); setUploadFile(null); setRegisterProgress(null); }}>
-            <Upload size={15} /> 상품 등록
-          </RegisterButton>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <RegisterButton
+              disabled={isDeleteMode}
+              onClick={() => { setShowRegisterModal(true); setUploadFile(null); setRegisterProgress(null); }}
+            >
+              <Upload size={15} /> 상품 등록
+            </RegisterButton>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <DeleteModeButton $deleteMode={isDeleteMode} $active={selectedIds.size > 0} onClick={handleDeleteButtonClick}>
+                <Trash2 size={15} />
+                {isDeleteMode && selectedIds.size > 0 ? `${selectedIds.size}개 삭제` : '상품 삭제'}
+              </DeleteModeButton>
+              {isDeleteMode && (
+                <RegisterButton onClick={() => { setIsDeleteMode(false); setSelectedIds(new Set()); }}>
+                  취소
+                </RegisterButton>
+              )}
+            </div>
+          </div>
         )}
       </PageHeader>
 
@@ -1066,6 +1163,31 @@ export default function Products() {
           <Table>
             <thead>
               <tr>
+                {isDeleteMode && (
+                  <Th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={products.length > 0 && products.every(p => selectedIds.has(p.product_id))}
+                      onChange={() => {
+                        const allSelected = products.every(p => selectedIds.has(p.product_id));
+                        if (allSelected) {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            products.forEach(p => next.delete(p.product_id));
+                            return next;
+                          });
+                        } else {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            products.forEach(p => next.add(p.product_id));
+                            return next;
+                          });
+                        }
+                      }}
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                    />
+                  </Th>
+                )}
                 <Th>상품 ID</Th>
                 <Th>상품명</Th>
                 <Th>브랜드</Th>
@@ -1080,12 +1202,22 @@ export default function Products() {
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={10}>조회 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isDeleteMode ? 11 : 10}>조회 중...</td></EmptyRow>
               ) : products.length === 0 ? (
-                <EmptyRow><td colSpan={10}>조건에 맞는 상품이 없습니다.</td></EmptyRow>
+                <EmptyRow><td colSpan={isDeleteMode ? 11 : 10}>조건에 맞는 상품이 없습니다.</td></EmptyRow>
               ) : (
                 products.map(p => (
-                  <Tr key={p.product_id} onDoubleClick={() => setSelectedProduct(p)}>
+                  <Tr key={p.product_id} onDoubleClick={isDeleteMode ? undefined : () => setSelectedProduct(p)}>
+                    {isDeleteMode && (
+                      <Td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.product_id)}
+                          onChange={() => handleToggleSelect(p.product_id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                      </Td>
+                    )}
                     <Td><IdText>{p.product_id}</IdText></Td>
                     <TruncatedTd style={{ maxWidth: 220, fontWeight: 600 }}>{p.product_name}</TruncatedTd>
                     <Td>{p.brand ? <TagBadge>{p.brand}</TagBadge> : '-'}</Td>
@@ -1147,6 +1279,34 @@ export default function Products() {
 
       {selectedProduct && (
         <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+      )}
+
+      {showDeleteConfirm && (
+        <ConfirmOverlay onClick={() => setShowDeleteConfirm(false)}>
+          <ConfirmBox onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>상품 삭제</div>
+              <div style={{ fontSize: 14, color: '#555', lineHeight: 1.6 }}>
+                선택한 <strong>{selectedIds.size}개</strong>의 상품을 삭제하시겠습니까?<br />
+                이 작업은 되돌릴 수 없습니다.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', cursor: 'pointer', fontSize: 13 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#D93025', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+              >
+                삭제
+              </button>
+            </div>
+          </ConfirmBox>
+        </ConfirmOverlay>
       )}
 
       {/* 상품 등록 모달 */}

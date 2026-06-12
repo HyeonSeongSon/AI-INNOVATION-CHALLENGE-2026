@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 // 브랜드 / 카테고리 데이터
 import brandsData from '../data/brands.json';
 import categoriesData from '../data/categories.json';
+import SLASH_COMMANDS from '../data/slashCommands';
 
 const NODE_STATUS = {
   supervisor:              '요청 분석 중...',
@@ -111,7 +112,50 @@ const OneLineReview = styled.div` font-size: 14px; color: #444; background: #f0f
 const TagContainer = styled.div` display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; `;
 const TagChip = styled.span` font-size: 10px; color: #555; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-weight: 600; `;
 const ProductLinkBtn = styled.a` display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6B4DFF; background: #fff; border: 1px solid #6B4DFF; padding: 10px; border-radius: 8px; text-decoration: none; transition: 0.2s; margin-top: auto; &:hover { background: #6B4DFF; color: white; } `;
-const InputArea = styled.div` padding: 20px; background: white; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; `;
+const InputArea = styled.div` position: relative; padding: 20px; background: white; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; `;
+const SlashMenuList = styled.ul`
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 20px; right: 20px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
+  padding: 8px 0;
+  list-style: none;
+  margin: 0;
+  z-index: 200;
+  overflow: hidden;
+`;
+const SlashMenuHeader = styled.li`
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #f5f5f5;
+  margin-bottom: 4px;
+  cursor: default;
+`;
+const SlashMenuItem = styled.li`
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: ${p => p.$active ? 'rgba(107,77,255,0.07)' : 'transparent'};
+  border-left: ${p => p.$active ? '3px solid #6B4DFF' : '3px solid transparent'};
+  transition: background 0.1s;
+  .cmd-label { font-size: 14px; font-weight: 700; color: #6B4DFF; width: 110px; flex-shrink: 0; }
+  .cmd-desc  { font-size: 13px; color: #555; }
+  .cmd-icon  { color: ${p => p.$active ? '#6B4DFF' : '#bbb'}; flex-shrink: 0; transition: color 0.1s; }
+  &:hover {
+    background: rgba(107,77,255,0.07);
+    border-left-color: #6B4DFF;
+    .cmd-icon { color: #6B4DFF; }
+  }
+`;
 const InputRow = styled.div` display: flex; gap: 8px; align-items: center; `;
 const ChatInput = styled.textarea`
   flex: 1;
@@ -151,6 +195,19 @@ const AttachBtn = styled.button`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 
+const SlashBtn = styled.button`
+  width: 36px; height: 36px; min-width: 36px; min-height: 36px;
+  border-radius: 50%; background: ${p => p.$active ? 'rgba(107,77,255,0.12)' : '#f4f4f4'};
+  border: 1.5px solid ${p => p.$active ? '#6B4DFF' : '#ddd'};
+  color: ${p => p.$active ? '#6B4DFF' : '#888'};
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  font-size: 16px; font-weight: 700; line-height: 1; padding: 0; box-sizing: border-box;
+  font-family: monospace;
+  &:hover { background: rgba(107,77,255,0.10); border-color: #6B4DFF; color: #6B4DFF; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+`;
+
 const FileChip = styled.div`
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 10px 6px 12px; background: rgba(107,77,255,0.08);
@@ -160,6 +217,69 @@ const FileChip = styled.div`
   button { background: none; border: none; cursor: pointer; color: #6B4DFF;
            display: flex; align-items: center; padding: 0; opacity: 0.6;
            &:hover { opacity: 1; } }
+`;
+
+const AgentInfoCard = styled.div`
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 20px 20px 20px 4px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+`;
+const AgentInfoTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #111;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f0f0f0;
+  svg { color: #6B4DFF; }
+`;
+const AgentInfoSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  li { font-size: 13px; color: #444; }
+`;
+const ExampleChips = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+const ExampleChip = styled.button`
+  text-align: left;
+  padding: 8px 14px;
+  background: #f7f5ff;
+  border: 1px solid rgba(107,77,255,0.2);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #5a3de0;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover {
+    background: rgba(107,77,255,0.12);
+    border-color: #6B4DFF;
+  }
 `;
 
 const CopyBtn = styled.button`
@@ -351,6 +471,7 @@ export default function Message() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState(null);
+  const [slashMenu, setSlashMenu] = useState({ open: false, filter: '', index: 0 });
 
   // 파일 업로드 상태
   const [uploadedFile, setUploadedFile] = useState(null); // { name: string, records: [] }
@@ -426,6 +547,16 @@ export default function Message() {
     };
     fetchPersonas();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredCommands = slashMenu.open
+    ? SLASH_COMMANDS.filter(c => c.name.startsWith(slashMenu.filter))
+    : [];
+
+  const applySlashCommand = (cmd) => {
+    setSlashMenu({ open: false, filter: '', index: 0 });
+    setChatInput('');
+    setMessages(prev => [...prev, { id: Date.now(), role: 'ai', agentInfo: cmd }]);
+  };
 
   const handleSendChat = async () => {
     if (uploadedFile) return handleSendBulkUpload();
@@ -696,7 +827,49 @@ export default function Message() {
           {(messages || []).map((msg, idx) => (
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
-              {msg.isLoading ? (
+              {msg.agentInfo ? (
+                <AgentInfoCard>
+                  <AgentInfoTitle>
+                    <msg.agentInfo.icon size={20} />
+                    {msg.agentInfo.label} — {msg.agentInfo.description}
+                  </AgentInfoTitle>
+                  {msg.agentInfo.tools.length > 0 && (
+                    <AgentInfoSection>
+                      <span className="section-label">사용 도구</span>
+                      <ul>{msg.agentInfo.tools.map(t => <li key={t}>{t}</li>)}</ul>
+                    </AgentInfoSection>
+                  )}
+                  {msg.agentInfo.tasks.length > 0 && (
+                    <AgentInfoSection>
+                      <span className="section-label">가능한 작업</span>
+                      <ul>{msg.agentInfo.tasks.map(t => <li key={t}>{t}</li>)}</ul>
+                    </AgentInfoSection>
+                  )}
+                  {msg.agentInfo.examples.length > 0 && (
+                    <AgentInfoSection>
+                      <span className="section-label">예시 문구</span>
+                      <ExampleChips>
+                        {msg.agentInfo.examples.map(ex => (
+                          <ExampleChip
+                            key={ex}
+                            onClick={() => {
+                              setChatInput(ex);
+                              setTimeout(() => {
+                                if (chatInputRef.current) {
+                                  chatInputRef.current.focus();
+                                  autoResize(chatInputRef.current);
+                                }
+                              }, 0);
+                            }}
+                          >
+                            {ex}
+                          </ExampleChip>
+                        ))}
+                      </ExampleChips>
+                    </AgentInfoSection>
+                  )}
+                </AgentInfoCard>
+              ) : msg.isLoading ? (
                 msg.streamingText ? (
                   <div className="bubble">
                     <MarkdownBody>
@@ -785,6 +958,22 @@ export default function Message() {
           ))}
         </ChatScroll>
         <InputArea>
+          {slashMenu.open && filteredCommands.length > 0 && (
+            <SlashMenuList>
+              <SlashMenuHeader>명령어</SlashMenuHeader>
+              {filteredCommands.map((cmd, i) => (
+                <SlashMenuItem
+                  key={cmd.name}
+                  $active={i === slashMenu.index}
+                  onMouseDown={() => applySlashCommand(cmd)}
+                >
+                  <cmd.icon size={16} className="cmd-icon" />
+                  <span className="cmd-label">{cmd.label}</span>
+                  <span className="cmd-desc">{cmd.description}</span>
+                </SlashMenuItem>
+              ))}
+            </SlashMenuList>
+          )}
           {uploadedFile && (
             <FileChip>
               <Paperclip size={13} />
@@ -807,12 +996,63 @@ export default function Message() {
             >
               +
             </AttachBtn>
+            <SlashBtn
+              $active={slashMenu.open}
+              disabled={isChatLoading || isConvLoading}
+              title="명령어 목록 (또는 / 입력)"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (slashMenu.open) {
+                  setSlashMenu({ open: false, filter: '', index: 0 });
+                  setChatInput('');
+                } else {
+                  setChatInput('/');
+                  setSlashMenu({ open: true, filter: '', index: 0 });
+                  setTimeout(() => chatInputRef.current?.focus(), 0);
+                }
+              }}
+            >
+              /
+            </SlashBtn>
             <ChatInput
               ref={chatInputRef}
-              placeholder={uploadedFile ? `해당 파일로 무슨 작업을 할지 입력해 주세요 (예: 상품 등록, 페르소나 생성)` : '메시지를 입력하세요'}
+              placeholder={uploadedFile ? `해당 파일로 무슨 작업을 할지 입력해 주세요 (예: 상품 등록, 페르소나 생성)` : '메시지 입력  ·  / 로 명령어'}
               value={chatInput}
-              onChange={(e) => { setChatInput(e.target.value); autoResize(e.target); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                setChatInput(val);
+                autoResize(e.target);
+                if (val.startsWith('/')) {
+                  const filter = val.slice(1).toLowerCase();
+                  const hasMatch = SLASH_COMMANDS.some(c => c.name.startsWith(filter));
+                  setSlashMenu({ open: hasMatch, filter, index: 0 });
+                } else {
+                  setSlashMenu(m => ({ ...m, open: false }));
+                }
+              }}
               onKeyDown={(e) => {
+                if (slashMenu.open && filteredCommands.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSlashMenu(m => ({ ...m, index: (m.index + 1) % filteredCommands.length }));
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSlashMenu(m => ({ ...m, index: (m.index - 1 + filteredCommands.length) % filteredCommands.length }));
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    applySlashCommand(filteredCommands[slashMenu.index]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSlashMenu(m => ({ ...m, open: false }));
+                    return;
+                  }
+                }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   uploadedFile ? handleSendBulkUpload() : handleSendChat();

@@ -266,35 +266,46 @@ const EmptyRow = styled.tr`
   }
 `;
 
-const SelectionBar = styled.div`
+const DeleteModeButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: #F0EDFF;
-  border-bottom: 1px solid #DDD8FF;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  background: ${({ $active }) => $active ? '#D93025' : 'white'};
+  color: ${({ $active, $deleteMode }) => $active ? '#fff' : $deleteMode ? '#D93025' : '#888'};
+  border: 1.5px solid ${({ $active, $deleteMode }) => $active || $deleteMode ? '#D93025' : '#CCC'};
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: #5a3ee0;
-`;
-
-const DeleteButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: #fff;
-  color: #D93025;
-  border: 1px solid #FFCDD2;
-  border-radius: 7px;
-  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  margin-left: auto;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 
-  &:hover { background: #FFF0F0; border-color: #D93025; }
-  svg { width: 13px; height: 13px; }
+  &:hover {
+    background: ${({ $active }) => $active ? '#b8271d' : '#FFF0EF'};
+    border-color: #D93025;
+    color: ${({ $active }) => $active ? '#fff' : '#D93025'};
+  }
+`;
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ConfirmBox = styled.div`
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 `;
 
 const CheckTh = styled(Th)`
@@ -508,6 +519,8 @@ export default function GeneratedMessages() {
   const [loading, setLoading] = useState(false);
   const [selectedMsg, setSelectedMsg] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // 조회 버튼 클릭 시 확정된 필터 — ref로 관리해 closure 문제 방지
@@ -602,11 +615,17 @@ export default function GeneratedMessages() {
     });
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteButtonClick = () => {
+    if (!isDeleteMode) { setIsDeleteMode(true); setSelectedIds(new Set()); return; }
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`선택한 ${selectedIds.size}개의 메시지를 삭제하시겠습니까?`)) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
     try {
       await api.delete('/generated-messages', { data: { ids: [...selectedIds] } });
+      setShowDeleteConfirm(false);
+      setIsDeleteMode(false);
       setSelectedIds(new Set());
       doFetch(committedRef.current, page);
     } catch (err) {
@@ -629,6 +648,20 @@ export default function GeneratedMessages() {
         <FileText size={22} />
         <h1>생성 메시지 관리</h1>
         <TotalBadge>총 {total.toLocaleString()}건</TotalBadge>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <DeleteModeButton $deleteMode={isDeleteMode} $active={selectedIds.size > 0} onClick={handleDeleteButtonClick}>
+            <Trash2 size={14} />
+            {isDeleteMode && selectedIds.size > 0 ? `${selectedIds.size}개 삭제` : '메시지 삭제'}
+          </DeleteModeButton>
+          {isDeleteMode && (
+            <button
+              onClick={() => { setIsDeleteMode(false); setSelectedIds(new Set()); }}
+              style={{ height: 34, padding: '0 14px', borderRadius: 8, border: '1px solid #D0D0D0', background: '#fff', color: '#555', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              취소
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       {/* 필터 바 */}
@@ -686,28 +719,20 @@ export default function GeneratedMessages() {
 
       {/* 테이블 */}
       <TableCard>
-        {/* 선택 삭제 바 */}
-        {someChecked && (
-          <SelectionBar>
-            <span>{selectedIds.size}개 선택됨</span>
-            <DeleteButton onClick={handleDeleteSelected}>
-              <Trash2 /> 삭제
-            </DeleteButton>
-          </SelectionBar>
-        )}
-
         <TableWrapper>
           <Table>
             <thead>
               <tr>
-                <CheckTh>
-                  <Checkbox
-                    checked={allChecked}
-                    ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
-                    onChange={handleSelectAll}
-                    onClick={e => e.stopPropagation()}
-                  />
-                </CheckTh>
+                {isDeleteMode && (
+                  <CheckTh>
+                    <Checkbox
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                      onChange={handleSelectAll}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </CheckTh>
+                )}
                 <Th style={{ width: 160, minWidth: 160 }}>생성일시</Th>
                 {isAdmin && <Th style={{ width: 140, minWidth: 140 }}>등록자</Th>}
                 <Th style={{ width: 300, minWidth: 200 }}>상품명</Th>
@@ -721,23 +746,25 @@ export default function GeneratedMessages() {
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조회 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? (isDeleteMode ? 11 : 10) : (isDeleteMode ? 10 : 9)}>조회 중...</td></EmptyRow>
               ) : messages.length === 0 ? (
-                <EmptyRow><td colSpan={isAdmin ? 10 : 9}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? (isDeleteMode ? 11 : 10) : (isDeleteMode ? 10 : 9)}>조건에 맞는 메시지가 없습니다.</td></EmptyRow>
               ) : (
                 messages.map(msg => (
                   <Tr
                     key={msg.id}
-                    onDoubleClick={() => setSelectedMsg(msg)}
+                    onDoubleClick={isDeleteMode ? undefined : () => setSelectedMsg(msg)}
                     style={selectedIds.has(msg.id) ? { background: '#F5F2FF' } : {}}
                   >
-                    <CheckTd>
-                      <Checkbox
-                        checked={selectedIds.has(msg.id)}
-                        onChange={e => handleToggleSelect(e, msg.id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    </CheckTd>
+                    {isDeleteMode && (
+                      <CheckTd>
+                        <Checkbox
+                          checked={selectedIds.has(msg.id)}
+                          onChange={e => handleToggleSelect(e, msg.id)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </CheckTd>
+                    )}
                     <Td style={{ whiteSpace: 'nowrap', color: '#888', fontSize: 12 }}>
                       {formatDateTime(msg.created_at)}
                     </Td>
@@ -783,6 +810,35 @@ export default function GeneratedMessages() {
           </PageBtn>
         </Pagination>
       </TableCard>
+
+      {/* 삭제 확인 모달 */}
+      {showDeleteConfirm && (
+        <ConfirmOverlay onClick={() => setShowDeleteConfirm(false)}>
+          <ConfirmBox onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>메시지 삭제</div>
+              <div style={{ fontSize: 14, color: '#555' }}>
+                선택한 <strong>{selectedIds.size}개</strong>의 메시지를 삭제하시겠습니까?<br />
+                이 작업은 되돌릴 수 없습니다.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', cursor: 'pointer', fontSize: 13 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#D93025', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+              >
+                삭제
+              </button>
+            </div>
+          </ConfirmBox>
+        </ConfirmOverlay>
+      )}
 
       {/* 상세 모달 */}
       {selectedMsg && (

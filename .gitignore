@@ -27,6 +27,7 @@ MANIFEST
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/

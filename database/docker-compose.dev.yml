@@ -1,0 +1,40 @@
+# 로컬 개발용 전용 — 프로덕션에서는 사용하지 않음
+# 사용: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# 프로덕션에서 DB 접근이 필요한 경우 SSM 포트 포워딩 사용:
+#   INSTANCE_ID=$(aws ec2 describe-instances \
+#     --filters "Name=tag:Name,Values=ai-innovation-ec2-db" \
+#     --query "Reservations[0].Instances[0].InstanceId" --output text)
+#   aws ssm start-session --target $INSTANCE_ID \
+#     --document-name AWS-StartPortForwardingSession \
+#     --parameters '{"portNumber":["5432"],"localPortNumber":["5432"]}'
+#   # 이후 로컬 pgAdmin 또는 psql로 localhost:5432 연결
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    container_name: ai-innovation-pgadmin
+    env_file:
+      - .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - msa-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgadmin_data:
+    driver: local

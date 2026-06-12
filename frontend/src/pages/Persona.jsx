@@ -66,6 +66,8 @@ const AddButton = styled.button`
   transition: background 0.15s;
 
   &:hover { background: #5a3de0; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:disabled:hover { background: #6B4DFF; }
 `;
 
 const FileButton = styled.button`
@@ -84,6 +86,8 @@ const FileButton = styled.button`
   transition: background 0.15s;
 
   &:hover { background: #F5F0FF; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:disabled:hover { background: white; }
 `;
 
 const TableCard = styled.div`
@@ -187,35 +191,46 @@ const ConcernBadge = styled(TagBadge)`
   color: #D93025;
 `;
 
-const SelectionBar = styled.div`
+const DeleteModeButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: #F0EDFF;
-  border-bottom: 1px solid #DDD8FF;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  background: ${({ $active }) => $active ? '#D93025' : 'white'};
+  color: ${({ $active, $deleteMode }) => $active ? '#fff' : $deleteMode ? '#D93025' : '#888'};
+  border: 1.5px solid ${({ $active, $deleteMode }) => $active || $deleteMode ? '#D93025' : '#CCC'};
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: #5a3ee0;
-`;
-
-const DeleteButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  background: #fff;
-  color: #D93025;
-  border: 1px solid #FFCDD2;
-  border-radius: 7px;
-  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  margin-left: auto;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 
-  &:hover { background: #FFF0F0; border-color: #D93025; }
-  svg { width: 13px; height: 13px; }
+  &:hover {
+    background: ${({ $active }) => $active ? '#b8271d' : '#FFF0EF'};
+    border-color: #D93025;
+    color: ${({ $active }) => $active ? '#fff' : '#D93025'};
+  }
+`;
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ConfirmBox = styled.div`
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 `;
 
 const EmptyRow = styled.tr`
@@ -366,6 +381,8 @@ export default function PersonaManager() {
   const [pageIndex, setPageIndex] = useState(0);
 
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 검색 쿼리 모달
   const [queryModal, setQueryModal] = useState({ open: false, persona: null, data: null, loading: false, error: null });
@@ -475,14 +492,22 @@ export default function PersonaManager() {
   };
 
   /* 일괄 삭제 */
-  const handleDeleteSelected = async () => {
+  const handleDeleteButtonClick = () => {
+    if (!isDeleteMode) { setIsDeleteMode(true); setSelectedIds(new Set()); return; }
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`선택한 ${selectedIds.size}개의 페르소나를 삭제하시겠습니까?`)) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    const ids = [...selectedIds];
+    const count = ids.length;
     try {
-      await pipelineApi.delete('/personas', { data: { ids: [...selectedIds] } });
+      await pipelineApi.delete('/personas', { data: { ids } });
+      setShowDeleteConfirm(false);
+      setIsDeleteMode(false);
       setSelectedIds(new Set());
       refreshPersonas();
-      addToast(`${selectedIds.size}개 삭제되었습니다.`, 'info');
+      addToast(`${count}개 삭제되었습니다.`, 'info');
     } catch (err) {
       console.error('삭제 실패:', err);
       addToast('삭제 실패: 서버 오류', 'error');
@@ -640,39 +665,50 @@ export default function PersonaManager() {
           페르소나 관리
           <TotalBadge>총 {total}개</TotalBadge>
         </h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <FileButton onClick={() => { setShowFileModal(true); setFileProgress(null); setUploadFile(null); }}>
-            <Upload size={15} /> 파일로 페르소나 만들기
-          </FileButton>
-          <AddButton onClick={() => setShowTextModal(true)}>
-            <Plus size={15} /> 새 페르소나 만들기
-          </AddButton>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <FileButton
+              disabled={isDeleteMode}
+              onClick={() => { setShowFileModal(true); setFileProgress(null); setUploadFile(null); }}
+            >
+              <Upload size={15} /> 파일로 페르소나 만들기
+            </FileButton>
+            <AddButton
+              disabled={isDeleteMode}
+              onClick={() => setShowTextModal(true)}
+            >
+              <Plus size={15} /> 새 페르소나 만들기
+            </AddButton>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <DeleteModeButton $deleteMode={isDeleteMode} $active={selectedIds.size > 0} onClick={handleDeleteButtonClick}>
+              <Trash2 size={14} />
+              {isDeleteMode && selectedIds.size > 0 ? `${selectedIds.size}개 삭제` : '페르소나 삭제'}
+            </DeleteModeButton>
+            {isDeleteMode && (
+              <FileButton onClick={() => { setIsDeleteMode(false); setSelectedIds(new Set()); }}>
+                취소
+              </FileButton>
+            )}
+          </div>
         </div>
       </PageHeader>
 
       <TableCard>
-        {/* 선택 삭제 바 */}
-        {someChecked && (
-          <SelectionBar>
-            <span>{selectedIds.size}개 선택됨</span>
-            <DeleteButton onClick={handleDeleteSelected}>
-              <Trash2 /> 삭제
-            </DeleteButton>
-          </SelectionBar>
-        )}
-
         <TableWrapper>
           <Table>
             <thead>
               <tr>
-                <CheckTh>
-                  <Checkbox
-                    checked={allChecked}
-                    ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
-                    onChange={handleSelectAll}
-                    onClick={e => e.stopPropagation()}
-                  />
-                </CheckTh>
+                {isDeleteMode && (
+                  <CheckTh>
+                    <Checkbox
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                      onChange={handleSelectAll}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </CheckTh>
+                )}
                 <Th style={{ width: 120, minWidth: 120 }}>이름</Th>
                 <Th style={{ width: 240, minWidth: 240 }}>나이 / 성별 / 직업</Th>
                 <Th style={{ width: 120, minWidth: 120 }}>페르소나 ID</Th>
@@ -684,23 +720,25 @@ export default function PersonaManager() {
             </thead>
             <tbody>
               {loading ? (
-                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>불러오는 중...</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? (isDeleteMode ? 9 : 8) : (isDeleteMode ? 8 : 7)}>불러오는 중...</td></EmptyRow>
               ) : personas.length === 0 ? (
-                <EmptyRow><td colSpan={isAdmin ? 8 : 7}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
+                <EmptyRow><td colSpan={isAdmin ? (isDeleteMode ? 9 : 8) : (isDeleteMode ? 8 : 7)}>등록된 페르소나가 없습니다. 새 페르소나를 추가해보세요!</td></EmptyRow>
               ) : (
                 personas.map(p => (
                   <Tr
                     key={p.id}
                     $selected={selectedIds.has(p.id)}
-                    onDoubleClick={() => handleRowClick(p)}
+                    onDoubleClick={isDeleteMode ? undefined : () => handleRowClick(p)}
                   >
-                    <CheckTd>
-                      <Checkbox
-                        checked={selectedIds.has(p.id)}
-                        onChange={e => handleToggleSelect(e, p.id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    </CheckTd>
+                    {isDeleteMode && (
+                      <CheckTd>
+                        <Checkbox
+                          checked={selectedIds.has(p.id)}
+                          onChange={e => handleToggleSelect(e, p.id)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </CheckTd>
+                    )}
                     <Td style={{ fontWeight: 700 }}>{p.name}</Td>
                     <Td style={{ color: '#666', maxWidth: 160, width: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[p.age ? `${p.age}세` : null, p.gender, p.occupation].filter(Boolean).join(' / ') || '-'}
@@ -748,6 +786,35 @@ export default function PersonaManager() {
           </PageBtn>
         </Pagination>
       </TableCard>
+
+      {/* 삭제 확인 모달 */}
+      {showDeleteConfirm && (
+        <ConfirmOverlay onClick={() => setShowDeleteConfirm(false)}>
+          <ConfirmBox onClick={e => e.stopPropagation()}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>페르소나 삭제</div>
+              <div style={{ fontSize: 14, color: '#555' }}>
+                선택한 <strong>{selectedIds.size}개</strong>의 페르소나를 삭제하시겠습니까?<br />
+                이 작업은 되돌릴 수 없습니다.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #DDD', background: '#fff', cursor: 'pointer', fontSize: 13 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#D93025', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+              >
+                삭제
+              </button>
+            </div>
+          </ConfirmBox>
+        </ConfirmOverlay>
+      )}
 
       {/* 검색 쿼리 모달 */}
       {queryModal.open && (
