@@ -103,6 +103,7 @@ jobs:
           TF_VAR_ecr_image_tag: ${{ github.sha }}
 
           # ── 시크릿 (GitHub Secrets에서 주입) ──
+          TF_VAR_opensearch_admin_password: ${{ secrets.OPENSEARCH_ADMIN_PASSWORD }}
           TF_VAR_postgres_password:    ${{ secrets.POSTGRES_PASSWORD }}
           TF_VAR_internal_token:       ${{ secrets.INTERNAL_TOKEN }}
           TF_VAR_jwt_secret:           ${{ secrets.JWT_SECRET }}
