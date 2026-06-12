@@ -157,6 +157,8 @@ jobs:
 
       - name: Package & upload OpenSearch API
         run: |
+          mkdir -p opensearch/data
+          cp backend/app/agents/generate_message_agent/data/forbidden_keyword.json opensearch/data/
           tar -czf /tmp/opensearch.tar.gz -C opensearch .
           aws s3 cp /tmp/opensearch.tar.gz s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz
 

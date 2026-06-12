@@ -259,11 +259,17 @@ class Settings(BaseSettings):
     admin_seed_email: str = ""
     admin_seed_password: str = ""
 
+    # AWS — self-cleaning seed secrets용 (Terraform var.project_name, var.aws_region과 일치)
+    aws_region: str = "ap-northeast-2"
+    project_name: str = "ai-innovation"
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_allowed_origins(cls, v: object) -> object:
         if isinstance(v, str):
             return [o.strip() for o in v.split(",") if o.strip()]
+        if isinstance(v, list):
+            return [o for o in v if isinstance(o, str) and o.strip()]
         return v
 
     @field_validator("trusted_proxy_ips", mode="before")
@@ -345,6 +351,24 @@ class Settings(BaseSettings):
                 "무효화됩니다. Nginx IP를 TRUSTED_PROXY_IPS 환경변수에 추가하세요. "
                 "예: TRUSTED_PROXY_IPS=10.0.0.1"
             )
+
+        if self.environment == "production":
+            localhost_origins = [
+                o for o in self.allowed_origins
+                if "localhost" in o or "127.0.0.1" in o
+            ]
+            if localhost_origins:
+                raise ValueError(
+                    f"프로덕션 환경에서 localhost CORS 오리진이 설정되어 있습니다: {localhost_origins}. "
+                    "실제 프론트엔드 도메인으로 교체하세요. "
+                    "예: ALLOWED_ORIGINS=https://your-domain.com"
+                )
+            if not self.allowed_origins:
+                raise ValueError(
+                    "프로덕션 환경에서 ALLOWED_ORIGINS가 비어 있습니다. "
+                    "GitHub Secret에 프론트엔드 도메인을 설정하세요. "
+                    "예: ALLOWED_ORIGINS=https://your-domain.com"
+                )
 
         # LangSmith 트레이싱 활성화 시 API 키 필요
         if self.langchain_tracing_v2 and not self.langchain_api_key:

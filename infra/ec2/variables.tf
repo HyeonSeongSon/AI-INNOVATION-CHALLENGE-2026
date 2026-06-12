@@ -133,6 +133,12 @@ variable "postgres_password" {
   sensitive   = true
 }
 
+variable "opensearch_admin_password" {
+  description = "OpenSearch admin 비밀번호 (최소 8자, 대소문자+숫자+특수문자 포함)"
+  type        = string
+  sensitive   = true
+}
+
 variable "internal_token" {
   description = "내부 서비스 간 인증 토큰 (최소 32자, openssl rand -hex 32)"
   type        = string
