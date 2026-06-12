@@ -116,6 +116,9 @@ services:
       - OPENSEARCH_HOST=opensearch-node1
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD}
+      # 로컬 3노드 클러스터는 보안 활성(HTTPS)이므로 SSL opt-in.
+      # AWS 단일노드(평문 HTTP)는 이 변수를 설정하지 않아 기본값 false로 동작.
+      - OPENSEARCH_USE_SSL=true
       - ENVIRONMENT=production
       # 볼륨 마운트 위치(/app/data/...)를 인덱싱 스크립트에 명시. 미설정 시 컨테이너 내에서
       # DEFAULT_JSON_PATH가 /backend/... 로 잡혀 파일을 못 찾아 색인 단계가 exit 1 → 컨테이너 종료.
