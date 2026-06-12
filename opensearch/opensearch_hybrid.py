@@ -33,17 +33,27 @@ class OpenSearchHybridClient:
 
             port = int(port_str)
 
-            logger.info("opensearch_connecting", host=host, port=port)
+            # 보안 활성(HTTPS) 클러스터에서만 SSL을 사용한다. 기본값 false는 현 AWS 운영
+            # 환경(single-node, plugins.security.disabled=true, 평문 HTTP)에 맞춘 안전한 기본.
+            # 로컬 docker-compose는 OPENSEARCH_USE_SSL=true로 명시해 HTTPS로 연결한다.
+            use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
 
-            self.client = OpenSearch(
-                hosts=[{"host": host, "port": port}],
-                http_auth=(user, password),
-                use_ssl=True,
-                verify_certs=False,
-                ssl_assert_hostname=False,
-                ssl_show_warn=False,
-                timeout=30,
-            )
+            logger.info("opensearch_connecting", host=host, port=port, use_ssl=use_ssl)
+
+            client_kwargs = {
+                "hosts": [{"host": host, "port": port}],
+                "http_auth": (user, password),
+                "timeout": 30,
+            }
+            if use_ssl:
+                client_kwargs.update(
+                    use_ssl=True,
+                    verify_certs=False,      # 데모 인증서 (내부망)
+                    ssl_assert_hostname=False,
+                    ssl_show_warn=False,
+                )
+
+            self.client = OpenSearch(**client_kwargs)
 
             if not self.client.ping():
                 raise exceptions.ConnectionError("OpenSearch에 연결할 수 없습니다.")
