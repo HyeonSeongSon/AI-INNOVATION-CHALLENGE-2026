@@ -34,6 +34,23 @@ configure_logging(
 logger = get_logger("main")
 
 
+def _delete_seed_secrets() -> None:
+    import boto3
+    from botocore.exceptions import ClientError
+
+    client = boto3.client("secretsmanager", region_name=settings.aws_region)
+    for suffix in ("admin-seed-email", "admin-seed-password"):
+        secret_id = f"{settings.project_name}/{suffix}"
+        try:
+            client.delete_secret(SecretId=secret_id, ForceDeleteWithoutRecovery=True)
+            logger.info("seed_secret_deleted", secret=suffix)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                pass
+            else:
+                logger.warning("seed_secret_delete_failed", secret=suffix, error_type=type(e).__name__)
+
+
 def _seed_admin_if_needed() -> None:
     email = settings.admin_seed_email.strip()
     password = settings.admin_seed_password
@@ -47,11 +64,12 @@ def _seed_admin_if_needed() -> None:
     with SessionLocal() as db:
         if db.query(User).filter(User.email == email).first():
             logger.info("admin_seed_skipped", reason="already_exists")
-            return
-        db.add(User(email=email, password_hash=hash_password(password), role="admin"))
-        db.commit()
+        else:
+            db.add(User(email=email, password_hash=hash_password(password), role="admin"))
+            db.commit()
+            logger.info("admin_seeded")
 
-    logger.info("admin_seeded")
+    _delete_seed_secrets()
 
 
 @asynccontextmanager

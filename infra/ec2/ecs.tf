@@ -54,6 +54,39 @@ resource "aws_service_discovery_private_dns_namespace" "crm" {
   vpc         = aws_vpc.main.id
 }
 
+# ---- IAM Task Role (런타임 — 앱이 AWS API를 직접 호출할 때 사용) ----
+
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${var.project_name}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+}
+
+# Admin seed 시크릿 삭제 권한 — 앱이 시딩 완료 후 스스로 삭제
+resource "aws_iam_role_policy" "ecs_task_seed_delete" {
+  name = "${var.project_name}-ecs-task-seed-delete"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:DeleteSecret"]
+      Resource = [
+        "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/admin-seed-email*",
+        "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/admin-seed-password*",
+      ]
+    }]
+  })
+}
+
 # ---- IAM Task Execution Role ----
 
 resource "aws_iam_role" "ecs_execution" {
@@ -130,6 +163,7 @@ resource "aws_ecs_task_definition" "backend" {
   cpu                      = var.ecs_task_cpu
   memory                   = var.ecs_task_memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([{
     name      = "fastapi-backend"

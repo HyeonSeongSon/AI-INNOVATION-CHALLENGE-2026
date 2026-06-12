@@ -4,7 +4,7 @@
 # 트래픽 흐름:
 #   인터넷 → ALB(sg_alb) → ECS tasks(sg_ecs_tasks)
 #   ECS tasks → DB EC2(sg_db_ec2)         [포트 5432, 8020]
-#   ECS tasks → OpenSearch EC2(sg_opensearch_ec2) [포트 8010, 9200]
+#   ECS tasks → OpenSearch EC2(sg_opensearch_ec2) [포트 8010]  ← 9200 직접 접근 차단
 #   ECS/EC2  → VPC Endpoints(sg_vpc_endpoints)   [포트 443]
 # -----------------------------------------------------------------------
 
@@ -138,7 +138,7 @@ resource "aws_security_group" "opensearch_ec2" {
   tags = { Name = "${var.project_name}-sg-opensearch-ec2" }
 }
 
-# OpenSearch API(8010) — ECS tasks에서 HTTP 호출
+# OpenSearch API(8010) — ECS tasks에서 HTTP 호출 (9200 직접 접근은 차단 — 인증 없는 경로 제거)
 resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   type                     = "ingress"
   description              = "OpenSearch API server - ECS to OpenSearch API"
@@ -149,16 +149,6 @@ resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   security_group_id        = aws_security_group.opensearch_ec2.id
 }
 
-# OpenSearch native REST(9200) — ECS tasks에서 직접 호출 시
-resource "aws_security_group_rule" "ecs_to_opensearch_native" {
-  type                     = "ingress"
-  description              = "OpenSearch native REST - ECS to OpenSearch 9200"
-  from_port                = 9200
-  to_port                  = 9200
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.ecs_tasks.id
-  security_group_id        = aws_security_group.opensearch_ec2.id
-}
 
 # ---- VPC Interface Endpoints ----
 

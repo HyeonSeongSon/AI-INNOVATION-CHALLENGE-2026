@@ -183,8 +183,9 @@ WorkingDirectory=/opt/opensearch-api
 Environment=OPENSEARCH_URL=http://localhost:9200
 Environment=OPENSEARCH_HOST=localhost
 Environment=OPENSEARCH_PORT=9200
-Environment=OPENSEARCH_ADMIN_PASSWORD=admin
+Environment=OPENSEARCH_ADMIN_PASSWORD=${opensearch_admin_password}
 Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
+Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
 # OpenSearch 완전 기동 후 60초 추가 대기
 # — 재부팅 직후 SSM 에이전트가 메모리를 확보할 시간을 확보합니다
 ExecStartPre=/bin/sleep 60

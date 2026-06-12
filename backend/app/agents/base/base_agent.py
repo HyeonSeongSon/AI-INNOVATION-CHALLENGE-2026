@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
+from app.config.settings import settings
+
 
 class BaseAgent(ABC):
     """
@@ -19,7 +21,8 @@ class BaseAgent(ABC):
         config: Optional[Dict] = None,
     ):
         self.llm = llm
-        self.config = config or {}
+        base_config: Dict = {"recursion_limit": settings.langgraph_recursion_limit}
+        self.config = {**base_config, **(config or {})}
 
         # 그래프는 하위 클래스에서 구현
         self.graph = self._build_workflow()
@@ -54,7 +57,7 @@ class BaseAgent(ABC):
 
         state = self._create_initial_state(**kwargs)
 
-        result = self.graph.invoke(state)
+        result = self.graph.invoke(state, self.config)
 
         return result
 
@@ -65,7 +68,7 @@ class BaseAgent(ABC):
 
         state = self._create_initial_state(**kwargs)
 
-        result = await self.graph.ainvoke(state)
+        result = await self.graph.ainvoke(state, self.config)
 
         return result
 
@@ -76,8 +79,7 @@ class BaseAgent(ABC):
 
         state = self._create_initial_state(**kwargs)
 
-        for event in self.graph.stream(state):
-            yield event
+        yield from self.graph.stream(state, self.config)
 
     async def astream(self, **kwargs):
         """
@@ -86,7 +88,7 @@ class BaseAgent(ABC):
 
         state = self._create_initial_state(**kwargs)
 
-        async for event in self.graph.astream(state):
+        async for event in self.graph.astream(state, self.config):
             yield event
 
 # -------------------------------------------------
@@ -98,7 +100,7 @@ class BaseAgent(ABC):
         interrupt 이후 resume
         """
 
-        return self.graph.invoke(state)
+        return self.graph.invoke(state, self.config)
 
     async def aresume(self, state):
-        return await self.graph.ainvoke(state)
+        return await self.graph.ainvoke(state, self.config)
