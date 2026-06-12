@@ -664,12 +664,30 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         )
 
     except Exception as e:
+        # 인덱스가 존재하지 않는 경우 빈 결과 반환 (Stage 2 통과 처리)
+        # — API 서버 자체가 응답하므로 api_unavailable이 아닌 "검사 데이터 미존재" 상황
+        error_info = getattr(e, "info", {}) or {}
+        if (
+            getattr(e, "status_code", None) == 404
+            or error_info.get("error", {}).get("type") == "index_not_found_exception"
+        ):
+            logger.warning(
+                "search_similar_index_not_found",
+                index_name=request.index_name,
+            )
+            return SimilarSentenceResponse(
+                success=True,
+                total_results=0,
+                query=request.query,
+                index_name=request.index_name,
+                results=[],
+            )
         logger.error("search_similar_sentences_failed", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
         )
-    
+
 @app.post("/api/search/combined", response_model=CombinedSearchResponse)
 async def search_by_combined_vector(request: ProductIDSearchRequest):
     """

@@ -13,6 +13,7 @@
 skincare가 반드시 먼저 실행되어야 합니다 (인덱스를 생성하기 때문).
 이후 카테고리들은 기존 인덱스에 매핑을 추가한 뒤 문서를 색인합니다.
 """
+import gc
 import sys
 import os
 import logging
@@ -110,6 +111,7 @@ def run_pipeline():
         status = "성공" if success else "실패"
         print(f"[{i}/{total}] {name} {status} ({elapsed:.1f}초)")
         results.append((name, success))
+        gc.collect()  # KURE-v1 모델 인스턴스 즉시 해제 (반복 로드 시 OOM 방지)
 
         if not success:
             print(f"\n'{name}' 색인 실패로 파이프라인을 중단합니다.")

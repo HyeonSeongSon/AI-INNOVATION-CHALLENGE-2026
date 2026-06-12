@@ -12,7 +12,7 @@
 
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-sg-alb"
-  description = "ALB: 인터넷 트래픽 수신"
+  description = "ALB: internet traffic ingress"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -45,7 +45,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-sg-ecs-tasks"
-  description = "ECS Fargate: ALB에서만 8005 수신, 내부 서비스 간 통신"
+  description = "ECS Fargate: 8005 from ALB only, internal A2A traffic"
   vpc_id      = aws_vpc.main.id
 
   # API Gateway(8005) — ALB에서만 수신
@@ -80,7 +80,7 @@ resource "aws_security_group" "ecs_tasks" {
 
 resource "aws_security_group" "db_ec2" {
   name        = "${var.project_name}-sg-db-ec2"
-  description = "DB EC2: ECS tasks에서만 PostgreSQL/DB API 수신"
+  description = "DB EC2: PostgreSQL and DB API from ECS tasks only"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -102,7 +102,7 @@ resource "aws_security_group" "db_ec2" {
 # -----------------------------------------------------------------------
 resource "aws_security_group_rule" "ecs_to_postgres" {
   type                     = "ingress"
-  description              = "[이슈 6] LangGraph checkpointer — ECS to PostgreSQL"
+  description              = "LangGraph checkpointer - ECS to PostgreSQL"
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
@@ -113,7 +113,7 @@ resource "aws_security_group_rule" "ecs_to_postgres" {
 # Database API(8020) — ECS tasks에서 HTTP 호출
 resource "aws_security_group_rule" "ecs_to_db_api" {
   type                     = "ingress"
-  description              = "Database API server — ECS to DB API"
+  description              = "Database API server - ECS to DB API"
   from_port                = 8020
   to_port                  = 8020
   protocol                 = "tcp"
@@ -125,7 +125,7 @@ resource "aws_security_group_rule" "ecs_to_db_api" {
 
 resource "aws_security_group" "opensearch_ec2" {
   name        = "${var.project_name}-sg-opensearch-ec2"
-  description = "OpenSearch EC2: ECS tasks에서만 OpenSearch API/native 수신"
+  description = "OpenSearch EC2: OpenSearch API and native from ECS tasks only"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -141,7 +141,7 @@ resource "aws_security_group" "opensearch_ec2" {
 # OpenSearch API(8010) — ECS tasks에서 HTTP 호출
 resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   type                     = "ingress"
-  description              = "OpenSearch API server — ECS to OpenSearch API"
+  description              = "OpenSearch API server - ECS to OpenSearch API"
   from_port                = 8010
   to_port                  = 8010
   protocol                 = "tcp"
@@ -152,7 +152,7 @@ resource "aws_security_group_rule" "ecs_to_opensearch_api" {
 # OpenSearch native REST(9200) — ECS tasks에서 직접 호출 시
 resource "aws_security_group_rule" "ecs_to_opensearch_native" {
   type                     = "ingress"
-  description              = "OpenSearch native REST — ECS to OpenSearch 9200"
+  description              = "OpenSearch native REST - ECS to OpenSearch 9200"
   from_port                = 9200
   to_port                  = 9200
   protocol                 = "tcp"
@@ -164,7 +164,7 @@ resource "aws_security_group_rule" "ecs_to_opensearch_native" {
 
 resource "aws_security_group" "vpc_endpoints" {
   name        = "${var.project_name}-sg-vpc-endpoints"
-  description = "VPC Interface Endpoints: VPC 내부 HTTPS 트래픽만 허용"
+  description = "VPC Interface Endpoints: HTTPS from within VPC only"
   vpc_id      = aws_vpc.main.id
 
   ingress {

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 _pool: AsyncConnectionPool | None = None
@@ -109,7 +110,7 @@ async def append_event(job: UploadJob, event: dict[str, Any]) -> None:
     async with _pool.connection() as conn:
         await conn.execute(
             "INSERT INTO upload_job_events (job_id, event_data) VALUES (%s, %s)",
-            (job.job_id, event),
+            (job.job_id, Jsonb(event)),
         )
         if event_type in ("done", "error"):
             new_status = "done" if event_type == "done" else "error"

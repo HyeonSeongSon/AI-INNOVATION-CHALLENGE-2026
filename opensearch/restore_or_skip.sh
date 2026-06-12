@@ -1,0 +1,56 @@
+#!/bin/bash
+# OpenSearch S3 스냅샷 복원 스크립트
+# 인덱스가 비어있으면 S3 스냅샷에서 복원, 이미 있으면 스킵
+set -euo pipefail
+
+BUCKET="ai-innovation-deploy"
+REGION="ap-northeast-2"
+REPO_NAME="s3_backup"
+SNAPSHOT_NAME="opensearch_snapshot"
+
+# S3 스냅샷 repository 등록 (멱등 — 매번 실행해도 안전)
+echo "Registering S3 snapshot repository..."
+curl -sf -X PUT "http://localhost:9200/_snapshot/$REPO_NAME" \
+  -H "Content-Type: application/json" \
+  -d "{\"type\":\"s3\",\"settings\":{\"bucket\":\"$BUCKET\",\"base_path\":\"opensearch-snapshots\",\"region\":\"$REGION\"}}"
+echo ""
+
+# 인덱스에 데이터가 있는지 확인
+COUNT=$(curl -s "http://localhost:9200/product_index_v3/_count" 2>/dev/null \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('count', 0))" 2>/dev/null \
+  || echo 0)
+
+echo "product_index_v3 현재 문서 수: $COUNT"
+
+if [ "$COUNT" -gt "100" ]; then
+  echo "인덱스에 데이터가 있습니다. 복원 스킵."
+  exit 0
+fi
+
+echo "인덱스가 비어있습니다. S3 스냅샷 확인 중..."
+
+# S3 스냅샷 존재 여부 확인
+SNAP_COUNT=$(curl -s "http://localhost:9200/_snapshot/$REPO_NAME/$SNAPSHOT_NAME" 2>/dev/null \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('snapshots', [])))" 2>/dev/null \
+  || echo 0)
+
+if [ "$SNAP_COUNT" -eq "0" ]; then
+  echo "S3 스냅샷이 없습니다. 수동 인덱싱이 필요합니다."
+  exit 0
+fi
+
+echo "S3 스냅샷 복원 시작: $SNAPSHOT_NAME"
+
+# 기존 product 인덱스 삭제 (복원 전 클린업)
+curl -s -X DELETE "http://localhost:9200/product_*" || true
+sleep 2
+
+# 스냅샷 복원 (글로벌 상태 제외, product 인덱스만)
+curl -sf -X POST \
+  "http://localhost:9200/_snapshot/$REPO_NAME/$SNAPSHOT_NAME/_restore?wait_for_completion=true" \
+  -H "Content-Type: application/json" \
+  -d '{"ignore_unavailable": true, "include_global_state": false}'
+
+echo ""
+echo "스냅샷 복원 완료."
+curl -s "http://localhost:9200/_cat/indices?h=index,docs.count,health" | grep product

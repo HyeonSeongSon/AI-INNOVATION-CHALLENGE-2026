@@ -32,10 +32,13 @@ async def _process_one(index: int, record: dict, llm, persona_client, user_id: s
         persona_id = await persona_client.save_persona(structured_persona, user_id=user_id)
         try:
             await persona_client.save_product_search_query(persona_id, raw_queries, user_id=user_id)
-        except Exception:
-            logger.warning("compensating_delete", index=index, persona_id=persona_id)
-            await persona_client.delete_persona(persona_id, user_id=user_id)
-            raise
+        except Exception as original_exc:
+            logger.warning("compensating_delete", index=index, persona_id=persona_id, error_type=type(original_exc).__name__)
+            try:
+                await persona_client.delete_persona(persona_id, user_id=user_id)
+            except Exception:
+                logger.error("compensating_delete_failed", index=index, persona_id=persona_id)
+            raise original_exc
         return {
             "index": index,
             "success": True,

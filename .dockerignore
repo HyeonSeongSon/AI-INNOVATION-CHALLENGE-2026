@@ -23,4 +23,5 @@
 frontend/
 infra/
 data/
+!data/category.json
 **/node_modules/

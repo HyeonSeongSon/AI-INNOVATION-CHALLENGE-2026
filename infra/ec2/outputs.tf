@@ -47,3 +47,18 @@ output "deploy_s3_bucket" {
   description = "앱 코드 아카이브 S3 버킷 이름"
   value       = aws_s3_bucket.deploy.bucket
 }
+
+output "cloudfront_domain_name" {
+  description = "CloudFront 배포 도메인 (프론트엔드 접속 URL)"
+  value       = aws_cloudfront_distribution.frontend.domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront 배포 ID (캐시 무효화용)"
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
+output "frontend_s3_bucket" {
+  description = "프론트엔드 정적 파일 S3 버킷"
+  value       = aws_s3_bucket.frontend.bucket
+}

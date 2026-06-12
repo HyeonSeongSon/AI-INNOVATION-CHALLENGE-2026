@@ -19,7 +19,7 @@ locals {
   # EC2 프라이빗 IP 기반 URL — ECS 태스크 환경변수에 주입
   db_api_url         = "http://${aws_instance.db.private_ip}:8020"
   opensearch_api_url = "http://${aws_instance.opensearch.private_ip}:8010"
-  postgres_url       = "postgresql+asyncpg://${var.postgres_user}:${var.postgres_password}@${aws_instance.db.private_ip}:5432/ai_innovation_db"
+  postgres_url       = "postgresql://${var.postgres_user}:${var.postgres_password}@${aws_instance.db.private_ip}:5432/ai_innovation_db"
 }
 
 variable "postgres_user" {
@@ -108,7 +108,7 @@ locals {
     { name = "LOG_LEVEL",            value = "INFO" },
     # TRUSTED_PROXY_IPS: ALB는 VPC 프라이빗 서브넷에서 ECS로 전달
     # ALB가 신뢰 프록시이므로 프라이빗 서브넷 CIDR을 허용
-    { name = "TRUSTED_PROXY_IPS",    value = join(",", var.private_subnet_cidrs) },
+    { name = "TRUSTED_PROXY_IPS",    value = jsonencode(var.private_subnet_cidrs) },
     { name = "TRUSTED_PROXY_COUNT",  value = "1" },
   ]
 
@@ -137,7 +137,7 @@ resource "aws_ecs_task_definition" "backend" {
     essential = true
     portMappings = [{ containerPort = 8005, protocol = "tcp" }]
     environment  = concat(local.common_env, local.a2a_env, [
-      { name = "ALLOWED_ORIGINS", value = var.allowed_origins },
+      { name = "ALLOWED_ORIGINS", value = jsonencode(split(",", var.allowed_origins)) },
     ])
     # Secrets Manager — ECS가 태스크 시작 시 주입, 태스크 정의 JSON에 값 미노출
     secrets = local.admin_seed_enabled ? [
@@ -296,9 +296,14 @@ resource "aws_service_discovery_service" "crm" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "crm" {
@@ -325,9 +330,14 @@ resource "aws_service_discovery_service" "recommend" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "recommend" {
@@ -354,9 +364,14 @@ resource "aws_service_discovery_service" "generate" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "generate" {
@@ -383,9 +398,14 @@ resource "aws_service_discovery_service" "data_registration" {
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.crm.id
     routing_policy = "MULTIVALUE"
-    dns_records { ttl = 10; type = "A" }
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "data_registration" {

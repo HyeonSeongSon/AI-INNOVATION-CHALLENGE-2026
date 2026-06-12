@@ -109,8 +109,8 @@ class Settings(BaseSettings):
     # Rate limiting — persona pipeline endpoints (per-user)
     rate_limit_persona_text_max_requests: int = 20
     rate_limit_persona_text_window_seconds: int = 3600   # 1시간당 20회
-    rate_limit_persona_upload_max_requests: int = 5
-    rate_limit_persona_upload_window_seconds: int = 3600  # 1시간당 5회
+    rate_limit_persona_upload_max_requests: int = 20
+    rate_limit_persona_upload_window_seconds: int = 3600  # 1시간당 20회
 
     # Rate limiting — DB write endpoints (per-user)
     rate_limit_conversation_write_max_requests: int = 100

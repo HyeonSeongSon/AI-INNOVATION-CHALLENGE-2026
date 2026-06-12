@@ -11,7 +11,6 @@ set -euo pipefail
 PROJECT_NAME="${project_name}"
 POSTGRES_PASSWORD="${postgres_password}"
 DB_API_DIR="/opt/db-api"
-DATA_DISK="/dev/xvdf"
 DATA_MOUNT="/data"
 POSTGRES_DB="ai_innovation_db"
 POSTGRES_USER="postgres"
@@ -25,6 +24,18 @@ apt-get update -qq
 apt-get upgrade -y -qq
 
 # ---- 2. EBS 데이터 볼륨 마운트 ----
+# EBS 연결 완료까지 최대 2분 대기 (EC2 재생성 시 볼륨 연결이 늦을 수 있음)
+log "Waiting for data volume to be attached..."
+DATA_DISK=""
+for i in $(seq 1 24); do
+  DATA_DISK=$(lsblk -d -o NAME,SIZE | awk '$2=="50G"{print "/dev/"$1}' | head -1)
+  [ -n "$DATA_DISK" ] && break
+  sleep 5
+done
+if [ -z "$DATA_DISK" ]; then
+  log "ERROR: No 50GB data volume found after 2 minutes"
+  exit 1
+fi
 log "Mounting data volume $DATA_DISK -> $DATA_MOUNT..."
 if ! blkid "$DATA_DISK" &>/dev/null; then
   mkfs.ext4 -F "$DATA_DISK"
@@ -78,26 +89,25 @@ sudo -u postgres createdb -O $POSTGRES_USER $POSTGRES_DB 2>/dev/null || true
 
 systemctl reload postgresql
 
-# ---- 4. Python 3.11 + venv 설치 ----
+# ---- 4. AWS CLI 설치 ----
+log "Installing AWS CLI..."
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+apt-get install -y -qq unzip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
+
+# ---- 5. Python 3.11 + venv 설치 ----
 log "Installing Python 3.11..."
 apt-get install -y -qq python3.11 python3.11-venv python3-pip git
 
 mkdir -p "$DB_API_DIR"
 python3.11 -m venv "$DB_API_DIR/venv"
-
-# [방법 A] S3에서 아카이브 다운로드 — GitHub Actions가 푸시한 아카이브를 pull
-aws s3 cp "s3://$PROJECT_NAME-deploy/database.tar.gz" /tmp/database.tar.gz
-tar -xzf /tmp/database.tar.gz -C "$DB_API_DIR"
-
-if [ -f "$DB_API_DIR/requirements.txt" ]; then
-  "$DB_API_DIR/venv/bin/pip" install -q -r "$DB_API_DIR/requirements.txt"
-fi
-
 chown -R ubuntu:ubuntu "$DB_API_DIR"
 
 # ---- 5. systemd 서비스 등록 ----
 log "Registering db-api systemd service..."
-cat > /etc/systemd/system/db-api.service <<'UNIT'
+cat > /etc/systemd/system/db-api.service <<UNIT
 [Unit]
 Description=Database API Server (ai-innovation)
 Documentation=https://github.com/ai-innovation-challenge/database
@@ -109,10 +119,13 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/db-api
+Environment=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+Environment=POSTGRES_DB=$POSTGRES_DB
+Environment=POSTGRES_USER=$POSTGRES_USER
+Environment=POSTGRES_HOST=localhost
 ExecStart=/opt/db-api/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8020 --workers 2
 Restart=always
 RestartSec=5
-# 연속 실패 시 재시작 주기를 늘려 플래핑 방지
 StartLimitIntervalSec=120
 StartLimitBurst=5
 StandardOutput=journal
@@ -125,8 +138,9 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable db-api
-systemctl start db-api
+# 코드는 GitHub Actions SSM 배포에서 설치 후 시작
 
 log "DB server setup complete."
 log "  PostgreSQL: systemctl status postgresql"
 log "  DB API:     systemctl status db-api"
+touch /var/log/user-data-complete

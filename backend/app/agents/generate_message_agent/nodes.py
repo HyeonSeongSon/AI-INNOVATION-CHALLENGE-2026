@@ -7,8 +7,7 @@ from ...core.llm_factory import get_llm
 from ...core.logging import AgentLogger, get_logger
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from typing import Dict, Any, Union
-from langgraph.types import Command
+from typing import Dict, Any
 import json
 
 _MAX_RETRIES = 2
@@ -107,7 +106,7 @@ async def router_node(state: GenerateMessageState, config: RunnableConfig) -> Di
         }
 
 
-async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
+async def generate_message_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
     generator = config["configurable"]["services"].generator
     agent_logger = AgentLogger(state, node_name="generate_message_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
@@ -131,15 +130,15 @@ async def generate_message_node(state: GenerateMessageState, config: RunnableCon
         tasks = await generator.generate_crm_message(tasks, message_llm)
     except Exception as e:
         agent_logger.error("generate_message_error", user_message="[generate] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
-        return Command(
-            goto="output_node",
-            update={
-                "status": "failed",
-                "error": "메시지 생성 중 오류가 발생했습니다.",
-                "error_details": {"node": "generate_message_node"},
-                "logs": agent_logger.get_user_logs(),
-            },
-        )
+        # Command(goto="output_node") 대신 plain dict 반환:
+        # static edge generate_message_node → quality_check_node 가 단독 발화하도록 허용.
+        # (Command + static edge 동시 발화 시 output_node 가 두 경로에서 중복 실행되어 LangGraph 예외 발생)
+        return {
+            "status": "failed",
+            "error": "메시지 생성 중 오류가 발생했습니다.",
+            "error_details": {"node": "generate_message_node"},
+            "logs": agent_logger.get_user_logs(),
+        }
 
     generated_tasks = [
         {
@@ -225,7 +224,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     }
 
 
-async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Union[Dict[str, Any], Command]:
+async def message_feedback_node(state: GenerateMessageState, config: RunnableConfig) -> Dict[str, Any]:
     agent_logger = AgentLogger(state, node_name="message_feedback_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     feedback_llm = get_llm(model, temperature=settings.llm_temperature_creative)
@@ -245,10 +244,12 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             user_message=f"품질 검사 최대 재시도 횟수 초과 (status={failure_status})",
             retry_count=retry_count,
         )
-        return Command(
-            goto="output_node",
-            update={"status": failure_status, "failed_task_ids": failed_ids_list},
-        )
+        # 라우팅은 workflow의 conditional edge(_route_after_feedback)가 담당
+        return {
+            "status": failure_status,
+            "failed_task_ids": failed_ids_list,
+            "logs": agent_logger.get_user_logs(),
+        }
 
     services = config["configurable"]["services"]
     applier = services.applier
@@ -289,15 +290,14 @@ async def message_feedback_node(state: GenerateMessageState, config: RunnableCon
             updated_tasks = await applier.apply_feedback_batch(generated_tasks, failed_task_ids, llm=feedback_llm, persona_info=persona_info)
     except Exception as e:
         agent_logger.error("feedback_error", user_message="[feedback] 오류가 발생했습니다.", error_type=type(e).__name__, exc_info=True)
-        return Command(
-            goto="output_node",
-            update={
-                "status": "failed",
-                "error": "피드백 적용 중 오류가 발생했습니다.",
-                "error_details": {"node": "message_feedback_node"},
-                "logs": agent_logger.get_user_logs(),
-            },
-        )
+        # feedback_retry_count를 _MAX_RETRIES로 설정 → _route_after_feedback가 output_node로 라우팅
+        return {
+            "status": "failed",
+            "error": "피드백 적용 중 오류가 발생했습니다.",
+            "error_details": {"node": "message_feedback_node"},
+            "feedback_retry_count": _MAX_RETRIES,
+            "logs": agent_logger.get_user_logs(),
+        }
 
     agent_logger.info("feedback_done", user_message="피드백 적용 완료")
 
@@ -316,6 +316,13 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
     failed_task_ids = set(state.get("failed_task_ids") or [])
 
     if not failed_task_ids:
+        if state.get("status") == "failed" and not generated_tasks:
+            logger.info("output_propagate_failure", user_message="[output] 이전 노드 실패로 완료되지 않음")
+            return {
+                "messages": [AIMessage(content="CRM 메시지 생성 중 오류가 발생했습니다. 다시 시도해주세요.", name="generate_message_agent")],
+                "status": "failed",
+                "logs": logger.get_user_logs(),
+            }
         content = _format_generated_tasks(generated_tasks)
         status = "completed"
     else:
@@ -338,15 +345,23 @@ async def output_node(state: GenerateMessageState) -> Dict[str, Any]:
         )
         all_failed = len(failed_task_ids) == len(generated_tasks) and len(generated_tasks) > 0
         status = "failed" if all_failed else "partial_failure"
+        passed_tasks = [t for t in generated_tasks if t["product_id"] not in failed_task_ids]
         if status == "partial_failure":
-            succeeded_content = _format_generated_tasks(
-                [t for t in generated_tasks if t["product_id"] not in failed_task_ids]
-            )
+            succeeded_content = _format_generated_tasks(passed_tasks)
             content = f"{succeeded_content}\n\nCRM 메시지 일부 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
         else:
             content = f"CRM 메시지 생성 실패: {reason}\n\n실패 목록:\n" + "\n".join(failed_details)
 
     logger.info("output_done", user_message=f"[output] 완료 (status={status})", status=status)
+
+    if failed_task_ids:
+        # 실패 태스크를 state에서 제거 — CRM 레이어에 passed=False 태스크가 전달되지 않도록
+        return {
+            "messages": [AIMessage(content=content, name="generate_message_agent")],
+            "status": status,
+            "generated_tasks": passed_tasks,
+            "logs": logger.get_user_logs(),
+        }
     return {
         "messages": [AIMessage(content=content, name="generate_message_agent")],
         "status": status,
