@@ -29,6 +29,12 @@ services:
       AUTH_MODE: jwt
     ports:
       - "8005:8005"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8005/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   crm-service:
     <<: *backend-common
