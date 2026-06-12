@@ -97,8 +97,8 @@ class Settings(BaseSettings):
     lockout_per_ip_window_seconds: int = 900  # 잠금 지속 시간 (기본 15분)
 
     # Rate limiting — LLM chat endpoints (per-user)
-    rate_limit_chat_max_requests: int = 20
-    rate_limit_chat_window_seconds: int = 3600  # 1시간당 20회
+    rate_limit_chat_max_requests: int = 100
+    rate_limit_chat_window_seconds: int = 3600  # 1시간당 100회
 
     # Rate limiting — auth token endpoints (per-IP)
     rate_limit_refresh_max_requests: int = 30
