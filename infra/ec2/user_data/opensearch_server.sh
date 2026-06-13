@@ -85,6 +85,31 @@ mkdir -p "$DATA_MOUNT/opensearch/data" "$DATA_MOUNT/opensearch/logs"
 useradd -r -s /bin/false opensearch 2>/dev/null || true
 chown -R opensearch:opensearch /opt/opensearch "$DATA_MOUNT/opensearch"
 
+# ---- TLS 인증서 생성 (root CA → node cert → admin cert) ----
+log "Generating TLS certificates for OpenSearch security..."
+mkdir -p /opt/opensearch/config/certs
+(
+  cd /opt/opensearch/config/certs
+  # Root CA
+  openssl genrsa -out root-ca-key.pem 2048
+  openssl req -new -x509 -sha256 -key root-ca-key.pem -out root-ca.pem -days 3650 \
+    -subj "/C=KR/O=ai-innovation/CN=opensearch-root-ca"
+  # Node cert (HTTP + transport 겸용)
+  openssl genrsa -out node-key.pem 2048
+  openssl req -new -key node-key.pem -out node.csr \
+    -subj "/C=KR/O=ai-innovation/CN=opensearch-node-1"
+  openssl x509 -req -in node.csr -CA root-ca.pem -CAkey root-ca-key.pem \
+    -CAcreateserial -out node.pem -days 3650 -sha256
+  # Admin cert (securityadmin.sh 전용)
+  openssl genrsa -out admin-key.pem 2048
+  openssl req -new -key admin-key.pem -out admin.csr \
+    -subj "/C=KR/O=ai-innovation/CN=opensearch-admin"
+  openssl x509 -req -in admin.csr -CA root-ca.pem -CAkey root-ca-key.pem \
+    -CAcreateserial -out admin.pem -days 3650 -sha256
+)
+chown -R opensearch:opensearch /opt/opensearch/config/certs
+chmod 600 /opt/opensearch/config/certs/*-key.pem
+
 # opensearch.yml
 cat > /opt/opensearch/config/opensearch.yml <<EOF
 cluster.name: $PROJECT_NAME-search
@@ -94,7 +119,23 @@ path.logs: $DATA_MOUNT/opensearch/logs
 network.host: 0.0.0.0
 http.port: 9200
 discovery.type: single-node
-plugins.security.disabled: true
+# TLS — transport layer
+plugins.security.ssl.transport.pemcert_filepath: certs/node.pem
+plugins.security.ssl.transport.pemkey_filepath: certs/node-key.pem
+plugins.security.ssl.transport.pemtrustedcas_filepath: certs/root-ca.pem
+plugins.security.ssl.transport.enforce_hostname_verification: false
+# TLS — HTTP layer
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.http.pemcert_filepath: certs/node.pem
+plugins.security.ssl.http.pemkey_filepath: certs/node-key.pem
+plugins.security.ssl.http.pemtrustedcas_filepath: certs/root-ca.pem
+# Security plugin
+plugins.security.allow_unsafe_democertificates: false
+plugins.security.allow_default_init_securityindex: true
+plugins.security.authcz.admin_dn:
+  - "CN=opensearch-admin,O=ai-innovation,C=KR"
+plugins.security.nodes_dn:
+  - "CN=opensearch-node-1,O=ai-innovation,C=KR"
 EOF
 
 # -----------------------------------------------------------------------
@@ -141,12 +182,31 @@ systemctl start opensearch
 # OpenSearch 준비 대기 (최대 120초)
 log "Waiting for OpenSearch to be ready..."
 for i in $(seq 1 24); do
-  if curl -sf http://localhost:9200/_cluster/health &>/dev/null; then
+  if curl -sk https://localhost:9200/_cluster/health \
+       -u "admin:${opensearch_admin_password}" &>/dev/null; then
     log "OpenSearch is ready."
     break
   fi
   sleep 5
 done
+
+# ---- 보안 플러그인 초기화 ----
+log "Initializing OpenSearch security plugin..."
+# admin 패스워드 해시 생성
+HASHED_PW=$(/opt/opensearch/plugins/opensearch-security/tools/hash.sh \
+  -p "${opensearch_admin_password}" | tail -1)
+INTERNAL_USERS="/opt/opensearch/config/opensearch-security/internal_users.yml"
+# internal_users.yml의 admin hash 교체
+sed -i "s|hash: \".*\"|hash: \"$HASHED_PW\"|g" "$INTERNAL_USERS"
+# 보안 인덱스 초기화
+/opt/opensearch/plugins/opensearch-security/tools/securityadmin.sh \
+  -cd /opt/opensearch/config/opensearch-security/ \
+  -icl -nhnv \
+  -cacert /opt/opensearch/config/certs/root-ca.pem \
+  -cert  /opt/opensearch/config/certs/admin.pem \
+  -key   /opt/opensearch/config/certs/admin-key.pem \
+  -h localhost
+log "OpenSearch security initialized."
 
 # 플러그인 설치: 한국어 형태소 분석기 + KNN + S3 스냅샷
 /opt/opensearch/bin/opensearch-plugin install --batch analysis-nori || true
@@ -180,9 +240,10 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/opensearch-api
-Environment=OPENSEARCH_URL=http://localhost:9200
+Environment=OPENSEARCH_URL=https://localhost:9200
 Environment=OPENSEARCH_HOST=localhost
 Environment=OPENSEARCH_PORT=9200
+Environment=OPENSEARCH_USE_SSL=true
 Environment=OPENSEARCH_ADMIN_PASSWORD=${opensearch_admin_password}
 Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
 Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json

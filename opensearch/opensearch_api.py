@@ -15,6 +15,7 @@ import sys
 import structlog
 from dotenv import load_dotenv
 from opensearch_hybrid import OpenSearchHybridClient
+from index_forbidden_sentences import run_indexing
 
 # 환경 변수 로드
 load_dotenv()
@@ -370,8 +371,12 @@ async def startup_event():
     """서버 시작 시 OpenSearch 클라이언트 초기화"""
     logger.info("server_starting")
     try:
-        get_opensearch_client()
+        client = get_opensearch_client()
         logger.info("opensearch_client_initialized")
+        # forbidden_sentences 인덱스 문서가 없으면 자동 색인 (idempotent)
+        ok = await asyncio.to_thread(run_indexing, client)
+        if not ok:
+            logger.warning("forbidden_sentences_index_failed")
     except Exception as e:
         logger.error("startup_failed", error_type=type(e).__name__)
 

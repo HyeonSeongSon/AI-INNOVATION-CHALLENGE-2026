@@ -33,9 +33,8 @@ class OpenSearchHybridClient:
 
             port = int(port_str)
 
-            # 보안 활성(HTTPS) 클러스터에서만 SSL을 사용한다. 기본값 false는 현 AWS 운영
-            # 환경(single-node, plugins.security.disabled=true, 평문 HTTP)에 맞춘 안전한 기본.
-            # 로컬 docker-compose는 OPENSEARCH_USE_SSL=true로 명시해 HTTPS로 연결한다.
+            # OPENSEARCH_USE_SSL=true 시 HTTPS + 자체 서명 인증서(verify_certs=False)로 연결.
+            # AWS EC2 환경(opensearch-api systemd)과 로컬 docker-compose 모두 true로 주입.
             use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
 
             logger.info("opensearch_connecting", host=host, port=port, use_ssl=use_ssl)
