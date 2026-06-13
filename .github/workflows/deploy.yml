@@ -151,6 +151,22 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Cache OpenSearch tarball in S3 (skip if already uploaded)
+        run: |
+          OPENSEARCH_VERSION="2.13.0"
+          S3_KEY="opensearch-${OPENSEARCH_VERSION}-linux-x64.tar.gz"
+          if aws s3 ls "s3://${{ env.PROJECT_NAME }}-deploy/${S3_KEY}" > /dev/null 2>&1; then
+            echo "OpenSearch tarball already cached in S3, skipping."
+          else
+            echo "Downloading OpenSearch ${OPENSEARCH_VERSION} and uploading to S3..."
+            curl -fsSL \
+              "https://artifacts.opensearch.org/releases/bundle/opensearch/${OPENSEARCH_VERSION}/opensearch-${OPENSEARCH_VERSION}-linux-x64.tar.gz" \
+              -o /tmp/opensearch-dist.tar.gz
+            aws s3 cp /tmp/opensearch-dist.tar.gz \
+              "s3://${{ env.PROJECT_NAME }}-deploy/${S3_KEY}"
+            echo "OpenSearch tarball cached."
+          fi
+
       - name: Package & upload Database API
         run: |
           tar -czf /tmp/database.tar.gz -C database .
@@ -248,7 +264,7 @@ jobs:
       - name: Wait for OpenSearch EC2 user_data to complete
         run: |
           echo "Waiting for OpenSearch EC2 user_data to complete..."
-          for i in $(seq 1 60); do
+          for i in $(seq 1 80); do
             RESULT=$(aws ssm send-command \
               --instance-ids "${{ needs.terraform.outputs.opensearch_instance_id }}" \
               --document-name "AWS-RunShellScript" \
@@ -264,8 +280,8 @@ jobs:
               echo "OpenSearch EC2 user_data complete."
               break
             fi
-            if [ "$i" = "60" ]; then
-              echo "ERROR: OpenSearch EC2 user_data did not complete within 30 minutes."
+            if [ "$i" = "80" ]; then
+              echo "ERROR: OpenSearch EC2 user_data did not complete within 40 minutes."
               exit 1
             fi
             sleep 25

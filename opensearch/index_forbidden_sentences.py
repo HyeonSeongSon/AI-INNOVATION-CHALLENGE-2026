@@ -33,6 +33,8 @@ if _DIR not in sys.path:
 from path_utils import get_absolute_path
 
 INDEX_NAME = "forbidden_sentences"
+# 로컬 개발 기준 경로 — EC2에서는 FORBIDDEN_KEYWORD_JSON_PATH 환경변수가 이 값을 덮어씀
+# (opensearch-api.service: Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json)
 DEFAULT_JSON_PATH = get_absolute_path(
     "backend", "app", "agents", "generate_message_agent", "data", "forbidden_keyword.json"
 )

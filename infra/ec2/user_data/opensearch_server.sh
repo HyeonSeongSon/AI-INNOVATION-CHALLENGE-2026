@@ -22,6 +22,17 @@ INTERNAL_TOKEN="${internal_token}"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/user-data.log; }
 
 # ---- 1. 시스템 업데이트 ----
+log "Waiting for cloud-init apt lock to release..."
+# Ubuntu 최초 부팅 시 unattended-upgrades가 dpkg lock을 점유 — 해제까지 대기
+systemctl stop unattended-upgrades apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+systemctl kill --kill-who=all apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+sleep 5
+for i in $(seq 1 30); do
+  if ! lsof /var/lib/dpkg/lock-frontend 2>/dev/null | grep -q dpkg; then break; fi
+  log "apt lock held, waiting... ($i/30)"
+  sleep 10
+done
+
 log "Updating system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -74,8 +85,25 @@ echo "opensearch hard nofile 65536" >> /etc/security/limits.conf
 
 # ---- 5. OpenSearch 설치 ----
 log "Installing OpenSearch $OPENSEARCH_VERSION..."
-curl -fsSL "https://artifacts.opensearch.org/releases/bundle/opensearch/$${OPENSEARCH_VERSION}/opensearch-$${OPENSEARCH_VERSION}-linux-x64.tar.gz" \
-  -o /tmp/opensearch.tar.gz
+S3_KEY="opensearch-$OPENSEARCH_VERSION-linux-x64.tar.gz"
+# S3 Gateway Endpoint 경유 (NAT 우회, 무료) — package-data-services job이 먼저 캐시
+# 최대 10분 대기 후 fallback
+DOWNLOADED=false
+for i in $(seq 1 20); do
+  if /usr/local/bin/aws s3 cp "s3://$PROJECT_NAME-deploy/$S3_KEY" /tmp/opensearch.tar.gz 2>/dev/null; then
+    log "Downloaded OpenSearch from S3 (attempt $i)."
+    DOWNLOADED=true
+    break
+  fi
+  log "S3 tarball not ready yet, waiting 30s... ($i/20)"
+  sleep 30
+done
+if [ "$DOWNLOADED" = "false" ]; then
+  log "S3 unavailable, falling back to direct download..."
+  curl -fsSL \
+    "https://artifacts.opensearch.org/releases/bundle/opensearch/$${OPENSEARCH_VERSION}/opensearch-$${OPENSEARCH_VERSION}-linux-x64.tar.gz" \
+    -o /tmp/opensearch.tar.gz
+fi
 mkdir -p /opt/opensearch
 tar xzf /tmp/opensearch.tar.gz -C /opt/opensearch --strip-components=1
 rm /tmp/opensearch.tar.gz
@@ -179,52 +207,84 @@ systemctl daemon-reload
 systemctl enable opensearch
 systemctl start opensearch
 
-# OpenSearch 준비 대기 (최대 120초)
+# OpenSearch 준비 대기 (최대 300초)
+# t3.medium에서 JVM 콜드 스타트는 60~150초 소요 — 120초 상한은 부족
 log "Waiting for OpenSearch to be ready..."
-for i in $(seq 1 24); do
+OS_READY=false
+for i in $(seq 1 60); do
   if curl -sk https://localhost:9200/_cluster/health \
        -u "admin:${opensearch_admin_password}" &>/dev/null; then
-    log "OpenSearch is ready."
+    log "OpenSearch is ready (attempt $i)."
+    OS_READY=true
     break
   fi
   sleep 5
 done
+if [ "$OS_READY" = "false" ]; then
+  log "ERROR: OpenSearch did not start within 300 seconds."
+  exit 1
+fi
 
 # ---- 보안 플러그인 초기화 ----
 log "Initializing OpenSearch security plugin..."
-# admin 패스워드 해시 생성
 HASHED_PW=$(/opt/opensearch/plugins/opensearch-security/tools/hash.sh \
   -p "${opensearch_admin_password}" | tail -1)
 INTERNAL_USERS="/opt/opensearch/config/opensearch-security/internal_users.yml"
-# internal_users.yml의 admin hash 교체
 sed -i "s|hash: \".*\"|hash: \"$HASHED_PW\"|g" "$INTERNAL_USERS"
-# 보안 인덱스 초기화
-/opt/opensearch/plugins/opensearch-security/tools/securityadmin.sh \
-  -cd /opt/opensearch/config/opensearch-security/ \
-  -icl -nhnv \
-  -cacert /opt/opensearch/config/certs/root-ca.pem \
-  -cert  /opt/opensearch/config/certs/admin.pem \
-  -key   /opt/opensearch/config/certs/admin-key.pem \
-  -h localhost
-log "OpenSearch security initialized."
+# securityadmin.sh: OpenSearch가 완전히 준비된 직후에도 일시적으로 거부할 수 있음 — 최대 5회 재시도
+SEC_OK=false
+for i in $(seq 1 5); do
+  if /opt/opensearch/plugins/opensearch-security/tools/securityadmin.sh \
+      -cd /opt/opensearch/config/opensearch-security/ \
+      -icl -nhnv \
+      -cacert /opt/opensearch/config/certs/root-ca.pem \
+      -cert  /opt/opensearch/config/certs/admin.pem \
+      -key   /opt/opensearch/config/certs/admin-key.pem \
+      -h localhost; then
+    log "OpenSearch security initialized (attempt $i)."
+    SEC_OK=true
+    break
+  fi
+  log "securityadmin.sh failed, retrying in 30s... ($i/5)"
+  sleep 30
+done
+if [ "$SEC_OK" = "false" ]; then
+  log "ERROR: Failed to initialize OpenSearch security after 5 attempts."
+  exit 1
+fi
 
 # 플러그인 설치: 한국어 형태소 분석기 + KNN + S3 스냅샷
-/opt/opensearch/bin/opensearch-plugin install --batch analysis-nori || true
-/opt/opensearch/bin/opensearch-plugin install --batch opensearch-knn || true
-/opt/opensearch/bin/opensearch-plugin install --batch repository-s3 || true
-systemctl restart opensearch
+# 이미 설치된 플러그인은 스킵 — EC2 재생성 시 매번 재설치되나, 동일 인스턴스 재실행 방어
+PLUGIN_LIST=$(/opt/opensearch/bin/opensearch-plugin list 2>/dev/null || echo "")
+PLUGINS_CHANGED=false
+for PLUGIN in analysis-nori opensearch-knn repository-s3; do
+  if echo "$PLUGIN_LIST" | grep -q "$PLUGIN"; then
+    log "Plugin $PLUGIN already installed, skipping."
+  else
+    /opt/opensearch/bin/opensearch-plugin install --batch "$PLUGIN" || true
+    PLUGINS_CHANGED=true
+  fi
+done
+if [ "$PLUGINS_CHANGED" = "true" ]; then
+  systemctl restart opensearch
+fi
 
 # ---- 7. OpenSearch API 서비스 설치 ----
 log "Installing OpenSearch API server..."
 mkdir -p "$OPENSEARCH_API_DIR"
-# venv는 EBS(/data)에 생성 — 루트 디스크(20GB) 용량 부족 방지
-python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
-# CPU-only torch + transformers 4.x 사전 설치
-# - torch: CPU 버전으로 CUDA 2GB 다운로드 방지
-# - transformers==4.41.0: 5.x 설치 시 sentence-transformers와 torch._dynamo 충돌 방지
-"$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
-"$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
-"$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
+# venv는 EBS(/data)에 생성 — EC2 재생성(루트 디스크 초기화) 후에도 EBS는 보존됨
+# torch(~300MB) + transformers(~150MB) 재다운로드 방지
+if [ -f "$DATA_MOUNT/opensearch-api-venv/bin/python" ]; then
+  log "EBS venv already exists, skipping torch/transformers install."
+else
+  log "Creating venv and installing torch + transformers..."
+  python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
+  # CPU-only torch: CUDA 2GB 다운로드 방지
+  # transformers==4.41.0: 5.x에서 sentence-transformers와 torch._dynamo 충돌
+  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
+  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
+fi
 chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" "$DATA_MOUNT/opensearch-api-venv"
 
 # ---- 8. OpenSearch API systemd 서비스 등록 ----
