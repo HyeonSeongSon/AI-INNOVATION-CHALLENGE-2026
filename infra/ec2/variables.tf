@@ -53,7 +53,7 @@ variable "db_instance_type" {
 variable "opensearch_instance_type" {
   description = "OpenSearch EC2 인스턴스 타입"
   type        = string
-  default     = "t3.large"
+  default     = "t3.medium"
 }
 
 variable "ec2_ami" {
