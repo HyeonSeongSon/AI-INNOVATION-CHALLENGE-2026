@@ -8,26 +8,38 @@ REGION="ap-northeast-2"
 REPO_NAME="s3_backup"
 SNAPSHOT_NAME="opensearch_snapshot"
 
+# opensearch-api.service 에서 관리자 패스워드 추출
+OS_PASSWORD=$(grep -Po 'OPENSEARCH_ADMIN_PASSWORD=\K[^ \n]+' \
+  /etc/systemd/system/opensearch-api.service 2>/dev/null | head -1 || true)
+if [ -z "$OS_PASSWORD" ]; then
+  echo "ERROR: OPENSEARCH_ADMIN_PASSWORD를 서비스 파일에서 찾을 수 없습니다."
+  exit 1
+fi
+
+BASE_URL="https://localhost:9200"
+CURL_AUTH="-u admin:$OS_PASSWORD"
+CURL_TLS="-k"
+
 # S3 스냅샷 repository 등록
 echo "Registering S3 snapshot repository..."
-curl -sf -X PUT "http://localhost:9200/_snapshot/$REPO_NAME" \
+curl -sf $CURL_TLS $CURL_AUTH -X PUT "$BASE_URL/_snapshot/$REPO_NAME" \
   -H "Content-Type: application/json" \
   -d "{\"type\":\"s3\",\"settings\":{\"bucket\":\"$BUCKET\",\"base_path\":\"opensearch-snapshots\",\"region\":\"$REGION\"}}"
 echo ""
 
 # 인덱스 상태 확인
 echo "현재 인덱스 상태:"
-curl -s "http://localhost:9200/_cat/indices?h=index,docs.count,health" | grep product
+curl -s $CURL_TLS $CURL_AUTH "$BASE_URL/_cat/indices?h=index,docs.count,health" | grep product
 
 # 기존 스냅샷 삭제
 echo "기존 스냅샷 삭제 중..."
-curl -s -X DELETE "http://localhost:9200/_snapshot/$REPO_NAME/$SNAPSHOT_NAME" || true
+curl -s $CURL_TLS $CURL_AUTH -X DELETE "$BASE_URL/_snapshot/$REPO_NAME/$SNAPSHOT_NAME" || true
 sleep 3
 
 # 새 스냅샷 생성 (전체 product 인덱스 포함, 완료까지 대기)
 echo "스냅샷 생성 중: $SNAPSHOT_NAME (수 분 소요)"
-curl -sf -X PUT \
-  "http://localhost:9200/_snapshot/$REPO_NAME/$SNAPSHOT_NAME?wait_for_completion=true" \
+curl -sf $CURL_TLS $CURL_AUTH -X PUT \
+  "$BASE_URL/_snapshot/$REPO_NAME/$SNAPSHOT_NAME?wait_for_completion=true" \
   -H "Content-Type: application/json" \
   -d '{"indices": "product_*", "ignore_unavailable": true, "include_global_state": false}'
 
