@@ -139,6 +139,9 @@ locals {
     { name = "PARSER_MODEL_NAME",    value = var.parser_model_name },
     { name = "ENVIRONMENT",          value = var.environment },
     { name = "LOG_LEVEL",            value = "INFO" },
+    # ALLOWED_ORIGINS: 모든 서비스에 주입 — Settings 프로덕션 검증이 localhost를 거부하므로
+    # CRM·recommend·generate·data-registration 같은 내부 서비스도 이 값이 필요함
+    { name = "ALLOWED_ORIGINS",      value = jsonencode(split(",", var.allowed_origins)) },
     # TRUSTED_PROXY_IPS: ALB는 VPC 프라이빗 서브넷에서 ECS로 전달
     # ALB가 신뢰 프록시이므로 프라이빗 서브넷 CIDR을 허용
     { name = "TRUSTED_PROXY_IPS",    value = jsonencode(var.private_subnet_cidrs) },
@@ -170,9 +173,7 @@ resource "aws_ecs_task_definition" "backend" {
     image     = "${var.ecr_registry}/${var.project_name}-backend:${var.ecr_image_tag}"
     essential = true
     portMappings = [{ containerPort = 8005, protocol = "tcp" }]
-    environment  = concat(local.common_env, local.a2a_env, [
-      { name = "ALLOWED_ORIGINS", value = jsonencode(split(",", var.allowed_origins)) },
-    ])
+    environment  = concat(local.common_env, local.a2a_env)
     # Secrets Manager — ECS가 태스크 시작 시 주입, 태스크 정의 JSON에 값 미노출
     secrets = local.admin_seed_enabled ? [
       {

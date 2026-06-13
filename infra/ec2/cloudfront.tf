@@ -60,6 +60,11 @@ resource "aws_cloudfront_distribution" "frontend" {
       https_port             = 443
       origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
+      # 기본값 30s → 최대 60s로 증가
+      # 페르소나 업로드: 파일 읽기(30s) + 파싱(15s) = 최대 45s 소요
+      # SSE 스트리밍: keepalive 25s 간격, 30s 미만 여유 없음
+      origin_read_timeout      = 60
+      origin_keepalive_timeout = 5
     }
   }
 
