@@ -159,6 +159,22 @@ sed -i 's/-Xmx[0-9]*[gGmM]/-Xmx1000m/g' /opt/opensearch/config/jvm.options
 grep -q "Xms" /opt/opensearch/config/jvm.options || echo "-Xms1000m" >> /opt/opensearch/config/jvm.options
 grep -q "Xmx" /opt/opensearch/config/jvm.options || echo "-Xmx1000m" >> /opt/opensearch/config/jvm.options
 
+# ---- 플러그인 설치 (반드시 OpenSearch 시작 전) ----
+# 보존 EBS의 product_v4_* 인덱스는 korean_analyzer(nori_tokenizer)에 의존한다.
+# 시작 시점에 nori가 없으면 샤드 복구가 IllegalArgumentException으로 실패 → 클러스터 RED
+# → securityadmin이 cluster state 조회에서 타임아웃 무한 반복 → user_data 미완료.
+# OpenSearch가 죽어있는 상태에서 오프라인 설치하므로 재시작이 필요 없다.
+log "Installing plugins (before startup)..."
+PLUGIN_LIST=$(/opt/opensearch/bin/opensearch-plugin list 2>/dev/null || echo "")
+for PLUGIN in analysis-nori opensearch-knn repository-s3; do
+  if echo "$PLUGIN_LIST" | grep -q "$PLUGIN"; then
+    log "Plugin $PLUGIN already installed, skipping."
+  else
+    /opt/opensearch/bin/opensearch-plugin install --batch "$PLUGIN" || true
+  fi
+done
+chown -R opensearch:opensearch /opt/opensearch/plugins
+
 # ---- 6. OpenSearch systemd 서비스 ----
 log "Registering opensearch service..."
 cat > /etc/systemd/system/opensearch.service <<'UNIT'
@@ -237,21 +253,6 @@ done
 if [ "$SEC_OK" = "false" ]; then
   log "ERROR: Failed to initialize OpenSearch security after 5 attempts."
   exit 1
-fi
-
-# ---- 플러그인 설치 ----
-PLUGIN_LIST=$(/opt/opensearch/bin/opensearch-plugin list 2>/dev/null || echo "")
-PLUGINS_CHANGED=false
-for PLUGIN in analysis-nori opensearch-knn repository-s3; do
-  if echo "$PLUGIN_LIST" | grep -q "$PLUGIN"; then
-    log "Plugin $PLUGIN already installed, skipping."
-  else
-    /opt/opensearch/bin/opensearch-plugin install --batch "$PLUGIN" || true
-    PLUGINS_CHANGED=true
-  fi
-done
-if [ "$PLUGINS_CHANGED" = "true" ]; then
-  systemctl restart opensearch
 fi
 
 # ---- 7. OpenSearch API venv ----
