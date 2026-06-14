@@ -16,6 +16,7 @@ OPENSEARCH_API_DIR="/opt/opensearch-api"
 DATA_MOUNT="/data"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/user-data.log; }
+trap 'log "FAILED at line $LINENO (exit $?)"' ERR
 
 # ---- 1. 시스템 업데이트 ----
 log "Waiting for apt lock..."
@@ -32,7 +33,6 @@ done
 log "Updating system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get upgrade -y -qq
 apt-get install -y -qq gnupg openjdk-17-jdk python3.11 python3.11-venv python3-pip git
 
 # ---- 2. EBS 데이터 볼륨 마운트 ----
