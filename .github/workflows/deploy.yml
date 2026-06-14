@@ -304,6 +304,7 @@ jobs:
               "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz /tmp/data.tar.gz",
               "mkdir -p /opt/data && tar -xzf /tmp/data.tar.gz -C /opt/",
               "chmod +x /opt/opensearch-api/restore_or_skip.sh /opt/opensearch-api/create_snapshot.sh",
+              "for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && break; echo \"Waiting for venv ($i/60)...\"; sleep 30; done; [ -f /var/log/venv-ready ] || { echo ERROR: venv not ready; exit 1; }",
               "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/opensearch-api",
               "systemctl restart opensearch-api"
