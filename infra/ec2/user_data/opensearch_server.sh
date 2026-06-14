@@ -2,6 +2,11 @@
 # Bootstrap: AWS CLI 설치 후 S3에서 실제 설치 스크립트를 내려받아 실행한다.
 # 크기 제한: EC2 user_data는 base64 인코딩 후 16KB 이하 — 이 파일은 부트스트랩만 담는다.
 # 실제 설치 로직: infra/ec2/user_data/opensearch_setup.sh (S3 경유 배포)
+#
+# SETUP_REVISION: opensearch_setup.sh 를 수정할 때마다 이 숫자를 올린다.
+#   user_data(=이 부트스트랩) 내용이 바뀌어야 user_data_replace_on_change=true 가
+#   EC2를 교체하고 새 setup.sh 를 실제로 실행한다. setup.sh 만 고치면 반영되지 않는다.
+# SETUP_REVISION: 2
 set -euo pipefail
 
 # Terraform templatefile 변수 → 쉘 환경변수로 export (setup.sh에서 사용)

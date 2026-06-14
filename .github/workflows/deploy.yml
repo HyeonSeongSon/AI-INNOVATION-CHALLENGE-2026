@@ -307,6 +307,8 @@ jobs:
               "for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && break; echo \"Waiting for venv ($i/60)...\"; sleep 30; done; [ -f /var/log/venv-ready ] || { echo ERROR: venv not ready; exit 1; }",
               "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
               "chown -R ubuntu:ubuntu /opt/opensearch-api",
+              "systemctl stop opensearch-api 2>/dev/null || true",
+              "cd /opt/opensearch-api && OPENSEARCH_HOST=localhost OPENSEARCH_PORT=9200 OPENSEARCH_USE_SSL=true OPENSEARCH_ADMIN_PASSWORD=$(grep -Po 'OPENSEARCH_ADMIN_PASSWORD=\\K[^ ]+' /etc/systemd/system/opensearch-api.service) INTERNAL_TOKEN=$(grep -Po 'INTERNAL_TOKEN=\\K[^ ]+' /etc/systemd/system/opensearch-api.service) FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json /data/opensearch-api-venv/bin/python index_forbidden_sentences.py",
               "systemctl restart opensearch-api"
             ]}' \
             --output text --query "Command.CommandId")
