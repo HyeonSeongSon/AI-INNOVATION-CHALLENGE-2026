@@ -92,6 +92,18 @@ jobs:
         working-directory: infra/ec2
         run: terraform init
 
+      # setup.sh를 내용 해시로 버전 키화해 apply 전에 S3 업로드.
+      # EC2 부트스트랩이 이 해시 키만 받으므로 낡은 setup.sh를 받는 race가 사라진다.
+      # (S3 버킷은 기존 인프라에 이미 존재. 최초 배포 시엔 package job이 동일 키를 재업로드)
+      - name: Upload versioned opensearch_setup.sh to S3
+        id: setup-hash
+        run: |
+          HASH=$(sha256sum infra/ec2/user_data/opensearch_setup.sh | cut -c1-16)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          aws s3 cp infra/ec2/user_data/opensearch_setup.sh \
+            "s3://${PROJECT_NAME}-deploy/opensearch_setup.${HASH}.sh" \
+            || echo "bucket not ready (first deploy) — package job will upload"
+
       - name: Terraform Apply
         working-directory: infra/ec2
         run: terraform apply -auto-approve
@@ -101,6 +113,7 @@ jobs:
           TF_VAR_environment:   production
           TF_VAR_ecr_registry:  "${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           TF_VAR_ecr_image_tag: ${{ github.sha }}
+          TF_VAR_opensearch_setup_hash: ${{ steps.setup-hash.outputs.hash }}
 
           # ── 시크릿 (GitHub Secrets에서 주입) ──
           TF_VAR_opensearch_admin_password: ${{ secrets.OPENSEARCH_ADMIN_PASSWORD }}
@@ -151,10 +164,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload opensearch_setup.sh to S3
+      - name: Upload versioned opensearch_setup.sh to S3 (first-deploy safety net)
         run: |
+          HASH=$(sha256sum infra/ec2/user_data/opensearch_setup.sh | cut -c1-16)
           aws s3 cp infra/ec2/user_data/opensearch_setup.sh \
-            s3://${{ env.PROJECT_NAME }}-deploy/opensearch_setup.sh
+            "s3://${{ env.PROJECT_NAME }}-deploy/opensearch_setup.${HASH}.sh"
 
       - name: Cache OpenSearch tarball in S3 (skip if already uploaded)
         run: |

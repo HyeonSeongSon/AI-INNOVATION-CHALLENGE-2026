@@ -16,6 +16,17 @@ variable "project_name" {
   default     = "ai-innovation"
 }
 
+variable "opensearch_setup_hash" {
+  description = <<-EOT
+    opensearch_setup.sh 내용 해시. CI가 sha256으로 계산해 주입한다.
+    S3 키(opensearch_setup.<hash>.sh)와 부트스트랩 user_data에 함께 들어가므로
+    setup.sh가 바뀌면 EC2가 자동 교체되고, 부트스트랩은 정확히 그 버전만 내려받는다.
+    (S3 latest 키를 받던 race condition 제거 + 수동 SETUP_REVISION 불필요)
+  EOT
+  type        = string
+  default     = "dev"
+}
+
 # ---- 네트워크 ----
 
 variable "vpc_cidr" {

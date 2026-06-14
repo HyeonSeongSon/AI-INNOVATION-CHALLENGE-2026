@@ -131,6 +131,7 @@ resource "aws_instance" "opensearch" {
     OPENSEARCH_VERSION        = "2.13.0"
     internal_token            = var.internal_token
     opensearch_admin_password = var.opensearch_admin_password
+    setup_hash                = var.opensearch_setup_hash
   }))
 
   root_block_device {
