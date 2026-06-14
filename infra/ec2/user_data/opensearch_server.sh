@@ -6,7 +6,7 @@
 # SETUP_REVISION: opensearch_setup.sh 를 수정할 때마다 이 숫자를 올린다.
 #   user_data(=이 부트스트랩) 내용이 바뀌어야 user_data_replace_on_change=true 가
 #   EC2를 교체하고 새 setup.sh 를 실제로 실행한다. setup.sh 만 고치면 반영되지 않는다.
-# SETUP_REVISION: 2
+# SETUP_REVISION: 3
 set -euo pipefail
 
 # Terraform templatefile 변수 → 쉘 환경변수로 export (setup.sh에서 사용)

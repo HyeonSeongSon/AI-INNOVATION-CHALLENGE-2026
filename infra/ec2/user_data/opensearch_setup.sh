@@ -209,6 +209,9 @@ fi
 
 # ---- 보안 플러그인 초기화 ----
 log "Initializing OpenSearch security..."
+# OpenSearch 2.13 tarball의 보안 도구(hash.sh, securityadmin.sh)는 실행 권한 없이(0644)
+# 배포된다. 직접 실행하면 exit 126으로 죽으므로 +x 부여 후 사용한다.
+chmod +x /opt/opensearch/plugins/opensearch-security/tools/*.sh
 HASHED_PW=$(/opt/opensearch/plugins/opensearch-security/tools/hash.sh \
   -p "$OPENSEARCH_ADMIN_PASSWORD" | tail -1)
 INTERNAL_USERS="/opt/opensearch/config/opensearch-security/internal_users.yml"
