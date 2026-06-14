@@ -63,13 +63,13 @@ variable "db_instance_type" {
 
 variable "opensearch_instance_type" {
   description = <<-EOT
-    OpenSearch EC2 인스턴스 타입. t3.large(8GB) 필요.
-    이 박스는 OpenSearch JVM(~1.5GB RSS) + opensearch-api 검색 서빙용 KURE-v1(~1.5GB)을
-    상주시키며(정상 운영 ~3GB), 배포 시 forbidden 색인이 추가 KURE를 로드한다.
-    t3.medium(4GB)은 색인 _bulk 스파이크에서 OOM으로 OpenSearch가 죽는다.
+    OpenSearch EC2 인스턴스 타입.
+    OpenSearch JVM(~1.5GB) + opensearch-api 서빙용 KURE-v1(~1.5GB) ≈ 3GB 상주.
+    forbidden 색인 one-shot은 opensearch-api를 정지한 뒤 실행하므로 t3.medium(4GB)+swap로 충분.
+    (과거 색인 크래시는 메모리가 아니라 knn nmslib 네이티브 미탑재 문제였고 lucene 엔진으로 해결됨)
   EOT
   type        = string
-  default     = "t3.large"
+  default     = "t3.medium"
 }
 
 variable "ec2_ami" {

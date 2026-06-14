@@ -56,6 +56,16 @@ def _build_mapping(vector_dim: int) -> dict:
                 "sentence_vector": {
                     "type": "knn_vector",
                     "dimension": vector_dim,
+                    # 엔진 미지정 시 기본 nmslib(네이티브 JNI)로 생성되는데, 해당 네이티브
+                    # 라이브러리(opensearchknn_nmslib) 미탑재 환경에서는 색인 시 write 스레드가
+                    # UnsatisfiedLinkError로 fatal 크래시 → OpenSearch 다운.
+                    # product_v4_* 인덱스와 동일하게 lucene 엔진(순수 Java)으로 고정한다.
+                    "method": {
+                        "name": "hnsw",
+                        "space_type": "cosinesimil",
+                        "engine": "lucene",
+                        "parameters": {"ef_construction": 128, "m": 16},
+                    },
                 },
             }
         },
@@ -102,8 +112,16 @@ def run_indexing(client=None, force: bool = False) -> bool:
             logger.error("OpenSearch 연결 실패")
             return False
 
-    if force:
-        client.delete_index(INDEX_NAME)
+    # 기존 인덱스가 비어있으면(0 docs) 매핑 변경(nmslib→lucene 엔진)을 반영하기 위해
+    # 삭제 후 재생성한다. 이미 문서가 있으면(정상 매핑으로 색인 완료) 그대로 둔다.
+    try:
+        if force or (
+            client.client.indices.exists(index=INDEX_NAME)
+            and client.client.count(index=INDEX_NAME)["count"] == 0
+        ):
+            client.delete_index(INDEX_NAME)
+    except Exception:
+        pass
 
     vector_dim = len(client.model.encode("dummy"))
     mapping = _build_mapping(vector_dim)
