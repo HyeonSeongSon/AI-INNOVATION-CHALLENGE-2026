@@ -52,7 +52,13 @@ if ! blkid "$DATA_DISK" &>/dev/null; then
   mkfs.ext4 -F "$DATA_DISK"
 fi
 mkdir -p "$DATA_MOUNT"
-mount "$DATA_DISK" "$DATA_MOUNT" || true
+if ! mountpoint -q "$DATA_MOUNT"; then
+  mount "$DATA_DISK" "$DATA_MOUNT"
+fi
+if ! mountpoint -q "$DATA_MOUNT"; then
+  log "ERROR: Failed to mount $DATA_DISK to $DATA_MOUNT"
+  exit 1
+fi
 grep -q "$DATA_DISK" /etc/fstab || echo "$DATA_DISK $DATA_MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
 
 # ---- 3. 스왑 파일 ----
@@ -282,7 +288,7 @@ Environment=OPENSEARCH_USE_SSL=true
 Environment=OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
 Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
 Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
-ExecStartPre=/bin/sleep 60
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && exit 0; echo "Waiting for venv ($i/60)..."; sleep 30; done; exit 1'
 ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
 Restart=always
 RestartSec=5
@@ -298,6 +304,26 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable opensearch-api
+
+# ---- 9. venv/torch 백그라운드 설치 ----
+# torch CPU 설치는 15~30분 소요. CI 대기를 막지 않도록 백그라운드 실행.
+# opensearch-api.service는 /var/log/venv-ready를 확인한 뒤 기동됨.
+if [ -f "$DATA_MOUNT/opensearch-api-venv/bin/python" ]; then
+  log "EBS venv exists, skipping torch/transformers install."
+  touch /var/log/venv-ready
+else
+  log "Starting background venv install (torch ~20min)..."
+  (
+    python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
+    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
+    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
+    chown -R ubuntu:ubuntu "$DATA_MOUNT/opensearch-api-venv"
+    log "Background venv install complete."
+    touch /var/log/venv-ready
+  ) >> /var/log/user-data.log 2>&1 &
+fi
+chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" 2>/dev/null || true
 
 log "OpenSearch setup complete."
 touch /var/log/user-data-complete
