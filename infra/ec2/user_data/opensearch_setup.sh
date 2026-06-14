@@ -300,8 +300,13 @@ Environment=OPENSEARCH_USE_SSL=true
 Environment=OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
 Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
 Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
-ExecStartPre=/bin/bash -c 'for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && exit 0; echo "Waiting for venv ($i/60)..."; sleep 30; done; exit 1'
+# \$ 이스케이프 필수: unquoted heredoc(<<UNIT)에서 \$ 없이 쓰면 \$(seq 1 60)/\$i가
+# 파일 작성 시점에 확장되어 seq 개행이 unit 파일에 박혀 "bad unit file setting"으로 깨진다.
+# \$ 로 써야 서비스 시작 시점에 bash가 평가한다.
+ExecStartPre=/bin/bash -c 'for i in \$(seq 1 60); do [ -f /var/log/venv-ready ] && exit 0; echo "Waiting for venv (\$i/60)..."; sleep 30; done; exit 1'
 ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
+# venv 대기 루프가 systemd 기본 시작 타임아웃(90초)에 죽지 않도록 연장
+TimeoutStartSec=2400
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=120
