@@ -62,9 +62,14 @@ variable "db_instance_type" {
 }
 
 variable "opensearch_instance_type" {
-  description = "OpenSearch EC2 인스턴스 타입"
+  description = <<-EOT
+    OpenSearch EC2 인스턴스 타입. t3.large(8GB) 필요.
+    이 박스는 OpenSearch JVM(~1.5GB RSS) + opensearch-api 검색 서빙용 KURE-v1(~1.5GB)을
+    상주시키며(정상 운영 ~3GB), 배포 시 forbidden 색인이 추가 KURE를 로드한다.
+    t3.medium(4GB)은 색인 _bulk 스파이크에서 OOM으로 OpenSearch가 죽는다.
+  EOT
   type        = string
-  default     = "t3.medium"
+  default     = "t3.large"
 }
 
 variable "ec2_ami" {
