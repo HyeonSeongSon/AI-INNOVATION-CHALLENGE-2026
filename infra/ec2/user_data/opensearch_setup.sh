@@ -47,16 +47,24 @@ if [ -z "$DATA_DISK" ]; then
   log "ERROR: No 50GB data volume found after 2 minutes"
   exit 1
 fi
-log "Mounting $DATA_DISK -> $DATA_MOUNT..."
+log "Preparing $DATA_DISK -> $DATA_MOUNT..."
 if ! blkid "$DATA_DISK" &>/dev/null; then
   mkfs.ext4 -F "$DATA_DISK"
+else
+  # 인스턴스 강제 교체(force_detach)로 더티/손상된 ext4는 mount 시 커널에서
+  # uninterruptible(D-state)로 무한 hang한다. 마운트 전에 비대화식 복구로 자가치유한다.
+  # e2fsck 종료코드: 0=clean, 1/2=corrected, 4+=uncorrected — 모두 진행하고 mount로 판단.
+  log "Running e2fsck before mount (self-heal dirty volume)..."
+  e2fsck -y -f "$DATA_DISK" || log "e2fsck exit $? (corrected or non-fatal), continuing"
 fi
 mkdir -p "$DATA_MOUNT"
 if ! mountpoint -q "$DATA_MOUNT"; then
-  mount "$DATA_DISK" "$DATA_MOUNT"
+  # mount가 40분씩 hang하지 않도록 타임아웃. 실패 시 아래에서 명시적으로 종료.
+  log "Mounting $DATA_DISK..."
+  timeout 180 mount "$DATA_DISK" "$DATA_MOUNT" || log "mount returned $? (timeout/err)"
 fi
 if ! mountpoint -q "$DATA_MOUNT"; then
-  log "ERROR: Failed to mount $DATA_DISK to $DATA_MOUNT"
+  log "ERROR: Failed to mount $DATA_DISK to $DATA_MOUNT (volume may be unrecoverable — recreate EBS)"
   exit 1
 fi
 grep -q "$DATA_DISK" /etc/fstab || echo "$DATA_DISK $DATA_MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
