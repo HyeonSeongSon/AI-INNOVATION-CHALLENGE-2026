@@ -7,11 +7,8 @@ contextvars를 통해 전체 에이전트 실행 과정에 전파됩니다.
 
 import re
 import time
-from typing import Callable
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .context import generate_request_id, set_request_id
 from .logging import get_logger
@@ -22,18 +19,25 @@ _REQUEST_ID_RE = re.compile(r'^[a-zA-Z0-9\-]{1,64}$')
 logger = get_logger("http")
 
 
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    미들웨어 기능:
-    1. 요청마다 고유한 request_id 생성
-    2. contextvars에 설정 (모든 하위 로그에 자동 전파)
-    3. 요청 시작 및 응답 완료를 소요 시간과 함께 로깅
-    4. 응답 헤더에 X-Request-ID 추가
+class RequestLoggingMiddleware:
+    """요청/응답 로깅 — pure ASGI middleware.
+
+    BaseHTTPMiddleware 대신 pure ASGI로 구현한다:
+    BaseHTTPMiddleware.call_next()는 anyio task group + memory channel을 생성해
+    receive를 전달하는데, 중첩 시 body stream이 끊기는 Starlette 버그 회피.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 클라이언트 제공 X-Request-ID는 형식 검증 후 신뢰, 미통과 시 서버 생성값 사용
-        client_request_id = request.headers.get("X-Request-ID", "")
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # request_id 생성
+        headers = dict(scope.get("headers", []))
+        client_request_id = headers.get(b"x-request-id", b"").decode("latin-1")
         request_id = (
             client_request_id
             if client_request_id and _REQUEST_ID_RE.match(client_request_id)
@@ -41,13 +45,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
         set_request_id(request_id)
 
-        # 엔드포인트에서 접근할 수 있도록 request.state에 저장
-        request.state.request_id = request_id
-
-        # 요청 메타데이터 추출
-        method = request.method
-        path = request.url.path
-        client_host = request.client.host if request.client else "unknown"
+        method = scope.get("method", "")
+        path = scope.get("path", "")
+        client = scope.get("client")
+        client_host = client[0] if client else "unknown"
 
         logger.info(
             "request_started",
@@ -57,26 +58,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
 
         start_time = time.perf_counter()
+        status_code = 500
 
+        async def send_wrapper(message: dict) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                # X-Request-ID 응답 헤더 추가
+                headers_list = list(message.get("headers", []))
+                headers_list.append((b"x-request-id", request_id.encode()))
+                message = {**message, "headers": headers_list}
+            await send(message)
+
+        failed = False
         try:
-            response = await call_next(request)
-            duration_ms = (time.perf_counter() - start_time) * 1000
-
-            logger.info(
-                "request_completed",
-                method=method,
-                path=path,
-                status_code=response.status_code,
-                duration_ms=round(duration_ms, 1),
-            )
-
-            # 응답에 상관관계 헤더 추가
-            response.headers["X-Request-ID"] = request_id
-            return response
-
+            await self.app(scope, receive, send_wrapper)
         except Exception as e:
+            failed = True
             duration_ms = (time.perf_counter() - start_time) * 1000
-
             logger.error(
                 "request_failed",
                 method=method,
@@ -85,3 +84,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 error_type=type(e).__name__,
             )
             raise
+
+        if not failed:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            logger.info(
+                "request_completed",
+                method=method,
+                path=path,
+                status_code=status_code,
+                duration_ms=round(duration_ms, 1),
+            )
