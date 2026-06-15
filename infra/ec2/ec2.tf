@@ -33,17 +33,20 @@ resource "aws_iam_role_policy" "ec2_s3_deploy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:ListBucket"]
         Resource = [
           aws_s3_bucket.deploy.arn,
           "${aws_s3_bucket.deploy.arn}/*"
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:DeleteObject"]
-        Resource = "${aws_s3_bucket.deploy.arn}/opensearch-snapshots/*"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:DeleteObject"]
+        Resource = [
+          "${aws_s3_bucket.deploy.arn}/opensearch-snapshots/*",
+          "${aws_s3_bucket.deploy.arn}/backups/*",
+        ]
       }
     ]
   })
@@ -101,7 +104,10 @@ resource "aws_ebs_volume" "db_data" {
   type              = "gp3"
   encrypted         = true
 
-  tags = { Name = "${var.project_name}-ebs-db-data" }
+  tags = {
+    Name   = "${var.project_name}-ebs-db-data"
+    Backup = "true" # DLM 일일 스냅샷 대상 (backup.tf)
+  }
 
   lifecycle {
     prevent_destroy = true
@@ -151,7 +157,10 @@ resource "aws_ebs_volume" "opensearch_data" {
   type              = "gp3"
   encrypted         = true
 
-  tags = { Name = "${var.project_name}-ebs-opensearch-data" }
+  tags = {
+    Name   = "${var.project_name}-ebs-opensearch-data"
+    Backup = "true" # DLM 일일 스냅샷 대상 (backup.tf)
+  }
 
   lifecycle {
     prevent_destroy = true
@@ -182,4 +191,22 @@ resource "aws_s3_bucket_public_access_block" "deploy" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# 백업 보관 정책 — pg_dump 논리 백업(backups/)은 30일 후 만료
+resource "aws_s3_bucket_lifecycle_configuration" "deploy" {
+  bucket = aws_s3_bucket.deploy.id
+
+  rule {
+    id     = "expire-postgres-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = 30
+    }
+  }
 }
