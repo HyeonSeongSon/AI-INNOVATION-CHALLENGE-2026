@@ -108,24 +108,30 @@ resource "aws_secretsmanager_secret_version" "jwt_secret" {
   secret_string = var.jwt_secret
 }
 
+# API 키는 사용하는 모델에 따라 한쪽만 설정됨(gpt면 openai, claude면 anthropic).
+# 빈 값은 Secrets Manager가 거부하므로 값이 있을 때만 시크릿 생성.
 resource "aws_secretsmanager_secret" "openai_api_key" {
+  count                   = var.openai_api_key != "" ? 1 : 0
   name                    = "${var.project_name}/openai-api-key"
   description             = "OPENAI_API_KEY for ECS tasks"
   recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "openai_api_key" {
-  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  count         = var.openai_api_key != "" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.openai_api_key[0].id
   secret_string = var.openai_api_key
 }
 
 resource "aws_secretsmanager_secret" "anthropic_api_key" {
+  count                   = var.anthropic_api_key != "" ? 1 : 0
   name                    = "${var.project_name}/anthropic-api-key"
   description             = "ANTHROPIC_API_KEY for ECS tasks"
   recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
-  secret_id     = aws_secretsmanager_secret.anthropic_api_key.id
+  count         = var.anthropic_api_key != "" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.anthropic_api_key[0].id
   secret_string = var.anthropic_api_key
 }
