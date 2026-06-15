@@ -56,10 +56,19 @@ apt-get update -qq
 apt-get install -y -qq postgresql-15
 
 # PostgreSQL 데이터 디렉터리를 EBS 볼륨으로 이동
+# 데이터 볼륨에 기존 클러스터가 있으면 절대 덮어쓰지 않는다.
+#    (과거: 매 부팅마다 신규 빈 클러스터를 rsync로 덮어써 EC2 교체 시 데이터 유실)
 systemctl stop postgresql || true
-mkdir -p "$DATA_MOUNT/postgresql/15/main"
-if [ -d /var/lib/postgresql/15/main ] && [ "$(ls -A /var/lib/postgresql/15/main)" ]; then
-  rsync -a /var/lib/postgresql/ "$DATA_MOUNT/postgresql/"
+if [ -f "$DATA_MOUNT/postgresql/15/main/PG_VERSION" ]; then
+  # 기존 클러스터 보존 — rsync 금지 (EC2 교체 시 데이터 유지)
+  log "Existing PostgreSQL cluster found on data volume — preserving (no rsync)."
+else
+  # 최초 초기화에만 신규 설치본을 데이터 볼륨으로 복사
+  log "No existing cluster on data volume — initializing from fresh install."
+  mkdir -p "$DATA_MOUNT/postgresql/15/main"
+  if [ -d /var/lib/postgresql/15/main ] && [ "$(ls -A /var/lib/postgresql/15/main)" ]; then
+    rsync -a /var/lib/postgresql/ "$DATA_MOUNT/postgresql/"
+  fi
 fi
 chown -R postgres:postgres "$DATA_MOUNT/postgresql"
 sed -i "s|/var/lib/postgresql|$DATA_MOUNT/postgresql|g" /etc/postgresql/15/main/postgresql.conf
