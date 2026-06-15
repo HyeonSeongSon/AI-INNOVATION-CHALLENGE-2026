@@ -573,26 +573,75 @@ class ProductRegistrationService:
             r.raise_for_status()
             logger.info("register_product_db_done", product_name=product_name, product_id=product_id)
 
-            # 5. OpenSearch 색인 → vectordb_id 수집
+            # 5. OpenSearch 색인 → vectordb_id 수집 (재시도 + 보상 트랜잭션 포함)
             logger.info(
                 "register_product_opensearch_start",
                 product_name=product_name,
                 product_id=product_id,
                 group=group,
             )
-            r = await self.http_client.post(
-                f"{settings.opensearch_api_url}/api/product/index-multivector",
-                json={
-                    "product_id": product_id,
-                    "group":      group,
-                    "multivector": multivector,
-                },
-                timeout=settings.http_timeout_upload,
-            )
-            r.raise_for_status()
-            index_result = r.json()
-            if not index_result.get("success", False):
-                raise RuntimeError("OpenSearch 색인 실패")
+            last_os_exc: Exception | None = None
+            index_result: dict = {}
+            for attempt in range(settings.opensearch_index_max_retries):
+                try:
+                    r = await self.http_client.post(
+                        f"{settings.opensearch_api_url}/api/product/index-multivector",
+                        json={
+                            "product_id": product_id,
+                            "group":      group,
+                            "multivector": multivector,
+                        },
+                        timeout=settings.http_timeout_upload,
+                    )
+                    r.raise_for_status()
+                    index_result = r.json()
+                    if not index_result.get("success", False):
+                        raise RuntimeError("OpenSearch 색인 실패")
+                    last_os_exc = None
+                    break
+                except Exception as os_exc:
+                    last_os_exc = os_exc
+                    logger.warning(
+                        "register_product_opensearch_retry",
+                        product_id=product_id,
+                        attempt=attempt + 1,
+                        max_retries=settings.opensearch_index_max_retries,
+                        error_type=type(os_exc).__name__,
+                    )
+                    if attempt < settings.opensearch_index_max_retries - 1:
+                        await asyncio.sleep(
+                            min(settings.a2a_retry_backoff_base ** attempt, settings.a2a_retry_backoff_max)
+                        )
+
+            if last_os_exc is not None:
+                logger.error(
+                    "register_product_opensearch_all_retries_exhausted",
+                    product_id=product_id,
+                    max_retries=settings.opensearch_index_max_retries,
+                    error_type=type(last_os_exc).__name__,
+                )
+                # 보상: step 4에서 커밋된 DB row 삭제 (고아 레코드 방지)
+                try:
+                    comp_headers: dict[str, str] = {}
+                    if user_id:
+                        comp_headers["X-User-Assertion"] = self._make_user_assertion(user_id)
+                    comp_r = await self.http_client.request(
+                        "DELETE",
+                        f"{settings.database_api_url}/api/products",
+                        json={"ids": [product_id]},
+                        headers=comp_headers,
+                        timeout=settings.http_timeout_default,
+                    )
+                    comp_r.raise_for_status()
+                    logger.info("register_product_db_compensated", product_id=product_id)
+                except Exception as comp_exc:
+                    logger.error(
+                        "register_product_compensation_failed",
+                        product_id=product_id,
+                        error_type=type(comp_exc).__name__,
+                    )
+                raise last_os_exc
+
             vectordb_id = index_result.get("vectordb_id", {})
             logger.info("register_product_opensearch_done", product_name=product_name, product_id=product_id)
 

@@ -247,6 +247,9 @@ class Settings(BaseSettings):
     a2a_retry_backoff_base: float = 2.0
     a2a_retry_backoff_max: float = 30.0
 
+    # OpenSearch 색인 재시도 (backoff은 a2a_retry_backoff_base/max 재사용)
+    opensearch_index_max_retries: int = Field(default=3, ge=1)
+
     # LLM temperatures (역할별)
     llm_temperature_classifier: float = 0.0
     llm_temperature_generator: float = 0.7
