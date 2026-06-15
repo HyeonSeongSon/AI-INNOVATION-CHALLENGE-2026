@@ -552,6 +552,66 @@ async def update_product_vectordb_id(
     return {"success": True, "product_id": product_id}
 
 
+class ProductCreate(BaseModel):
+    """상품 생성 요청 — products 테이블 컬럼과 매핑. 미지정 필드는 모델 기본값 적용."""
+    product_id: str
+    product_name: str
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    tag: Optional[str] = None
+    sub_tag: Optional[str] = None
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    original_price: Optional[int] = None
+    discount_rate: Optional[int] = None
+    sale_price: Optional[int] = None
+    skin_type: Optional[List[str]] = None
+    concerns: Optional[List[str]] = None
+    preferred_colors: Optional[List[str]] = None
+    preferred_ingredients: Optional[List[str]] = None
+    avoided_ingredients: Optional[List[str]] = None
+    preferred_scents: Optional[List[str]] = None
+    lifestyle_values: Optional[List[str]] = None
+    exclusive_product: Optional[str] = None
+    personal_color: Optional[List[str]] = None
+    skin_shades: Optional[List[int]] = None
+    product_image_url: Optional[List[str]] = None
+    product_page_url: Optional[str] = None
+    product_comment: Optional[str] = None
+    product_details: Optional[dict] = None
+
+
+class ProductResponse(BaseModel):
+    product_id: str
+    product_name: str
+    brand: Optional[str] = None
+    sale_price: Optional[int] = None
+    rating: Optional[float] = None
+    product_created_at: datetime
+
+
+@router.post("/products", response_model=ProductResponse, summary="상품 생성")
+async def create_product(request: ProductCreate, db: Session = Depends(get_db)):
+    existing = db.query(Product).filter(Product.product_id == request.product_id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Product '{request.product_id}' already exists")
+
+    # 미지정(None) 필드는 제외해 모델 컬럼 기본값(빈 배열, review_count 0 등)을 유지
+    product = Product(**request.model_dump(exclude_none=True))
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+
+    return ProductResponse(
+        product_id=product.product_id,
+        product_name=product.product_name,
+        brand=product.brand,
+        sale_price=product.sale_price,
+        rating=float(product.rating) if product.rating is not None else None,
+        product_created_at=product.product_created_at,
+    )
+
+
 def _to_product_detail(p) -> ProductDetailResponse:
     return ProductDetailResponse(
         product_id=p.product_id,
