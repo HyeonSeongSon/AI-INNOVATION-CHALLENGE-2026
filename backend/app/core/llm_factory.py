@@ -69,17 +69,20 @@ def create_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatMod
     Raises:
         ValueError: 지원하지 않는 모델명 접두사
     """
+    # 호출자가 timeout을 명시하면 그 값을 쓰고, 없으면 기본값 사용
+    kwargs.setdefault("timeout", settings.llm_timeout)
+
     if model_name.startswith(("gpt-", "o1", "o3", "o4")):
         from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
+        return ChatOpenAI(model=model_name, temperature=temperature, **kwargs)
 
     elif model_name.startswith("claude-"):
         from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
+        return ChatAnthropic(model=model_name, temperature=temperature, **kwargs)
 
     elif model_name.startswith("gemini-"):
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, timeout=settings.llm_timeout, **kwargs)
+        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, **kwargs)
 
     else:
         raise ValueError(
