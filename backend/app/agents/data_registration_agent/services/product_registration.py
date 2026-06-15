@@ -219,8 +219,8 @@ class ProductRegistrationService:
         self._image_http_client: httpx.AsyncClient | None = None
         register(self)
         model = settings.chatgpt_model_name
-        self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision)
-        self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document)
+        self._vision_llm   = get_llm(vision_model or model,   temperature=settings.llm_temperature_vision,   timeout=settings.llm_registration_sdk_timeout)
+        self._document_llm = get_llm(document_model or model, temperature=settings.llm_temperature_document, timeout=settings.llm_registration_sdk_timeout)
 
     def _make_user_assertion(self, user_id: str) -> str:
         return create_user_assertion(

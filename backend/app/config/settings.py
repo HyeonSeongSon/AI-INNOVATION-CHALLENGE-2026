@@ -166,6 +166,7 @@ class Settings(BaseSettings):
     llm_timeout: float = 60.0
     llm_call_timeout: float = 70.0
     llm_document_timeout: float = 300.0
+    llm_registration_sdk_timeout: float = 330.0  # 상품 등록 LLM SDK 타임아웃 (llm_document_timeout보다 여유있게)
 
     # LangGraph
     langgraph_recursion_limit: int = 100
