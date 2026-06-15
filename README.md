@@ -113,8 +113,8 @@ cp opensearch/.env.example opensearch/.env
 
 `.env` 파일 내용:
 ```bash
-# OpenSearch 연결 설정
-OPENSEARCH_ADMIN_PASSWORD=MyStrongPassword123!
+# OpenSearch 연결 설정 (비밀번호는 openssl rand -base64 24 로 생성)
+OPENSEARCH_ADMIN_PASSWORD=CHANGE_ME_STRONG_RANDOM
 OPENSEARCH_HOST=localhost
 OPENSEARCH_PORT=9200
 

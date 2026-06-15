@@ -86,7 +86,7 @@ nano .env
 
 **로컬 개발 환경 (.env.example 참고):**
 ```bash
-OPENSEARCH_ADMIN_PASSWORD=MyStrongPassword123!
+OPENSEARCH_ADMIN_PASSWORD=CHANGE_ME_STRONG_RANDOM
 OPENSEARCH_HOST=localhost
 OPENSEARCH_PORT=9200
 
@@ -280,8 +280,8 @@ print(response.json())
 ### 환경 변수 (.env)
 
 ```bash
-# OpenSearch 연결 설정
-OPENSEARCH_ADMIN_PASSWORD=MyStrongPassword123!
+# OpenSearch 연결 설정 (비밀번호는 openssl rand -base64 24 로 생성)
+OPENSEARCH_ADMIN_PASSWORD=CHANGE_ME_STRONG_RANDOM
 OPENSEARCH_HOST=localhost
 OPENSEARCH_PORT=9200
 

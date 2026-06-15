@@ -77,8 +77,8 @@ resource "aws_iam_role_policy" "ecs_task_seed_delete" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:DeleteSecret"]
+      Effect = "Allow"
+      Action = ["secretsmanager:DeleteSecret"]
       Resource = [
         "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/admin-seed-email*",
         "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/admin-seed-password*",
@@ -125,36 +125,55 @@ resource "aws_iam_role_policy" "ecs_secrets" {
 # ---- 공통 환경변수 (모든 ECS 태스크 공유) ----
 
 locals {
+  # 비민감 환경변수만 평문 environment로 주입.
+  # 민감 값(POSTGRES_URL/PASSWORD/INTERNAL_TOKEN/JWT_SECRET/API키)은 common_secrets로 분리 —
+  # task def JSON 평문 노출(ecs:DescribeTaskDefinition) 제거.
   common_env = [
-    { name = "DATABASE_API_URL",     value = local.db_api_url },
-    { name = "OPENSEARCH_API_URL",   value = local.opensearch_api_url },
-    { name = "POSTGRES_URL",         value = local.postgres_url },
-    { name = "POSTGRES_HOST",        value = aws_instance.db.private_ip },
-    { name = "POSTGRES_PASSWORD",    value = var.postgres_password },
-    { name = "INTERNAL_TOKEN",       value = var.internal_token },
-    { name = "JWT_SECRET",           value = var.jwt_secret },
-    { name = "OPENAI_API_KEY",       value = var.openai_api_key },
-    { name = "ANTHROPIC_API_KEY",    value = var.anthropic_api_key },
-    { name = "CHATGPT_MODEL_NAME",   value = var.chatgpt_model_name },
-    { name = "PARSER_MODEL_NAME",    value = var.parser_model_name },
-    { name = "ENVIRONMENT",          value = var.environment },
-    { name = "LOG_LEVEL",            value = "INFO" },
+    { name = "DATABASE_API_URL", value = local.db_api_url },
+    { name = "OPENSEARCH_API_URL", value = local.opensearch_api_url },
+    { name = "POSTGRES_HOST", value = aws_instance.db.private_ip },
+    { name = "CHATGPT_MODEL_NAME", value = var.chatgpt_model_name },
+    { name = "PARSER_MODEL_NAME", value = var.parser_model_name },
+    { name = "ENVIRONMENT", value = var.environment },
+    { name = "LOG_LEVEL", value = "INFO" },
     # ALLOWED_ORIGINS: 모든 서비스에 주입 — Settings 프로덕션 검증이 localhost를 거부하므로
     # CRM·recommend·generate·data-registration 같은 내부 서비스도 이 값이 필요함
-    { name = "ALLOWED_ORIGINS",      value = jsonencode(split(",", var.allowed_origins)) },
+    { name = "ALLOWED_ORIGINS", value = jsonencode(split(",", var.allowed_origins)) },
     # TRUSTED_PROXY_IPS: ALB는 VPC 프라이빗 서브넷에서 ECS로 전달
     # ALB가 신뢰 프록시이므로 프라이빗 서브넷 CIDR을 허용
-    { name = "TRUSTED_PROXY_IPS",    value = jsonencode(var.private_subnet_cidrs) },
-    { name = "TRUSTED_PROXY_COUNT",  value = "1" },
+    { name = "TRUSTED_PROXY_IPS", value = jsonencode(var.private_subnet_cidrs) },
+    { name = "TRUSTED_PROXY_COUNT", value = "1" },
+  ]
+
+  # 민감 환경변수 — Secrets Manager에서 valueFrom으로 주입 (모든 서비스 공통)
+  common_secrets = [
+    { name = "POSTGRES_URL", valueFrom = aws_secretsmanager_secret.postgres_url.arn },
+    { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.postgres_password.arn },
+    { name = "INTERNAL_TOKEN", valueFrom = aws_secretsmanager_secret.internal_token.arn },
+    { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret.jwt_secret.arn },
+    { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
+    { name = "ANTHROPIC_API_KEY", valueFrom = aws_secretsmanager_secret.anthropic_api_key.arn },
   ]
 
   # A2A 서비스 URL — Cloud Map DNS 이름
   a2a_env = [
-    { name = "RECOMMEND_AGENT_URL",          value = "http://recommend-agent.crm.local:8001" },
-    { name = "GENERATE_MESSAGE_AGENT_URL",   value = "http://generate-agent.crm.local:8002" },
-    { name = "DATA_REGISTRATION_AGENT_URL",  value = "http://data-registration-agent.crm.local:8003" },
-    { name = "CRM_SERVICE_URL",              value = "http://crm-service.crm.local:8006" },
+    { name = "RECOMMEND_AGENT_URL", value = "http://recommend-agent.crm.local:8001" },
+    { name = "GENERATE_MESSAGE_AGENT_URL", value = "http://generate-agent.crm.local:8002" },
+    { name = "DATA_REGISTRATION_AGENT_URL", value = "http://data-registration-agent.crm.local:8003" },
+    { name = "CRM_SERVICE_URL", value = "http://crm-service.crm.local:8006" },
   ]
+
+  # 컨테이너 healthCheck — /health 200 확인 (python-slim 이미지, 의존성 없는 urllib 사용)
+  # 헬퍼: 포트를 받아 healthCheck 맵 생성
+  healthcheck = {
+    for port in [8005, 8006, 8001, 8002, 8003] : port => {
+      command     = ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:${port}/health').status==200 else 1)\""]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 60
+    }
+  }
 }
 
 # ---- Task Definitions ----
@@ -169,13 +188,14 @@ resource "aws_ecs_task_definition" "backend" {
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([{
-    name      = "fastapi-backend"
-    image     = "${var.ecr_registry}/${var.project_name}-backend:${var.ecr_image_tag}"
-    essential = true
+    name         = "fastapi-backend"
+    image        = "${var.ecr_registry}/${var.project_name}-backend:${var.ecr_image_tag}"
+    essential    = true
     portMappings = [{ containerPort = 8005, protocol = "tcp" }]
     environment  = concat(local.common_env, local.a2a_env)
+    healthCheck  = local.healthcheck[8005]
     # Secrets Manager — ECS가 태스크 시작 시 주입, 태스크 정의 JSON에 값 미노출
-    secrets = local.admin_seed_enabled ? [
+    secrets = concat(local.common_secrets, local.admin_seed_enabled ? [
       {
         name      = "ADMIN_SEED_EMAIL"
         valueFrom = aws_secretsmanager_secret.admin_seed_email[0].arn
@@ -184,7 +204,7 @@ resource "aws_ecs_task_definition" "backend" {
         name      = "ADMIN_SEED_PASSWORD"
         valueFrom = aws_secretsmanager_secret.admin_seed_password[0].arn
       }
-    ] : []
+    ] : [])
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -205,12 +225,14 @@ resource "aws_ecs_task_definition" "crm" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
 
   container_definitions = jsonencode([{
-    name      = "crm-service"
-    image     = "${var.ecr_registry}/${var.project_name}-crm:${var.ecr_image_tag}"
-    essential = true
-    command   = ["uvicorn", "servers.crm_server:app", "--host", "0.0.0.0", "--port", "8006"]
+    name         = "crm-service"
+    image        = "${var.ecr_registry}/${var.project_name}-crm:${var.ecr_image_tag}"
+    essential    = true
+    command      = ["uvicorn", "servers.crm_server:app", "--host", "0.0.0.0", "--port", "8006"]
     portMappings = [{ containerPort = 8006, protocol = "tcp" }]
     environment  = concat(local.common_env, local.a2a_env)
+    secrets      = local.common_secrets
+    healthCheck  = local.healthcheck[8006]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -231,12 +253,14 @@ resource "aws_ecs_task_definition" "recommend" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
 
   container_definitions = jsonencode([{
-    name      = "recommend-agent"
-    image     = "${var.ecr_registry}/${var.project_name}-recommend:${var.ecr_image_tag}"
-    essential = true
-    command   = ["uvicorn", "servers.recommend_server:app", "--host", "0.0.0.0", "--port", "8001"]
+    name         = "recommend-agent"
+    image        = "${var.ecr_registry}/${var.project_name}-recommend:${var.ecr_image_tag}"
+    essential    = true
+    command      = ["uvicorn", "servers.recommend_server:app", "--host", "0.0.0.0", "--port", "8001"]
     portMappings = [{ containerPort = 8001, protocol = "tcp" }]
     environment  = local.common_env
+    secrets      = local.common_secrets
+    healthCheck  = local.healthcheck[8001]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -257,12 +281,14 @@ resource "aws_ecs_task_definition" "generate" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
 
   container_definitions = jsonencode([{
-    name      = "generate-agent"
-    image     = "${var.ecr_registry}/${var.project_name}-generate:${var.ecr_image_tag}"
-    essential = true
-    command   = ["uvicorn", "servers.generate_server:app", "--host", "0.0.0.0", "--port", "8002"]
+    name         = "generate-agent"
+    image        = "${var.ecr_registry}/${var.project_name}-generate:${var.ecr_image_tag}"
+    essential    = true
+    command      = ["uvicorn", "servers.generate_server:app", "--host", "0.0.0.0", "--port", "8002"]
     portMappings = [{ containerPort = 8002, protocol = "tcp" }]
     environment  = local.common_env
+    secrets      = local.common_secrets
+    healthCheck  = local.healthcheck[8002]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -283,12 +309,14 @@ resource "aws_ecs_task_definition" "data_registration" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
 
   container_definitions = jsonencode([{
-    name      = "data-registration-agent"
-    image     = "${var.ecr_registry}/${var.project_name}-data-registration:${var.ecr_image_tag}"
-    essential = true
-    command   = ["uvicorn", "servers.data_registration_server:app", "--host", "0.0.0.0", "--port", "8003"]
+    name         = "data-registration-agent"
+    image        = "${var.ecr_registry}/${var.project_name}-data-registration:${var.ecr_image_tag}"
+    essential    = true
+    command      = ["uvicorn", "servers.data_registration_server:app", "--host", "0.0.0.0", "--port", "8003"]
     portMappings = [{ containerPort = 8003, protocol = "tcp" }]
     environment  = local.common_env
+    secrets      = local.common_secrets
+    healthCheck  = local.healthcheck[8003]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

@@ -140,6 +140,24 @@ systemctl daemon-reload
 systemctl enable db-api
 # 코드는 GitHub Actions SSM 배포에서 설치 후 시작
 
+# ---- 6. 논리 백업 — pg_dump → S3 (일 1회) ----
+# 블록 레벨 백업은 DLM EBS 스냅샷(backup.tf)이 담당. 이건 테이블 단위 granular 복구용.
+log "Registering pg_dump backup cron..."
+cat > /opt/db-backup.sh <<BACKUP
+#!/bin/bash
+set -euo pipefail
+export PGPASSWORD="$POSTGRES_PASSWORD"
+TS=\$(date +%F_%H%M)
+DUMP=/tmp/pgdump-\$TS.sql.gz
+pg_dump -h localhost -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "\$DUMP"
+/usr/local/bin/aws s3 cp "\$DUMP" "s3://$PROJECT_NAME-deploy/backups/postgres/\$TS.sql.gz"
+rm -f "\$DUMP"
+BACKUP
+chmod 700 /opt/db-backup.sh  # PGPASSWORD 포함 — root 전용
+# 매일 18:10 UTC (KST 03:10) — DLM 스냅샷(18:00)과 시차
+echo "10 18 * * * root /opt/db-backup.sh >> /var/log/db-backup.log 2>&1" > /etc/cron.d/db-backup
+chmod 644 /etc/cron.d/db-backup
+
 log "DB server setup complete."
 log "  PostgreSQL: systemctl status postgresql"
 log "  DB API:     systemctl status db-api"

@@ -65,7 +65,7 @@ resource "aws_lb_target_group" "backend" {
   port        = 8005
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "ip"  # Fargate는 IP 타입
+  target_type = "ip" # Fargate는 IP 타입
 
   health_check {
     path                = "/health"

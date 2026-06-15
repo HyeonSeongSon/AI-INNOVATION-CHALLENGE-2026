@@ -54,3 +54,78 @@ resource "aws_secretsmanager_secret_version" "db_api_internal_token" {
   secret_id     = aws_secretsmanager_secret.db_api_internal_token.id
   secret_string = var.internal_token
 }
+
+# -----------------------------------------------------------------------
+# ECS Sensitive Env Secrets — task definition 평문 노출 제거용
+#
+# 기존엔 POSTGRES_URL/PASSWORD/JWT/토큰/API키가 task def environment에 평문으로
+# 들어가 ecs:DescribeTaskDefinition으로 조회됐다. Secrets Manager로 옮겨
+# ECS `secrets` 블록(valueFrom)으로 주입한다 — admin-seed와 동일 패턴.
+# ECS execution role이 secretsmanager:GetSecretValue ${project_name}/* 권한 보유.
+# -----------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "postgres_url" {
+  name                    = "${var.project_name}/postgres-url"
+  description             = "POSTGRES_URL (contains password) for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "postgres_url" {
+  secret_id     = aws_secretsmanager_secret.postgres_url.id
+  secret_string = local.postgres_url
+}
+
+resource "aws_secretsmanager_secret" "postgres_password" {
+  name                    = "${var.project_name}/postgres-password"
+  description             = "POSTGRES_PASSWORD for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "postgres_password" {
+  secret_id     = aws_secretsmanager_secret.postgres_password.id
+  secret_string = var.postgres_password
+}
+
+resource "aws_secretsmanager_secret" "internal_token" {
+  name                    = "${var.project_name}/internal-token"
+  description             = "INTERNAL_TOKEN for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "internal_token" {
+  secret_id     = aws_secretsmanager_secret.internal_token.id
+  secret_string = var.internal_token
+}
+
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name                    = "${var.project_name}/jwt-secret"
+  description             = "JWT_SECRET for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = var.jwt_secret
+}
+
+resource "aws_secretsmanager_secret" "openai_api_key" {
+  name                    = "${var.project_name}/openai-api-key"
+  description             = "OPENAI_API_KEY for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  secret_string = var.openai_api_key
+}
+
+resource "aws_secretsmanager_secret" "anthropic_api_key" {
+  name                    = "${var.project_name}/anthropic-api-key"
+  description             = "ANTHROPIC_API_KEY for ECS tasks"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
+  secret_id     = aws_secretsmanager_secret.anthropic_api_key.id
+  secret_string = var.anthropic_api_key
+}

@@ -263,6 +263,36 @@ if [ "$SEC_OK" = "false" ]; then
   exit 1
 fi
 
+# ---- 6b. S3 스냅샷 리포지토리 등록 + 일일 백업 cron ----
+# 블록 레벨 백업은 DLM EBS 스냅샷(backup.tf)이 담당. 이건 인덱스 단위 granular 복구용.
+# repository-s3 플러그인은 EC2 인스턴스 역할(IAM) 자격증명을 사용 — EC2 role에
+# s3://$PROJECT_NAME-deploy/opensearch-snapshots/* PutObject 권한 보유.
+log "Registering S3 snapshot repository..."
+REGION=$(curl -s -H "X-aws-ec2-metadata-token: $(curl -s -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')" http://169.254.169.254/latest/meta-data/placement/region || echo "ap-northeast-2")
+curl -sk -u "admin:$OPENSEARCH_ADMIN_PASSWORD" -X PUT "https://localhost:9200/_snapshot/s3-backup" \
+  -H "Content-Type: application/json" -d "{
+  \"type\": \"s3\",
+  \"settings\": {
+    \"bucket\": \"$PROJECT_NAME-deploy\",
+    \"base_path\": \"opensearch-snapshots\",
+    \"region\": \"$REGION\"
+  }
+}" || log "WARN: snapshot repo registration failed (will retry via cron)"
+
+cat > /opt/opensearch-snapshot.sh <<SNAP
+#!/bin/bash
+set -euo pipefail
+SNAP_NAME="snap-\$(date +%F-%H%M)"
+# 리포지토리 미등록 상태면 1회 재등록 (idempotent)
+curl -sk -u "admin:$OPENSEARCH_ADMIN_PASSWORD" -X PUT "https://localhost:9200/_snapshot/s3-backup" \
+  -H "Content-Type: application/json" -d '{"type":"s3","settings":{"bucket":"$PROJECT_NAME-deploy","base_path":"opensearch-snapshots","region":"$REGION"}}' >/dev/null 2>&1 || true
+curl -sk -u "admin:$OPENSEARCH_ADMIN_PASSWORD" -X PUT "https://localhost:9200/_snapshot/s3-backup/\$SNAP_NAME?wait_for_completion=false"
+SNAP
+chmod 700 /opt/opensearch-snapshot.sh  # admin 비밀번호 포함 — root 전용
+# 매일 18:20 UTC (KST 03:20) — DLM(18:00)·pg_dump(18:10)와 시차
+echo "20 18 * * * root /opt/opensearch-snapshot.sh >> /var/log/opensearch-snapshot.log 2>&1" > /etc/cron.d/opensearch-snapshot
+chmod 644 /etc/cron.d/opensearch-snapshot
+
 # ---- 7. OpenSearch API venv ----
 log "Setting up OpenSearch API venv..."
 mkdir -p "$OPENSEARCH_API_DIR"
