@@ -451,7 +451,7 @@ class ProductRegistrationService:
 
         for attempt in range(2):
             try:
-                response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)])
+                response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)], timeout=settings.llm_document_timeout)
             except Exception as e:
                 logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error_type=type(e).__name__, exc_info=True)
                 raise
