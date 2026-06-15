@@ -149,7 +149,7 @@ async def _extract_text_from_chunks(
     })
 
     try:
-        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)], timeout=settings.llm_document_timeout)
     except Exception as e:
         logger.error("extract_text_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
@@ -197,7 +197,7 @@ async def _extract_and_classify_from_chunks(
     })
 
     try:
-        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)])
+        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)], timeout=settings.llm_document_timeout)
     except Exception as e:
         logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
