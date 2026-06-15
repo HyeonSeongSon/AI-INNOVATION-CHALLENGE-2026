@@ -165,7 +165,7 @@ class Settings(BaseSettings):
     # LLM call timeouts (seconds)
     llm_timeout: float = 60.0
     llm_call_timeout: float = 70.0
-    llm_document_timeout: float = 150.0
+    llm_document_timeout: float = 300.0
 
     # LangGraph
     langgraph_recursion_limit: int = 100
