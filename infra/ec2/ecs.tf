@@ -146,14 +146,21 @@ locals {
   ]
 
   # 민감 환경변수 — Secrets Manager에서 valueFrom으로 주입 (모든 서비스 공통)
-  common_secrets = [
-    { name = "POSTGRES_URL", valueFrom = aws_secretsmanager_secret.postgres_url.arn },
-    { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.postgres_password.arn },
-    { name = "INTERNAL_TOKEN", valueFrom = aws_secretsmanager_secret.internal_token.arn },
-    { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret.jwt_secret.arn },
-    { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
-    { name = "ANTHROPIC_API_KEY", valueFrom = aws_secretsmanager_secret.anthropic_api_key.arn },
-  ]
+  # API 키는 설정된 것만 주입 (빈 키는 시크릿 미생성 → 여기서도 제외)
+  common_secrets = concat(
+    [
+      { name = "POSTGRES_URL", valueFrom = aws_secretsmanager_secret.postgres_url.arn },
+      { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.postgres_password.arn },
+      { name = "INTERNAL_TOKEN", valueFrom = aws_secretsmanager_secret.internal_token.arn },
+      { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret.jwt_secret.arn },
+    ],
+    var.openai_api_key != "" ? [
+      { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key[0].arn },
+    ] : [],
+    var.anthropic_api_key != "" ? [
+      { name = "ANTHROPIC_API_KEY", valueFrom = aws_secretsmanager_secret.anthropic_api_key[0].arn },
+    ] : [],
+  )
 
   # A2A 서비스 URL — Cloud Map DNS 이름
   a2a_env = [
