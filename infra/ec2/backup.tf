@@ -32,7 +32,7 @@ resource "aws_iam_role_policy_attachment" "dlm" {
 # ---- DLM 라이프사이클 정책 — 데이터 EBS 볼륨 일일 스냅샷 ----
 
 resource "aws_dlm_lifecycle_policy" "ebs_daily" {
-  description        = "${var.project_name} 데이터 볼륨 일일 EBS 스냅샷 (DB + OpenSearch)"
+  description        = "${var.project_name} daily EBS snapshots - DB and OpenSearch data volumes"
   execution_role_arn = aws_iam_role.dlm.arn
   state              = "ENABLED"
 
