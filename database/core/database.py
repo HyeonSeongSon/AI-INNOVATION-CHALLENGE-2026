@@ -28,6 +28,13 @@ class DatabaseConfig:
         if password is None:
             raise ValueError("POSTGRES_PASSWORD 환경변수가 설정되지 않았습니다.")
         self.password = password
+        # Postgres max_connections(기본 100) 중 관리자/마이그레이션용으로 일부를 남기고
+        # 앱이 쓸 수 있는 실질 한도를 pool_size+max_overflow로 설정한다.
+        self.pool_size = int(os.getenv('DB_POOL_SIZE', 20))
+        self.max_overflow = int(os.getenv('DB_MAX_OVERFLOW', 60))
+        # 동기 DB 세션 의존성(get_db)이 실행되는 anyio 스레드풀 capacity.
+        # pool_size+max_overflow보다 작으면 풀 증설 효과가 무력화되므로 그 이상으로 맞춘다.
+        self.db_threadpool_capacity = int(os.getenv('DB_THREADPOOL_CAPACITY', 100))
 
     @property
     def database_url(self) -> str:
@@ -42,8 +49,8 @@ db_config = DatabaseConfig()
 engine = create_engine(
     db_config.database_url,
     echo=False,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=db_config.pool_size,
+    max_overflow=db_config.max_overflow,
     pool_pre_ping=True,
     pool_recycle=3600,
 )

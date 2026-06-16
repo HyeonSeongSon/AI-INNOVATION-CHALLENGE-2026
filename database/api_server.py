@@ -6,6 +6,9 @@ DB CRUD + Pipeline API (port 8020)
 import hmac
 import json
 import os
+from contextlib import asynccontextmanager
+
+import anyio
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -14,6 +17,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 load_dotenv()
 
+from core.database import db_config
 from core.logging import configure_logging, RequestLoggingMiddleware
 
 configure_logging()
@@ -101,10 +105,20 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # anyio 기본 스레드풀 capacity(40)는 동기 SQLAlchemy 세션 의존성(get_db)이 실행되는 곳.
+    # db_config.db_threadpool_capacity(DB_THREADPOOL_CAPACITY 환경변수, 기본 100)보다
+    # SQLAlchemy pool이 크면 풀보다 먼저 천장이 되므로, 풀 크기와 함께 db_config에서 관리한다.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = db_config.db_threadpool_capacity
+    yield
+
+
 app = FastAPI(
     title="Database API",
     description="DB CRUD 및 Pipeline API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(InternalTokenMiddleware)
