@@ -5,7 +5,7 @@ set -euo pipefail
 
 BUCKET="ai-innovation-deploy"
 REGION="ap-northeast-2"
-REPO_NAME="s3_backup"
+REPO_NAME="s3-backup"             # restore_or_skip.sh / opensearch_setup.sh 일일 cron과 동일 repo로 통일
 SNAPSHOT_NAME="opensearch_snapshot"
 
 # opensearch-api.service 에서 관리자 패스워드 추출
