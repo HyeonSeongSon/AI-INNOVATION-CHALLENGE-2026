@@ -135,7 +135,7 @@ class Settings(BaseSettings):
     recommend_agent_url: str = "http://localhost:8001"
     generate_message_agent_url: str = "http://localhost:8002"
     data_registration_agent_url: str = "http://localhost:8003"
-    a2a_timeout: float = 120.0
+    a2a_timeout: float = 280.0
     a2a_max_retries: int = Field(default=3, ge=1)
 
     # CRM Service (내부 전용)
@@ -170,7 +170,7 @@ class Settings(BaseSettings):
 
     # LangGraph
     langgraph_recursion_limit: int = 100
-    graph_execution_timeout: float = 300.0
+    graph_execution_timeout: float = 600.0
 
     # Product recommendation tuning
     rrf_k: int = 60
