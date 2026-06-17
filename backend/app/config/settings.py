@@ -230,7 +230,10 @@ class Settings(BaseSettings):
 
     # Database pool (psycopg async — LangGraph checkpointer)
     postgres_async_pool_min_size: int = 1
-    postgres_async_pool_max_size: int = 10
+    postgres_async_pool_max_size: int = 30
+
+    # OpenSearch 동시 검색 요청 상한 (세마포어)
+    opensearch_max_concurrent_searches: int = 20
 
     # Health check
     health_check_db_timeout: float = 2.0

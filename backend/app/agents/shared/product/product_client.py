@@ -8,6 +8,16 @@ import asyncio
 
 logger = get_logger("recommend_products")
 
+_opensearch_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_opensearch_semaphore() -> asyncio.Semaphore:
+    global _opensearch_semaphore
+    if _opensearch_semaphore is None:
+        _opensearch_semaphore = asyncio.Semaphore(settings.opensearch_max_concurrent_searches)
+    return _opensearch_semaphore
+
+
 class ProductClient:
     def __init__(self):
         self.db_api_url = settings.database_api_url
@@ -20,7 +30,7 @@ class ProductClient:
         """httpx.AsyncClient lazy init (커넥션 풀 재사용)"""
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(settings.http_timeout_default),
+                timeout=httpx.Timeout(settings.http_timeout_long),
                 headers={"X-Internal-Token": settings.internal_token},
             )
         return self._http_client
@@ -254,27 +264,28 @@ class ProductClient:
         aggregation: str = "max",
     ) -> List[Dict[str, Any]]:
         """POST /api/search/multivector 호출 (내부용)"""
-        try:
-            response = await self.http_client.post(
-                f"{self.vector_db_api_url}/api/search/multivector",
-                json={
-                    "query": query,
-                    "index_name": index_name,
-                    "product_ids": product_ids,
-                    "top_k": top_k,
-                    "aggregation": aggregation,
-                },
-            )
-            response.raise_for_status()
-            return response.json().get("results", [])
-        except Exception as e:
-            logger.error(
-                "search_multivector.failed",
-                index_name=index_name,
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
-            raise
+        async with _get_opensearch_semaphore():
+            try:
+                response = await self.http_client.post(
+                    f"{self.vector_db_api_url}/api/search/multivector",
+                    json={
+                        "query": query,
+                        "index_name": index_name,
+                        "product_ids": product_ids,
+                        "top_k": top_k,
+                        "aggregation": aggregation,
+                    },
+                )
+                response.raise_for_status()
+                return response.json().get("results", [])
+            except Exception as e:
+                logger.error(
+                    "search_multivector.failed",
+                    index_name=index_name,
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
+                raise
 
     @traced(name="search_by_multivector_combined", run_type="retriever")
     async def search_by_multivector_combined(
