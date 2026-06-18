@@ -187,6 +187,12 @@ app.add_middleware(_BodySizeLimitMiddleware, max_body_bytes=_MAX_BODY_BYTES)
 # OpenSearch 클라이언트 (싱글톤)
 opensearch_client = None
 
+# OpenSearch 클러스터 동시 검색 요청 상한 — 이 서비스는 recommend-agent·generate-agent가
+# 공통으로 호출하는 단일 지점이라, 여기서 게이팅해야 두 호출자 간에 실제로 예산이 공유된다.
+# 프로덕션은 워커 4개로 떠서(uvicorn workers=4) 워커마다 별도 프로세스이므로, 워커별 예산을
+# 나눠서 총합이 전체 예산에 근접하도록 한다.
+_search_semaphore = asyncio.Semaphore(int(os.getenv("OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER", "5")))
+
 
 # 요청/응답 모델
 class ProductIDSearchRequest(BaseModel):
@@ -440,11 +446,12 @@ async def get_product_by_id(
         }
 
         # 검색 실행
-        response = await asyncio.to_thread(
-            client.client.search,
-            index=index_name,
-            body=query_body,
-        )
+        async with _search_semaphore:
+            response = await asyncio.to_thread(
+                client.client.search,
+                index=index_name,
+                body=query_body,
+            )
 
         hits = response.get("hits", {}).get("hits", [])
 
@@ -564,14 +571,15 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         }
 
         # 검색 실행
-        raw_results = await asyncio.to_thread(
-            client.search_with_pipeline,
-            query_text=request.query,
-            pipeline_id=request.pipeline_id,
-            index_name=request.index_name,
-            query_body=query_body,
-            top_k=request.top_k,
-        )
+        async with _search_semaphore:
+            raw_results = await asyncio.to_thread(
+                client.search_with_pipeline,
+                query_text=request.query,
+                pipeline_id=request.pipeline_id,
+                index_name=request.index_name,
+                query_body=query_body,
+                top_k=request.top_k,
+            )
 
         # 결과 포맷팅
         results = []
@@ -641,11 +649,12 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
             }
         }
 
-        response = await asyncio.to_thread(
-            client.client.search,
-            index=request.index_name,
-            body=query_body,
-        )
+        async with _search_semaphore:
+            response = await asyncio.to_thread(
+                client.client.search,
+                index=request.index_name,
+                body=query_body,
+            )
 
         hits = response.get("hits", {}).get("hits", [])
 
@@ -707,16 +716,17 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = await asyncio.to_thread(
-            client.search_combined,
-            query_text=request.query,
-            product_ids=request.product_ids,
-            top_k=request.top_k,
-            index_name=request.index_name,
-            pipeline_id=request.pipeline_id,
-            bm25_fields=request.bm25_fields,
-            vector_field=request.vector_field or "combined_vector",
-        )
+        async with _search_semaphore:
+            raw_results = await asyncio.to_thread(
+                client.search_combined,
+                query_text=request.query,
+                product_ids=request.product_ids,
+                top_k=request.top_k,
+                index_name=request.index_name,
+                pipeline_id=request.pipeline_id,
+                bm25_fields=request.bm25_fields,
+                vector_field=request.vector_field or "combined_vector",
+            )
 
         results = [
             CombinedSearchResult(
@@ -763,16 +773,17 @@ async def search_by_field(request: FieldSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
-        raw_results = await asyncio.to_thread(
-            client.search_by_field,
-            query_text=request.query,
-            bm25_fields=request.bm25_fields,
-            vector_field=request.vector_field,
-            product_ids=request.product_ids,
-            top_k=request.top_k,
-            index_name=request.index_name,
-            pipeline_id=request.pipeline_id,
-        )
+        async with _search_semaphore:
+            raw_results = await asyncio.to_thread(
+                client.search_by_field,
+                query_text=request.query,
+                bm25_fields=request.bm25_fields,
+                vector_field=request.vector_field,
+                product_ids=request.product_ids,
+                top_k=request.top_k,
+                index_name=request.index_name,
+                pipeline_id=request.pipeline_id,
+            )
 
         results = [
             FieldSearchResult(
@@ -818,15 +829,16 @@ async def search_multivector(request: MultiVectorSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
         
-        raw_results = await asyncio.to_thread(
-            client.search_multivector_field,
-            query_text=request.query,
-            index_name=request.index_name,
-            product_ids=request.product_ids,
-            top_k=request.top_k,
-            aggregation=request.aggregation,
-            pipeline_id=request.pipeline_id,
-        )
+        async with _search_semaphore:
+            raw_results = await asyncio.to_thread(
+                client.search_multivector_field,
+                query_text=request.query,
+                index_name=request.index_name,
+                product_ids=request.product_ids,
+                top_k=request.top_k,
+                aggregation=request.aggregation,
+                pipeline_id=request.pipeline_id,
+            )
 
         results = [
             FieldSearchResult(score=item["score"], product_id=item["product_id"])
@@ -890,7 +902,8 @@ async def index_multivector(request: IndexMultivectorRequest):
                     "embedding_model": _EMBEDDING_MODEL_VERSION,
                 })
 
-            response = await asyncio.to_thread(client.client.bulk, body=bulk_body, refresh=True)
+            async with _search_semaphore:
+                response = await asyncio.to_thread(client.client.bulk, body=bulk_body, refresh=True)
             failed_ids = {
                 item["index"]["_id"]
                 for item in response.get("items", [])

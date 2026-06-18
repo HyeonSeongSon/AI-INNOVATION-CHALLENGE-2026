@@ -23,7 +23,7 @@ from ....core.data_loader import get_forbidden_keywords, get_brand_tone
 from ....core.llm_utils import ainvoke_with_timeout
 from ....config.settings import settings
 from ....core.http_client_registry import register
-from ...shared.product.product_client import ProductClient, _get_opensearch_semaphore
+from ...shared.product.product_client import ProductClient
 
 logger = get_logger("quality_check")
 
@@ -469,15 +469,14 @@ class QualityChecker:
         """
         for attempt in range(1, settings.quality_check_semantic_max_retries + 1):
             try:
-                async with _get_opensearch_semaphore():
-                    response = await client.post(
-                        endpoint,
-                        json={
-                            "index_name": settings.opensearch_forbidden_sentences_index,
-                            "query": sentence,
-                            "top_k": settings.quality_check_semantic_top_k,
-                        },
-                    )
+                response = await client.post(
+                    endpoint,
+                    json={
+                        "index_name": settings.opensearch_forbidden_sentences_index,
+                        "query": sentence,
+                        "top_k": settings.quality_check_semantic_top_k,
+                    },
+                )
                 response.raise_for_status()
                 data = response.json()
                 return [
