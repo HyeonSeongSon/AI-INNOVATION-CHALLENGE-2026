@@ -235,9 +235,10 @@ class Settings(BaseSettings):
     # OpenSearch 동시 검색 요청 상한 (세마포어)
     opensearch_max_concurrent_searches: int = 20
 
-    # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 보호는 opensearch_max_concurrent_searches
-    # 세마포어(recommend_product_agent·quality_check 공유)가 전담하므로, 진입 단계는 동시
-    # 100명까지 허용. 그래프 실행(astream_events) 시작 전 세마포어 슬롯을 획득.
+    # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 보호는 opensearch_api.py(fastapi-search,
+    # recommend-agent·generate-agent가 공통으로 호출하는 단일 서버 프로세스)의 워커별 세마포어가
+    # 전담하므로, 진입 단계는 동시 100명까지 허용. 그래프 실행(astream_events) 시작 전 세마포어
+    # 슬롯을 획득.
     chat_stream_max_concurrent: int = 100
     chat_stream_admission_timeout: float = 300.0  # 슬롯 대기 최대 시간 (초) — 실제 처리시간(~150s) 대비 여유
 
