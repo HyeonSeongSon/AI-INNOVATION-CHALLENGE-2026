@@ -3,8 +3,9 @@
 #
 # 문제: ALB 기본 idle_timeout = 60s
 # LangGraph 에이전트 체인(supervisor → recommend → generate)이 LLM을
-# 연속 호출하면 총 소요 시간이 60s를 초과할 수 있습니다.
-# settings.py의 graph_execution_timeout = 300s에 맞춰 300으로 설정합니다.
+# 연속 호출하면 총 소요 시간이 graph_execution_timeout(600s)을 넘을 수 있습니다.
+# ALB가 graph보다 먼저 끊으면 504 경쟁 조건이 발생하므로(20차 부하테스트에서 실측),
+# graph_execution_timeout(600s)보다 길게 660으로 설정합니다.
 # -----------------------------------------------------------------------
 
 resource "aws_lb" "main" {
@@ -14,8 +15,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  # SSE 스트리밍 대응 — graph_execution_timeout(300s)에 맞춤
-  idle_timeout = 300
+  # SSE 스트리밍 대응 — graph_execution_timeout(600s)보다 길게 설정
+  idle_timeout = 660
 
   tags = { Name = "${var.project_name}-alb" }
 }

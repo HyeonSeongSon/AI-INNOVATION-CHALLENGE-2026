@@ -235,10 +235,11 @@ class Settings(BaseSettings):
     # OpenSearch 동시 검색 요청 상한 (세마포어)
     opensearch_max_concurrent_searches: int = 20
 
-    # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 동시성 한계(opensearch_max_concurrent_searches)에 맞춰
-    # 그래프 실행(astream_events) 시작 전 세마포어 슬롯을 획득. 스트리밍 UX 자체는 변경하지 않음.
-    chat_stream_max_concurrent: int = 20
-    chat_stream_admission_timeout: float = 60.0  # 슬롯 대기 최대 시간 (초)
+    # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 보호는 opensearch_max_concurrent_searches
+    # 세마포어(recommend_product_agent·quality_check 공유)가 전담하므로, 진입 단계는 동시
+    # 100명까지 허용. 그래프 실행(astream_events) 시작 전 세마포어 슬롯을 획득.
+    chat_stream_max_concurrent: int = 100
+    chat_stream_admission_timeout: float = 300.0  # 슬롯 대기 최대 시간 (초) — 실제 처리시간(~150s) 대비 여유
 
     # Health check
     health_check_db_timeout: float = 2.0
