@@ -189,9 +189,9 @@ opensearch_client = None
 
 # OpenSearch 클러스터 동시 검색 요청 상한 — 이 서비스는 recommend-agent·generate-agent가
 # 공통으로 호출하는 단일 지점이라, 여기서 게이팅해야 두 호출자 간에 실제로 예산이 공유된다.
-# 프로덕션은 워커 4개로 떠서(uvicorn workers=4) 워커마다 별도 프로세스이므로, 워커별 예산을
-# 나눠서 총합이 전체 예산에 근접하도록 한다.
-_search_semaphore = asyncio.Semaphore(int(os.getenv("OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER", "5")))
+# 프로덕션은 systemd가 단일 워커로 띄우므로(uvicorn --workers 1) 워커 분할 없이 전체
+# 예산을 그대로 사용한다.
+_search_semaphore = asyncio.Semaphore(int(os.getenv("OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER", "20")))
 
 
 # 요청/응답 모델
