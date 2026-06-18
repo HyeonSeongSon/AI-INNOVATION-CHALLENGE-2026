@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any
-from ..config.settings import ALLOWED_MODEL_PREFIXES
+from ..config.settings import ALLOWED_MODEL_PREFIXES, settings
 from ..core.auth import UserContext
 from ..core.logging import get_logger
 from ..core.database import SessionLocal
@@ -27,6 +27,10 @@ router = APIRouter(prefix="/api/marketing", tags=["Marketing"])
 
 def get_agent_v2(request: Request):
     return request.app.state.agent_v2
+
+
+def get_chat_stream_semaphore(request: Request) -> "asyncio.Semaphore":
+    return request.app.state.chat_stream_semaphore
 
 
 
@@ -406,6 +410,15 @@ async def chat_v2_stream(
         _result_data: dict | None = None
         _error_payload: dict | None = None
 
+        semaphore = get_chat_stream_semaphore(req)
+        try:
+            await asyncio.wait_for(semaphore.acquire(), timeout=settings.chat_stream_admission_timeout)
+        except asyncio.TimeoutError:
+            logger.warning("chat_v2_stream_admission_timeout", conv_id=conv_id)
+            yield 'data: {"type":"error","message":"현재 요청이 많아 대기 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."}\n\n'
+            yield 'data: {"type":"done"}\n\n'
+            return
+
         try:
             async for chunk in agent.chat_stream(
                 user_input=request.user_input,
@@ -459,6 +472,8 @@ async def chat_v2_stream(
             yield 'data: {"type":"error","message":"스트리밍 중 오류가 발생했습니다."}\n\n'
             yield 'data: {"type":"done"}\n\n'
             return
+        finally:
+            semaphore.release()
 
     return StreamingResponse(
         generate(),

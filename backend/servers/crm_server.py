@@ -109,6 +109,10 @@ async def lifespan(app: FastAPI):
         app.state.agent_v2 = CRMMessageAgent(checkpointer=checkpointer)
         logger.info("crm_services_initialized")
 
+        # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 동시 부하를 세마포어로 제한
+        app.state.chat_stream_semaphore = asyncio.Semaphore(settings.chat_stream_max_concurrent)
+        logger.info("chat_stream_semaphore_initialized", max_concurrent=settings.chat_stream_max_concurrent)
+
         async def _upload_cleanup_loop() -> None:
             while True:
                 await asyncio.sleep(settings.cleanup_interval_seconds)
