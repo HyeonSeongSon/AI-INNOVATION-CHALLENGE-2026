@@ -1,6 +1,9 @@
 # Windows crash dumps
 *.stackdump
 
+# Load test raw results (large, run-specific, not for version control)
+loadtest/results/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
