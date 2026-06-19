@@ -80,11 +80,14 @@ variable "opensearch_instance_type" {
 variable "opensearch_api_instance_type" {
   description = <<-EOT
     OpenSearch API(임베딩 추론, KURE-v1) 전용 EC2 인스턴스 타입.
-    OpenSearch 노드와 분리해 CPU 경합을 없애는 목적 — torch/transformers CPU 추론을
-    안전하게 감당하도록 OpenSearch 인스턴스와 동일 스펙으로 시작.
+    CPU-바운드 인코딩 워크로드라 vCPU 수가 핵심 — t3.medium/t3.large는 둘 다 2 vCPU로
+    동일해서 패밀리 내 단순 업그레이드는 효과가 없다(메모리만 늘어남). c5.xlarge(4 vCPU,
+    컴퓨트 최적화)로 vCPU를 실제로 2배 늘리고, t3 버스터블 인스턴스의 CPU 크레딧 소진에
+    따른 스로틀링 리스크도 같이 없앤다(25차 부하테스트에서 본 지속적 100% CPU 부하는
+    버스터블 인스턴스에 불리한 패턴).
   EOT
   type        = string
-  default     = "t3.medium"
+  default     = "c5.xlarge"
 }
 
 variable "ec2_ami" {
