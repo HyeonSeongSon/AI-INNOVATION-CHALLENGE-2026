@@ -4,15 +4,15 @@
 # 환경변수는 부트스트랩에서 export된 값을 사용한다:
 #   PROJECT_NAME, OPENSEARCH_VERSION, INTERNAL_TOKEN, OPENSEARCH_ADMIN_PASSWORD
 #
+# opensearch-api(임베딩 추론, KURE-v1)는 더 이상 이 인스턴스에 같이 뜨지 않는다 —
+# opensearch_api_setup.sh로 분리된 별도 EC2에서 돈다(CPU 경합 해소 목적).
+#
 # 메모리 예산 (t3.medium 4GB):
 #   OpenSearch JVM heap: 1000m (실사용 ~1200MB)
-#   opensearch-api + KURE-v1: ~1500MB
 #   OS + SSM: ~600MB
-#   여유: 스왑 4GB로 보완
-# 주의: JVM 1500m 이상 시 KURE-v1 로드 후 SSM 에이전트 OOM으로 배포 불가
+#   여유: 스왑 4GB로 보완(분리 이후 여유 폭 확대 — 필요 시 heap 상향 검토 가능)
 set -euo pipefail
 
-OPENSEARCH_API_DIR="/opt/opensearch-api"
 DATA_MOUNT="/data"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/user-data.log; }
@@ -293,84 +293,10 @@ chmod 700 /opt/opensearch-snapshot.sh  # admin 비밀번호 포함 — root 전�
 echo "20 18 * * * root /opt/opensearch-snapshot.sh >> /var/log/opensearch-snapshot.log 2>&1" > /etc/cron.d/opensearch-snapshot
 chmod 644 /etc/cron.d/opensearch-snapshot
 
-# ---- 7. OpenSearch API venv ----
-log "Setting up OpenSearch API venv..."
-mkdir -p "$OPENSEARCH_API_DIR"
-# EBS(/data)에 venv 보존 — EC2 재생성 후에도 재설치 스킵 (~450MB 절감)
-if [ -f "$DATA_MOUNT/opensearch-api-venv/bin/python" ]; then
-  log "EBS venv exists, skipping torch/transformers install."
-else
-  log "Creating venv and installing torch + transformers..."
-  python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
-  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
-  # CPU-only torch: CUDA 2GB 방지
-  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
-  # transformers 4.41.0: 5.x에서 sentence-transformers + torch._dynamo 충돌
-  "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
-fi
-chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" "$DATA_MOUNT/opensearch-api-venv"
-
-# ---- 8. OpenSearch API systemd 서비스 ----
-log "Registering opensearch-api service..."
-cat > /etc/systemd/system/opensearch-api.service <<UNIT
-[Unit]
-Description=OpenSearch API Server (ai-innovation)
-After=opensearch.service
-Requires=opensearch.service
-
-[Service]
-Type=simple
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/opt/opensearch-api
-Environment=OPENSEARCH_URL=https://localhost:9200
-Environment=OPENSEARCH_HOST=localhost
-Environment=OPENSEARCH_PORT=9200
-Environment=OPENSEARCH_USE_SSL=true
-Environment=OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
-Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
-Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
-# \$ 이스케이프 필수: unquoted heredoc(<<UNIT)에서 \$ 없이 쓰면 \$(seq 1 60)/\$i가
-# 파일 작성 시점에 확장되어 seq 개행이 unit 파일에 박혀 "bad unit file setting"으로 깨진다.
-# \$ 로 써야 서비스 시작 시점에 bash가 평가한다.
-ExecStartPre=/bin/bash -c 'for i in \$(seq 1 60); do [ -f /var/log/venv-ready ] && exit 0; echo "Waiting for venv (\$i/60)..."; sleep 30; done; exit 1'
-ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
-# venv 대기 루프가 systemd 기본 시작 타임아웃(90초)에 죽지 않도록 연장
-TimeoutStartSec=2400
-Restart=always
-RestartSec=5
-StartLimitIntervalSec=120
-StartLimitBurst=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=opensearch-api
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable opensearch-api
-
-# ---- 9. venv/torch 백그라운드 설치 ----
-# torch CPU 설치는 15~30분 소요. CI 대기를 막지 않도록 백그라운드 실행.
-# opensearch-api.service는 /var/log/venv-ready를 확인한 뒤 기동됨.
-if [ -f "$DATA_MOUNT/opensearch-api-venv/bin/python" ]; then
-  log "EBS venv exists, skipping torch/transformers install."
-  touch /var/log/venv-ready
-else
-  log "Starting background venv install (torch ~20min)..."
-  (
-    python3.11 -m venv "$DATA_MOUNT/opensearch-api-venv"
-    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q --upgrade pip
-    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
-    "$DATA_MOUNT/opensearch-api-venv/bin/pip" install -q "transformers==4.41.0"
-    chown -R ubuntu:ubuntu "$DATA_MOUNT/opensearch-api-venv"
-    log "Background venv install complete."
-    touch /var/log/venv-ready
-  ) >> /var/log/user-data.log 2>&1 &
-fi
-chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" 2>/dev/null || true
+# ---- 7. admin 비밀번호 파일 (opensearch-api가 더 이상 이 인스턴스에 없어 systemd
+# unit에서 추출할 수 없음 — restore_or_skip.sh/create_snapshot.sh가 이 파일에서 읽음) ----
+echo "OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD" > /etc/opensearch-admin.env
+chmod 600 /etc/opensearch-admin.env
 
 log "OpenSearch setup complete."
 touch /var/log/user-data-complete

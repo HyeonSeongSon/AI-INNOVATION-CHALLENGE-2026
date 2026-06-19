@@ -4,7 +4,8 @@
 # 트래픽 흐름:
 #   인터넷 → ALB(sg_alb) → ECS tasks(sg_ecs_tasks)
 #   ECS tasks → DB EC2(sg_db_ec2)         [포트 5432, 8020]
-#   ECS tasks → OpenSearch EC2(sg_opensearch_ec2) [포트 8010]  ← 9200 직접 접근 차단
+#   ECS tasks → OpenSearch API EC2(sg_opensearch_api_ec2) [포트 8010]
+#   OpenSearch API EC2 → OpenSearch EC2(sg_opensearch_ec2) [포트 9200]  ← ECS는 직접 접근 차단
 #   ECS/EC2  → VPC Endpoints(sg_vpc_endpoints)   [포트 443]
 # -----------------------------------------------------------------------
 
@@ -125,7 +126,7 @@ resource "aws_security_group_rule" "ecs_to_db_api" {
 
 resource "aws_security_group" "opensearch_ec2" {
   name        = "${var.project_name}-sg-opensearch-ec2"
-  description = "OpenSearch EC2: OpenSearch API and native from ECS tasks only"
+  description = "OpenSearch EC2: native (9200) from opensearch-api EC2 only"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -138,7 +139,36 @@ resource "aws_security_group" "opensearch_ec2" {
   tags = { Name = "${var.project_name}-sg-opensearch-ec2" }
 }
 
-# OpenSearch API(8010) — ECS tasks에서 HTTP 호출 (9200 직접 접근은 차단 — 인증 없는 경로 제거)
+# OpenSearch 네이티브(9200) — opensearch-api EC2(임베딩 추론, 검색 호출)에서만 접근
+# (ECS는 여전히 9200 직접 접근 불가 — 인증 없는 경로 차단 유지)
+resource "aws_security_group_rule" "opensearch_api_to_opensearch_native" {
+  type                     = "ingress"
+  description              = "OpenSearch native client - opensearch-api EC2 to OpenSearch"
+  from_port                = 9200
+  to_port                  = 9200
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.opensearch_api_ec2.id
+  security_group_id        = aws_security_group.opensearch_ec2.id
+}
+
+# ---- OpenSearch API EC2 (임베딩 추론, 별도 분리) ----
+
+resource "aws_security_group" "opensearch_api_ec2" {
+  name        = "${var.project_name}-sg-opensearch-api-ec2"
+  description = "OpenSearch API EC2: OpenSearch API(8010) from ECS tasks only"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project_name}-sg-opensearch-api-ec2" }
+}
+
+# OpenSearch API(8010) — ECS tasks에서 HTTP 호출
 resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   type                     = "ingress"
   description              = "OpenSearch API server - ECS to OpenSearch API"
@@ -146,7 +176,7 @@ resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   to_port                  = 8010
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.ecs_tasks.id
-  security_group_id        = aws_security_group.opensearch_ec2.id
+  security_group_id        = aws_security_group.opensearch_api_ec2.id
 }
 
 

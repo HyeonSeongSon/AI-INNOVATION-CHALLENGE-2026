@@ -27,6 +27,12 @@ variable "opensearch_setup_hash" {
   default     = "dev"
 }
 
+variable "opensearch_api_setup_hash" {
+  description = "opensearch_api_setup.sh 내용 해시 — opensearch_setup_hash와 동일한 버전 키화 패턴"
+  type        = string
+  default     = "dev"
+}
+
 # ---- 네트워크 ----
 
 variable "vpc_cidr" {
@@ -63,10 +69,19 @@ variable "db_instance_type" {
 
 variable "opensearch_instance_type" {
   description = <<-EOT
-    OpenSearch EC2 인스턴스 타입.
-    OpenSearch JVM(~1.5GB) + opensearch-api 서빙용 KURE-v1(~1.5GB) ≈ 3GB 상주.
-    forbidden 색인 one-shot은 opensearch-api를 정지한 뒤 실행하므로 t3.medium(4GB)+swap로 충분.
+    OpenSearch EC2 인스턴스 타입. opensearch-api(임베딩 추론)는 별도 EC2로 분리되어
+    이 인스턴스엔 OpenSearch JVM(~1.5GB)만 상주 — t3.medium(4GB)+swap로 충분히 여유.
     (과거 색인 크래시는 메모리가 아니라 knn nmslib 네이티브 미탑재 문제였고 lucene 엔진으로 해결됨)
+  EOT
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "opensearch_api_instance_type" {
+  description = <<-EOT
+    OpenSearch API(임베딩 추론, KURE-v1) 전용 EC2 인스턴스 타입.
+    OpenSearch 노드와 분리해 CPU 경합을 없애는 목적 — torch/transformers CPU 추론을
+    안전하게 감당하도록 OpenSearch 인스턴스와 동일 스펙으로 시작.
   EOT
   type        = string
   default     = "t3.medium"
@@ -100,6 +115,18 @@ variable "opensearch_az" {
   description = "OpenSearch EBS 고정 AZ — EC2 재생성 시 EBS가 다른 AZ로 옮겨지지 않도록 고정"
   type        = string
   default     = "ap-northeast-2a"
+}
+
+variable "opensearch_api_az" {
+  description = "OpenSearch API EBS(venv 보존) 고정 AZ — EC2 재생성 시 EBS가 다른 AZ로 옮겨지지 않도록 고정"
+  type        = string
+  default     = "ap-northeast-2a"
+}
+
+variable "opensearch_api_ebs_volume_size_gb" {
+  description = "OpenSearch API venv 보존용 EBS 볼륨 크기 (GB) — torch/transformers만 담으므로 OpenSearch/DB보다 작게"
+  type        = number
+  default     = 20
 }
 
 # ---- ECS ----
