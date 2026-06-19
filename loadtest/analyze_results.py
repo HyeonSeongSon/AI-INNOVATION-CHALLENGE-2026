@@ -75,6 +75,13 @@ def main() -> None:
     print(f"\nOpenSearch EC2 CPU — 평균: {os_cpu.get('average_of_averages', 'N/A')}, 최대: {os_cpu.get('max', 'N/A')}")
     print(f"\n> {metrics.get('opensearch_note', '')}")
 
+    os_api_cpu = metrics.get("opensearch_api_ec2_cpu", {})
+    if os_api_cpu:
+        print(
+            f"\nOpenSearch API EC2 CPU(임베딩 추론, 25차부터 별도 인스턴스) — "
+            f"평균: {os_api_cpu.get('average_of_averages', 'N/A')}, 최대: {os_api_cpu.get('max', 'N/A')}"
+        )
+
     db_matches = metrics.get("db_pool_log_matches", {})
     print(f"\nDB 풀 고갈 로그 매칭: {db_matches.get('match_count', 'N/A')}건 (상태: {db_matches.get('status', 'N/A')})")
 

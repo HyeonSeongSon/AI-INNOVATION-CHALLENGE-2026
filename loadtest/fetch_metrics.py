@@ -25,6 +25,7 @@ DEFAULT_SERVICES = [
 ]
 DEFAULT_LOG_GROUP = "/ecs/ai-innovation"
 DEFAULT_OPENSEARCH_INSTANCE_ID = "i-0603d62e9349ea0a9"
+DEFAULT_OPENSEARCH_API_INSTANCE_ID = ""  # 25차부터 별도 인스턴스 — 매 테스트 시 현재 ID로 넘겨야 함
 DB_POOL_KEYWORDS = "QueuePool|TimeoutError|SQLSTATE|OperationalError|too many clients|remaining connection|PoolTimeout"
 
 
@@ -106,6 +107,7 @@ def main() -> None:
     parser.add_argument("--services", nargs="+", default=DEFAULT_SERVICES)
     parser.add_argument("--log-group", default=DEFAULT_LOG_GROUP)
     parser.add_argument("--opensearch-instance-id", default=DEFAULT_OPENSEARCH_INSTANCE_ID)
+    parser.add_argument("--opensearch-api-instance-id", default=DEFAULT_OPENSEARCH_API_INSTANCE_ID)
     parser.add_argument("--region", default="ap-northeast-2")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
@@ -128,6 +130,11 @@ def main() -> None:
         ),
         "db_pool_log_matches": fetch_db_pool_log_matches(logs_client, args.log_group, start, end),
     }
+
+    if args.opensearch_api_instance_id:
+        result["opensearch_api_ec2_cpu"] = fetch_ec2_cpu(
+            cloudwatch, args.opensearch_api_instance_id, start, end
+        )
 
     for service in args.services:
         result["ecs"][service] = {
