@@ -194,9 +194,10 @@ opensearch_client = None
 _search_semaphore = asyncio.Semaphore(int(os.getenv("OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER", "20")))
 
 # model.encode()는 CPU-바운드라 네트워크 I/O용 _search_semaphore(20)와는 다른 자원이다.
-# 일부 엔드포인트(search_by_product_ids, search_similar_sentences)는 동시성 제어가
-# 전혀 없이 인코딩을 호출하고 있어 별도로 제한한다. 기본값은 os.cpu_count()로 동적
-# 산출 — 인스턴스 타입이 바뀌어도 코드 수정 없이 맞는다.
+# 모든 검색 엔드포인트는 인코딩 단계를 이 세마포어로, OpenSearch 네트워크 호출 단계를
+# _search_semaphore로 각각 보호한다 — 두 자원을 하나의 한도로 묶으면 CPU 코어 수보다
+# 훨씬 많은 인코딩이 동시에 몰려 오버서브스크립션이 발생한다. 기본값은 os.cpu_count()로
+# 동적 산출 — 인스턴스 타입이 바뀌어도 코드 수정 없이 맞는다.
 _encode_semaphore = asyncio.Semaphore(
     int(os.getenv("OPENSEARCH_MAX_CONCURRENT_ENCODES", str(os.cpu_count() or 4)))
 )
@@ -834,6 +835,9 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
+        async with _encode_semaphore:
+            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+
         async with _search_semaphore:
             raw_results = await asyncio.to_thread(
                 client.search_combined,
@@ -844,6 +848,7 @@ async def search_by_combined_vector(request: ProductIDSearchRequest):
                 pipeline_id=request.pipeline_id,
                 bm25_fields=request.bm25_fields,
                 vector_field=request.vector_field or "combined_vector",
+                query_vector=query_vector,
             )
 
         results = [
@@ -891,6 +896,9 @@ async def search_by_field(request: FieldSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
 
+        async with _encode_semaphore:
+            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+
         async with _search_semaphore:
             raw_results = await asyncio.to_thread(
                 client.search_by_field,
@@ -901,6 +909,7 @@ async def search_by_field(request: FieldSearchRequest):
                 top_k=request.top_k,
                 index_name=request.index_name,
                 pipeline_id=request.pipeline_id,
+                query_vector=query_vector,
             )
 
         results = [
@@ -947,6 +956,9 @@ async def search_multivector(request: MultiVectorSearchRequest):
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
         
+        async with _encode_semaphore:
+            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+
         async with _search_semaphore:
             raw_results = await asyncio.to_thread(
                 client.search_multivector_field,
@@ -956,6 +968,7 @@ async def search_multivector(request: MultiVectorSearchRequest):
                 top_k=request.top_k,
                 aggregation=request.aggregation,
                 pipeline_id=request.pipeline_id,
+                query_vector=query_vector,
             )
 
         results = [

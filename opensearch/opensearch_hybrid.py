@@ -268,6 +268,7 @@ class OpenSearchHybridClient:
         pipeline_id: str = "hybrid-minmax-pipeline",
         bm25_fields: list = None,
         vector_field: str = "combined_vector",
+        query_vector: list = None,
     ) -> list:
         """
         combined_vector(KNN) + retrieval_query(BM25) 하이브리드 검색 실행
@@ -280,11 +281,14 @@ class OpenSearchHybridClient:
             pipeline_id: 사용할 search pipeline ID
             bm25_fields: BM25 대상 필드 리스트 (기본: search_tags^2.0, search_phrases)
             vector_field: KNN 대상 벡터 필드 (기본: combined_vector)
+            query_vector: 미리 인코딩된 쿼리 벡터. 주어지면 내부 인코딩을 스킵한다
+                          (호출자가 별도 CPU 동시성 한도로 인코딩을 보호하기 위함).
 
         Returns:
             List[Dict]: 검색 결과 (score + source)
         """
-        query_vector = self.model.encode(query_text).tolist()
+        if query_vector is None:
+            query_vector = self.model.encode(query_text).tolist()
         query_body = self._create_combined_query_body(
             query_vector, product_ids, top_k, bm25_fields, vector_field
         )
@@ -359,6 +363,7 @@ class OpenSearchHybridClient:
         top_k: int = 50,
         index_name: str = "product_index_v3",
         pipeline_id: str = "hybrid-minmax-pipeline",
+        query_vector: list = None,
     ) -> list:
         """
         특정 필드를 대상으로 한 하이브리드 검색 실행
@@ -372,11 +377,13 @@ class OpenSearchHybridClient:
             top_k: 반환할 최대 결과 수
             index_name: 검색 대상 인덱스
             pipeline_id: 사용할 search pipeline ID
+            query_vector: 미리 인코딩된 쿼리 벡터. 주어지면 내부 인코딩을 스킵한다.
 
         Returns:
             List[Dict]: score + product_id 검색 결과
         """
-        query_vector = self.model.encode(query_text).tolist()
+        if query_vector is None:
+            query_vector = self.model.encode(query_text).tolist()
         query_body = self._create_field_specific_query_body(
             query_vector, bm25_fields, vector_field, product_ids, top_k
         )
@@ -400,6 +407,7 @@ class OpenSearchHybridClient:
         aggregation: str = "max",
         topk_k: int = 2,
         pipeline_id: str = "hybrid-minmax-pipeline",
+        query_vector: list = None,
     ) -> list:
         """
         멀티벡터 인덱스(문장 단위 문서)에서 하이브리드 검색 후 product_id별 스코어 집계
@@ -415,13 +423,15 @@ class OpenSearchHybridClient:
             aggregation: 집계 방식 "max" | "topk_avg"
             topk_k: topk_avg 사용 시 상위 k개 문장 수 (기본 2)
             pipeline_id: 하이브리드 파이프라인 ID
+            query_vector: 미리 인코딩된 쿼리 벡터. 주어지면 내부 인코딩을 스킵한다.
 
         Returns:
             [{"product_id": str, "score": float}, ...] 내림차순 top_k개
         """
         from collections import defaultdict
 
-        query_vector = self.model.encode(query_text).tolist()
+        if query_vector is None:
+            query_vector = self.model.encode(query_text).tolist()
 
         # 문장이 상품당 최대 6~7개이므로 size를 충분히 크게
         fetch_size = min(top_k * 10, 2000)
