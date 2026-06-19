@@ -174,6 +174,60 @@ resource "aws_volume_attachment" "opensearch_data" {
   force_detach = true
 }
 
+# ---- OpenSearch API EC2 — 임베딩 추론(SentenceTransformer) 전용, OpenSearch 노드와 분리 ----
+# CPU 경합 해소 목적(부하테스트 23~24차에서 OpenSearch 노드와 같은 인스턴스에서 돌던
+# opensearch-api의 인코딩이 OpenSearch JVM 검색 스레드의 CPU를 빼앗는 현상을 확인).
+
+resource "aws_instance" "opensearch_api" {
+  ami                         = var.ec2_ami
+  instance_type               = var.opensearch_api_instance_type
+  subnet_id                   = aws_subnet.private[0].id
+  vpc_security_group_ids      = [aws_security_group.opensearch_api_ec2.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  key_name                    = var.ec2_key_name != "" ? var.ec2_key_name : null
+  user_data_replace_on_change = true
+
+  user_data = base64encode(templatefile("${path.module}/user_data/opensearch_api_server.sh", {
+    project_name              = var.project_name
+    internal_token            = var.internal_token
+    opensearch_admin_password = var.opensearch_admin_password
+    opensearch_host           = aws_instance.opensearch.private_ip
+    setup_hash                = var.opensearch_api_setup_hash
+  }))
+
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
+  tags = { Name = "${var.project_name}-ec2-opensearch-api" }
+}
+
+# OpenSearch API venv 보존 볼륨 (torch/transformers — EC2 교체 시에도 재설치 스킵)
+resource "aws_ebs_volume" "opensearch_api_data" {
+  availability_zone = var.opensearch_api_az
+  size              = var.opensearch_api_ebs_volume_size_gb
+  type              = "gp3"
+  encrypted         = true
+
+  tags = {
+    Name   = "${var.project_name}-ebs-opensearch-api-data"
+    Backup = "true"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_volume_attachment" "opensearch_api_data" {
+  device_name  = "/dev/xvdf"
+  volume_id    = aws_ebs_volume.opensearch_api_data.id
+  instance_id  = aws_instance.opensearch_api.id
+  force_detach = true
+}
+
 # ---- S3 Deploy 버킷 (앱 코드 아카이브 저장) ----
 
 resource "aws_s3_bucket" "deploy" {

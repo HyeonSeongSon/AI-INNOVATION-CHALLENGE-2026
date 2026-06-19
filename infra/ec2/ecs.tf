@@ -18,7 +18,7 @@
 locals {
   # EC2 프라이빗 IP 기반 URL — ECS 태스크 환경변수에 주입
   db_api_url         = "http://${aws_instance.db.private_ip}:8020"
-  opensearch_api_url = "http://${aws_instance.opensearch.private_ip}:8010"
+  opensearch_api_url = "http://${aws_instance.opensearch_api.private_ip}:8010"
   postgres_url       = "postgresql://${var.postgres_user}:${var.postgres_password}@${aws_instance.db.private_ip}:5432/ai_innovation_db"
 }
 

@@ -13,6 +13,11 @@ output "opensearch_ec2_private_ip" {
   value       = aws_instance.opensearch.private_ip
 }
 
+output "opensearch_api_ec2_private_ip" {
+  description = "OpenSearch API EC2 프라이빗 IP (임베딩 추론, OpenSearch 노드와 분리)"
+  value       = aws_instance.opensearch_api.private_ip
+}
+
 output "ecs_cluster_name" {
   description = "ECS 클러스터 이름"
   value       = aws_ecs_cluster.main.name
@@ -41,6 +46,11 @@ output "db_ec2_instance_id" {
 output "opensearch_ec2_instance_id" {
   description = "OpenSearch EC2 인스턴스 ID (SSM Run Command 타겟)"
   value       = aws_instance.opensearch.id
+}
+
+output "opensearch_api_ec2_instance_id" {
+  description = "OpenSearch API EC2 인스턴스 ID (SSM Run Command 타겟)"
+  value       = aws_instance.opensearch_api.id
 }
 
 output "deploy_s3_bucket" {

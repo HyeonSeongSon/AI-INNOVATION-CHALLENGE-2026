@@ -104,6 +104,15 @@ jobs:
             "s3://${PROJECT_NAME}-deploy/opensearch_setup.${HASH}.sh" \
             || echo "bucket not ready (first deploy) — package job will upload"
 
+      - name: Upload versioned opensearch_api_setup.sh to S3
+        id: setup-hash-api
+        run: |
+          HASH=$(sha256sum infra/ec2/user_data/opensearch_api_setup.sh | cut -c1-16)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          aws s3 cp infra/ec2/user_data/opensearch_api_setup.sh \
+            "s3://${PROJECT_NAME}-deploy/opensearch_api_setup.${HASH}.sh" \
+            || echo "bucket not ready (first deploy) — package job will upload"
+
       - name: Terraform Apply
         working-directory: infra/ec2
         run: terraform apply -auto-approve
@@ -113,7 +122,8 @@ jobs:
           TF_VAR_environment:   production
           TF_VAR_ecr_registry:  "${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           TF_VAR_ecr_image_tag: ${{ github.sha }}
-          TF_VAR_opensearch_setup_hash: ${{ steps.setup-hash.outputs.hash }}
+          TF_VAR_opensearch_setup_hash:     ${{ steps.setup-hash.outputs.hash }}
+          TF_VAR_opensearch_api_setup_hash: ${{ steps.setup-hash-api.outputs.hash }}
 
           # ── 시크릿 (GitHub Secrets에서 주입) ──
           TF_VAR_opensearch_admin_password: ${{ secrets.OPENSEARCH_ADMIN_PASSWORD }}
@@ -136,14 +146,16 @@ jobs:
         run: |
           echo "db_instance_id=$(terraform output -raw db_ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "opensearch_instance_id=$(terraform output -raw opensearch_ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "opensearch_api_instance_id=$(terraform output -raw opensearch_api_ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "cloudfront_dist_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(terraform output -raw frontend_s3_bucket)" >> $GITHUB_OUTPUT
 
     outputs:
-      db_instance_id:         ${{ steps.tf-outputs.outputs.db_instance_id }}
-      opensearch_instance_id: ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
-      cloudfront_dist_id:     ${{ steps.tf-outputs.outputs.cloudfront_dist_id }}
-      frontend_bucket:        ${{ steps.tf-outputs.outputs.frontend_bucket }}
+      db_instance_id:             ${{ steps.tf-outputs.outputs.db_instance_id }}
+      opensearch_instance_id:     ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
+      opensearch_api_instance_id: ${{ steps.tf-outputs.outputs.opensearch_api_instance_id }}
+      cloudfront_dist_id:         ${{ steps.tf-outputs.outputs.cloudfront_dist_id }}
+      frontend_bucket:            ${{ steps.tf-outputs.outputs.frontend_bucket }}
 
   # ────────────────────────────────────────────
   # Job 3: 데이터 서비스 코드 패키징 → S3 업로드
@@ -169,6 +181,12 @@ jobs:
           HASH=$(sha256sum infra/ec2/user_data/opensearch_setup.sh | cut -c1-16)
           aws s3 cp infra/ec2/user_data/opensearch_setup.sh \
             "s3://${{ env.PROJECT_NAME }}-deploy/opensearch_setup.${HASH}.sh"
+
+      - name: Upload versioned opensearch_api_setup.sh to S3 (first-deploy safety net)
+        run: |
+          HASH=$(sha256sum infra/ec2/user_data/opensearch_api_setup.sh | cut -c1-16)
+          aws s3 cp infra/ec2/user_data/opensearch_api_setup.sh \
+            "s3://${{ env.PROJECT_NAME }}-deploy/opensearch_api_setup.${HASH}.sh"
 
       - name: Cache OpenSearch tarball in S3 (skip if already uploaded)
         run: |
@@ -311,19 +329,12 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ needs.terraform.outputs.opensearch_instance_id }}" \
             --document-name "AWS-RunShellScript" \
-            --timeout-seconds 1800 \
+            --timeout-seconds 600 \
             --parameters '{"commands":[
               "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz /tmp/opensearch.tar.gz",
-              "tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
-              "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz /tmp/data.tar.gz",
-              "mkdir -p /opt/data && tar -xzf /tmp/data.tar.gz -C /opt/",
-              "chmod +x /opt/opensearch-api/restore_or_skip.sh /opt/opensearch-api/create_snapshot.sh /opt/opensearch-api/index_forbidden.sh",
-              "for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && break; echo \"Waiting for venv ($i/60)...\"; sleep 30; done; [ -f /var/log/venv-ready ] || { echo ERROR: venv not ready; exit 1; }",
-              "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
-              "chown -R ubuntu:ubuntu /opt/opensearch-api",
-              "systemctl stop opensearch-api 2>/dev/null || true",
-              "/opt/opensearch-api/index_forbidden.sh",
-              "systemctl restart opensearch-api"
+              "mkdir -p /opt/opensearch-api && tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
+              "chmod +x /opt/opensearch-api/restore_or_skip.sh /opt/opensearch-api/create_snapshot.sh",
+              "chown -R ubuntu:ubuntu /opt/opensearch-api"
             ]}' \
             --output text --query "Command.CommandId")
           echo "SSM Command ID (opensearch): $COMMAND_ID"
@@ -344,6 +355,74 @@ jobs:
             fi
             if [ "$i" = "120" ]; then
               echo "ERROR: OpenSearch deploy did not complete within 30 minutes."
+              exit 1
+            fi
+          done
+
+      - name: Wait for OpenSearch API EC2 user_data to complete
+        run: |
+          echo "Waiting for OpenSearch API EC2 user_data to complete..."
+          for i in $(seq 1 80); do
+            RESULT=$(aws ssm send-command \
+              --instance-ids "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+              --document-name "AWS-RunShellScript" \
+              --parameters '{"commands":["test -f /var/log/user-data-complete && echo OK || echo WAIT"]}' \
+              --output text --query "Command.CommandId")
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$RESULT" \
+              --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+              --query "StandardOutputContent" --output text 2>/dev/null || echo "WAIT")
+            echo "Attempt $i: $STATUS"
+            if echo "$STATUS" | grep -q "OK"; then
+              echo "OpenSearch API EC2 user_data complete."
+              break
+            fi
+            if [ "$i" = "80" ]; then
+              echo "ERROR: OpenSearch API EC2 user_data did not complete within 40 minutes."
+              exit 1
+            fi
+            sleep 25
+          done
+
+      - name: Deploy to OpenSearch API EC2 via SSM
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 1800 \
+            --parameters '{"commands":[
+              "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/opensearch.tar.gz /tmp/opensearch.tar.gz",
+              "mkdir -p /opt/opensearch-api && tar -xzf /tmp/opensearch.tar.gz -C /opt/opensearch-api",
+              "/usr/local/bin/aws s3 cp s3://${{ env.PROJECT_NAME }}-deploy/data.tar.gz /tmp/data.tar.gz",
+              "mkdir -p /opt/data && tar -xzf /tmp/data.tar.gz -C /opt/",
+              "chmod +x /opt/opensearch-api/index_forbidden.sh",
+              "for i in $(seq 1 60); do [ -f /var/log/venv-ready ] && break; echo \"Waiting for venv ($i/60)...\"; sleep 30; done; [ -f /var/log/venv-ready ] || { echo ERROR: venv not ready; exit 1; }",
+              "/data/opensearch-api-venv/bin/pip install -q -r /opt/opensearch-api/requirements.txt",
+              "chown -R ubuntu:ubuntu /opt/opensearch-api",
+              "systemctl stop opensearch-api 2>/dev/null || true",
+              "/opt/opensearch-api/index_forbidden.sh",
+              "systemctl restart opensearch-api"
+            ]}' \
+            --output text --query "Command.CommandId")
+          echo "SSM Command ID (opensearch-api): $COMMAND_ID"
+          for i in $(seq 1 120); do
+            sleep 15
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "Success" ]; then echo "OpenSearch API deploy success."; break; fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+                --query "StandardErrorContent" --output text
+              exit 1
+            fi
+            if [ "$i" = "120" ]; then
+              echo "ERROR: OpenSearch API deploy did not complete within 30 minutes."
               exit 1
             fi
           done

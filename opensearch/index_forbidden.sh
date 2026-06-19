@@ -13,7 +13,15 @@ if [ -z "$OS_PW" ]; then
   exit 1
 fi
 
-export OPENSEARCH_HOST=localhost
+# opensearch-api는 OpenSearch 노드와 별도 EC2에서 돈다 — 호스트도 서비스 파일에서 추출
+# (opensearch_api_setup.sh가 OPENSEARCH_HOST를 OpenSearch 인스턴스의 private IP로 박아둔다)
+OS_HOST=$(grep -Po 'OPENSEARCH_HOST=\K[^ ]+' "$SVC" | head -1)
+if [ -z "$OS_HOST" ]; then
+  echo "ERROR: OPENSEARCH_HOST를 서비스 파일에서 찾을 수 없습니다."
+  exit 1
+fi
+
+export OPENSEARCH_HOST="$OS_HOST"
 export OPENSEARCH_PORT=9200
 export OPENSEARCH_USE_SSL=true
 export OPENSEARCH_ADMIN_PASSWORD="$OS_PW"
