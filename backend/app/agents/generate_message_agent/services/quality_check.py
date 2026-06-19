@@ -389,7 +389,7 @@ class QualityChecker:
             - passed=True  → 금지 표현 없음
             - passed=False → 임계값 초과 결과 목록 또는 API 오류 마커 반환
         """
-        endpoint = f"{settings.opensearch_api_url}/api/search/similar-sentences"
+        endpoint = f"{settings.opensearch_api_url}/api/search/similar-sentences/batch"
 
         full_text = f"{title} {message}".strip()
 
@@ -403,21 +403,18 @@ class QualityChecker:
         if not sentences:
             return True, []
 
-        all_results: List[Dict[str, Any]] = []
-
-        search_tasks = [self._search_sentence(self.http_client, s, endpoint) for s in sentences]
-        results_per_sentence = await asyncio.gather(*search_tasks)
+        results_per_sentence = await self._search_sentences_batch(self.http_client, sentences, endpoint)
 
         # API 오류 시 검사 불가 → 실패 처리 (컴플라이언스 의무)
-        api_errors = [s for s, r in zip(sentences, results_per_sentence) if r is None]
-        if api_errors:
+        if results_per_sentence is None:
             logger.warning(
                 "semantic_check_api_failed",
-                failed_count=len(api_errors),
+                failed_count=len(sentences),
                 total=len(sentences),
             )
             return False, [{"error": "api_unavailable"}]
 
+        all_results: List[Dict[str, Any]] = []
         for results in results_per_sentence:
             all_results.extend(results)
 
@@ -449,23 +446,27 @@ class QualityChecker:
 
         return True, []
 
-    async def _search_sentence(
+    async def _search_sentences_batch(
         self,
         client: httpx.AsyncClient,
-        sentence: str,
+        sentences: List[str],
         endpoint: str,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[List[List[Dict[str, Any]]]]:
         """
-        단일 문장의 유사도 검색 요청을 보냅니다 (최대 ``quality_check_semantic_max_retries``회 재시도).
+        문장 리스트 전체를 한 번에 유사도 검색 요청으로 보냅니다(최대
+        ``quality_check_semantic_max_retries``회 배치 단위 재시도). 문장마다 인코딩을
+        따로 호출하지 않고 한 번에 묶어 OpenSearch 노드와 같은 인스턴스에서 도는
+        임베딩 모델의 CPU 경합을 줄입니다.
 
         Args:
-            client:   재사용할 httpx 비동기 클라이언트.
-            sentence: 유사도를 검색할 단일 문장.
-            endpoint: ``/api/search/similar-sentences`` 엔드포인트 URL.
+            client:    재사용할 httpx 비동기 클라이언트.
+            sentences: 유사도를 검색할 문장 리스트.
+            endpoint:  ``/api/search/similar-sentences/batch`` 엔드포인트 URL.
 
         Returns:
-            검색 결과 리스트 (각 항목은 ``query_sentence``, ``matched_sentence``,
-            ``score``, ``source`` 키를 포함). 모든 재시도 실패 시 ``None``.
+            문장별 검색 결과 리스트(입력 순서와 동일, 각 항목은 ``query_sentence``,
+            ``matched_sentence``, ``score``, ``source`` 키를 포함). 모든 재시도
+            실패 시 ``None``.
         """
         for attempt in range(1, settings.quality_check_semantic_max_retries + 1):
             try:
@@ -473,25 +474,28 @@ class QualityChecker:
                     endpoint,
                     json={
                         "index_name": settings.opensearch_forbidden_sentences_index,
-                        "query": sentence,
+                        "queries": sentences,
                         "top_k": settings.quality_check_semantic_top_k,
                     },
                 )
                 response.raise_for_status()
                 data = response.json()
                 return [
-                    {
-                        "query_sentence": sentence,
-                        "matched_sentence": r.get("sentence"),
-                        "score": r.get("score", 0.0),
-                        "source": r.get("source", {}),
-                    }
-                    for r in data.get("results", [])
+                    [
+                        {
+                            "query_sentence": item["query"],
+                            "matched_sentence": r.get("sentence"),
+                            "score": r.get("score", 0.0),
+                            "source": r.get("source", {}),
+                        }
+                        for r in item.get("results", [])
+                    ]
+                    for item in data.get("results", [])
                 ]
             except Exception as e:
                 logger.warning(
-                    "semantic_search_request_failed",
-                    sentence=sentence,
+                    "semantic_search_batch_request_failed",
+                    sentence_count=len(sentences),
                     attempt=attempt,
                     max_retries=settings.quality_check_semantic_max_retries,
                     error_type=type(e).__name__,

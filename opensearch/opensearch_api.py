@@ -253,6 +253,23 @@ class SimilarSentenceResponse(BaseModel):
     results: List[SimilarSentenceResult]
 
 
+class SimilarSentenceBatchRequest(BaseModel):
+    index_name: ValidatedIndexName = Field(..., description="검색할 인덱스 이름 (예: forbidden_sentences)")
+    queries: List[str] = Field(..., description="유사 문장을 찾을 검색 쿼리 텍스트 리스트", min_length=1, max_length=200)
+    top_k: int = Field(default=3, ge=1, le=100, description="쿼리당 반환할 유사 문장 개수 (기본값: 3)")
+
+
+class SimilarSentenceBatchResult(BaseModel):
+    query: str
+    results: List[SimilarSentenceResult]
+
+
+class SimilarSentenceBatchResponse(BaseModel):
+    success: bool
+    index_name: str
+    results: List[SimilarSentenceBatchResult]
+
+
 class ProductResult(BaseModel):
     score: float
     product_id: Optional[str] = None
@@ -701,6 +718,97 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
             status_code=500,
             detail="검색 중 오류가 발생했습니다."
         )
+
+
+@app.post("/api/search/similar-sentences/batch", response_model=SimilarSentenceBatchResponse)
+async def search_similar_sentences_batch(request: SimilarSentenceBatchRequest):
+    """
+    여러 쿼리 문장을 한 번에 인코딩 후 각각 KNN 검색 — 품질검사처럼 메시지를 문장
+    단위로 쪼개 검사할 때, 문장마다 인코딩을 따로 호출하는 대신 한 번에 묶어서
+    처리해 임베딩 모델의 CPU 사용을 줄인다(OpenSearch 노드와 같은 인스턴스에서
+    돌기 때문에 인코딩 호출 수 자체가 OpenSearch 검색 성능에 영향을 준다).
+
+    - **index_name**: 검색할 인덱스 이름 (예: forbidden_sentences)
+    - **queries**: 유사 문장을 찾을 검색 쿼리 텍스트 리스트 (필수)
+    - **top_k**: 쿼리당 반환할 결과 개수 (기본값: 3)
+    """
+    try:
+        logger.info(
+            "search_similar_batch_requested",
+            index_name=request.index_name,
+            query_count=len(request.queries),
+        )
+
+        client = get_opensearch_client()
+
+        async with _search_semaphore:
+            # 쿼리 벡터 일괄 생성 — 문장 수만큼 encode를 반복하지 않고 한 번만 호출
+            query_vectors = await asyncio.to_thread(client.model.encode, request.queries)
+
+            batch_results: List[SimilarSentenceBatchResult] = []
+            for query, vector in zip(request.queries, query_vectors):
+                query_body = {
+                    "size": request.top_k,
+                    "query": {
+                        "knn": {
+                            "sentence_vector": {
+                                "vector": vector.tolist(),
+                                "k": request.top_k
+                            }
+                        }
+                    },
+                    "_source": {
+                        "excludes": ["sentence_vector"]
+                    }
+                }
+                response = await asyncio.to_thread(
+                    client.client.search,
+                    index=request.index_name,
+                    body=query_body,
+                )
+                hits = response.get("hits", {}).get("hits", [])
+                results = [
+                    SimilarSentenceResult(
+                        score=hit.get("_score", 0.0),
+                        sentence=(hit.get("_source", {}).get("sentence")
+                                  or hit.get("_source", {}).get("문장")
+                                  or hit.get("_source", {}).get("text")),
+                        source=hit.get("_source", {})
+                    )
+                    for hit in hits
+                ]
+                batch_results.append(SimilarSentenceBatchResult(query=query, results=results))
+
+        logger.info("search_similar_batch_completed", query_count=len(request.queries))
+
+        return SimilarSentenceBatchResponse(
+            success=True,
+            index_name=request.index_name,
+            results=batch_results,
+        )
+
+    except Exception as e:
+        # 인덱스가 존재하지 않는 경우 빈 결과 반환 (Stage 2 통과 처리) — 단건 엔드포인트와 동일 정책
+        error_info = getattr(e, "info", {}) or {}
+        if (
+            getattr(e, "status_code", None) == 404
+            or error_info.get("error", {}).get("type") == "index_not_found_exception"
+        ):
+            logger.warning(
+                "search_similar_batch_index_not_found",
+                index_name=request.index_name,
+            )
+            return SimilarSentenceBatchResponse(
+                success=True,
+                index_name=request.index_name,
+                results=[SimilarSentenceBatchResult(query=q, results=[]) for q in request.queries],
+            )
+        logger.error("search_similar_sentences_batch_failed", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="검색 중 오류가 발생했습니다."
+        )
+
 
 @app.post("/api/search/combined", response_model=CombinedSearchResponse)
 async def search_by_combined_vector(request: ProductIDSearchRequest):
