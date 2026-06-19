@@ -128,10 +128,12 @@ variable "opensearch_api_ebs_volume_size_gb" {
     OpenSearch API venv 보존용 EBS 볼륨 크기 (GB) — torch/transformers만 담으므로
     OpenSearch/DB보다 작게. 루트 볼륨(20GB)과 다른 크기여야 한다 — 디스크 탐지
     스크립트(opensearch_api_setup.sh)가 lsblk 사이즈로 데이터 볼륨을 구분하므로
-    같은 크기면 루트 볼륨을 잘못 마운트한다.
+    같은 크기면 루트 볼륨을 잘못 마운트한다. EBS는 축소가 불가능(AWS 제약)하므로
+    반드시 루트 볼륨(20GB)보다 큰 값을 써야 한다 — 작게 가면 in-place resize가
+    "New size cannot be smaller than existing size" 에러로 실패한다.
   EOT
   type        = number
-  default     = 15
+  default     = 25
 }
 
 # ---- ECS ----
