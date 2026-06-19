@@ -3,6 +3,14 @@ import hmac
 import json
 import re
 
+import torch
+
+# 동시 인코딩 요청마다 PyTorch가 내부적으로 모든 코어를 또 쓰면(intra-op parallelism),
+# asyncio.to_thread로 띄운 동시 model.encode() 호출 수만큼 스레드가 중첩 경합한다
+# (예: 동시 인코딩 4건 × 내부 스레드 4개 = 코어 4개를 16개 스레드가 다툼).
+# 1로 고정해 모델 로딩 전에 적용 — 동시성 제어는 아래 _encode_semaphore가 전담한다.
+torch.set_num_threads(1)
+
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, AfterValidator
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -193,6 +201,13 @@ opensearch_client = None
 # 예산을 그대로 사용한다.
 _search_semaphore = asyncio.Semaphore(int(os.getenv("OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER", "20")))
 
+# model.encode()는 CPU-바운드라 네트워크 I/O용 _search_semaphore(20)와는 다른 자원이다.
+# 동시 인코딩 수를 vCPU 수에 맞춰 별도로 제한해야 위의 torch.set_num_threads(1)과
+# 같이 적용했을 때 코어가 비지 않으면서도 과도하게 경합하지 않는다.
+# 기본값은 os.cpu_count()로 동적 산출 — 인스턴스 타입이 바뀌어도 코드 수정 없이 맞는다.
+_encode_semaphore = asyncio.Semaphore(
+    int(os.getenv("OPENSEARCH_MAX_CONCURRENT_ENCODES", str(os.cpu_count() or 4)))
+)
 
 # 요청/응답 모델
 class ProductIDSearchRequest(BaseModel):
@@ -524,7 +539,8 @@ async def search_by_product_ids(request: ProductIDSearchRequest):
         )
 
         # 벡터 임베딩 생성
-        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+        async with _encode_semaphore:
+            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
         logger.info("query_embedding_created", dimension=len(query_vector))
 
         # Product ID 필터링 쿼리 구성
@@ -649,7 +665,8 @@ async def search_similar_sentences(request: SimilarSentenceRequest):
         client = get_opensearch_client()
 
         # 쿼리 벡터 생성
-        query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+        async with _encode_semaphore:
+            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
 
         query_body = {
             "size": request.top_k,
@@ -743,7 +760,8 @@ async def search_similar_sentences_batch(request: SimilarSentenceBatchRequest):
 
         async with _search_semaphore:
             # 쿼리 벡터 일괄 생성 — 문장 수만큼 encode를 반복하지 않고 한 번만 호출
-            query_vectors = await asyncio.to_thread(client.model.encode, request.queries)
+            async with _encode_semaphore:
+                query_vectors = await asyncio.to_thread(client.model.encode, request.queries)
 
             batch_results: List[SimilarSentenceBatchResult] = []
             for query, vector in zip(request.queries, query_vectors):
@@ -991,7 +1009,8 @@ async def index_multivector(request: IndexMultivectorRequest):
                 vectordb_id[f"{_INDEX_PREFIX}_{field}"] = []
                 continue
 
-            vectors = await asyncio.to_thread(client.model.encode, sentences, batch_size=64)
+            async with _encode_semaphore:
+                vectors = await asyncio.to_thread(client.model.encode, sentences, batch_size=64)
             index_name = f"{_INDEX_PREFIX}_{field}"
             doc_ids: List[str] = []
             bulk_body = []
