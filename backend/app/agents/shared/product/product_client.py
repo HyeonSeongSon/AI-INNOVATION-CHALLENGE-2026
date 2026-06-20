@@ -255,6 +255,25 @@ class ProductClient:
             "spec_feature":   settings.opensearch_v4_spec_feature_index,
         }
 
+    async def encode_batch(self, texts: List[str]) -> List[List[float]]:
+        """POST /api/search/encode/batch 호출 — 여러 쿼리 텍스트를 한 번에 인코딩(검색 없음)"""
+        async with _get_opensearch_semaphore():
+            try:
+                response = await self.http_client.post(
+                    f"{self.vector_db_api_url}/api/search/encode/batch",
+                    json={"texts": texts},
+                )
+                response.raise_for_status()
+                return response.json()["vectors"]
+            except Exception as e:
+                logger.error(
+                    "encode_batch.failed",
+                    text_count=len(texts),
+                    error_type=type(e).__name__,
+                    exc_info=True,
+                )
+                raise
+
     async def _search_multivector(
         self,
         query: str,
@@ -262,19 +281,25 @@ class ProductClient:
         product_ids: List[str],
         top_k: int = 100,
         aggregation: str = "max",
+        query_vector: Optional[List[float]] = None,
     ) -> List[Dict[str, Any]]:
-        """POST /api/search/multivector 호출 (내부용)"""
+        """POST /api/search/multivector 호출 (내부용). query_vector가 주어지면 서버 측
+        인코딩을 스킵하고 그 벡터로 검색만 수행 — 동일 쿼리를 여러 인덱스에 검색할 때
+        중복 인코딩을 피하기 위해 사용."""
         async with _get_opensearch_semaphore():
             try:
+                payload = {
+                    "query": query,
+                    "index_name": index_name,
+                    "product_ids": product_ids,
+                    "top_k": top_k,
+                    "aggregation": aggregation,
+                }
+                if query_vector is not None:
+                    payload["query_vector"] = query_vector
                 response = await self.http_client.post(
                     f"{self.vector_db_api_url}/api/search/multivector",
-                    json={
-                        "query": query,
-                        "index_name": index_name,
-                        "product_ids": product_ids,
-                        "top_k": top_k,
-                        "aggregation": aggregation,
-                    },
+                    json=payload,
                 )
                 response.raise_for_status()
                 return response.json().get("results", [])
@@ -293,6 +318,7 @@ class ProductClient:
         retrieval_query: str,
         product_ids: List[str],
         top_k: int = 100,
+        retrieval_vector: Optional[List[float]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Step 2 (Recall): combined + spec_feature 인덱스 병렬 검색 후 product_id별 max 머지
@@ -301,6 +327,8 @@ class ProductClient:
             retrieval_query: 검색 쿼리
             product_ids: 필터링된 상품 ID 리스트
             top_k: 반환할 최대 상품 수
+            retrieval_vector: 미리 계산된 retrieval_query 임베딩. 주어지면 combined/spec_feature
+                양쪽 검색에 재사용해 동일 쿼리를 두 번 인코딩하지 않음
 
         Returns:
             [{"product_id": str, "score": float}, ...] 내림차순
@@ -315,12 +343,14 @@ class ProductClient:
                 index_name=self._get_v4_indices()["combined"],
                 product_ids=product_ids,
                 top_k=top_k,
+                query_vector=retrieval_vector,
             ),
             self._search_multivector(
                 query=retrieval_query,
                 index_name=self._get_v4_indices()["spec_feature"],
                 product_ids=product_ids,
                 top_k=top_k,
+                query_vector=retrieval_vector,
             ),
         )
 
@@ -342,6 +372,7 @@ class ProductClient:
         queries: Dict[str, str],
         product_ids: List[str],
         top_k: int = 100,
+        query_vectors: Optional[Dict[str, List[float]]] = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Step 3 (Rerank): function_desc / attribute_desc / target_user 인덱스 병렬 검색
@@ -350,6 +381,8 @@ class ProductClient:
             queries: get_product_search_queries 반환값
             product_ids: Step 2 결과 상품 ID 리스트
             top_k: 차원별 반환 결과 수
+            query_vectors: queries와 동일한 키(user_need_query/user_preference_query/persona)로
+                미리 계산된 임베딩을 전달하면 서버 측 인코딩을 스킵
 
         Returns:
             {"need": [...], "preference": [...], "persona": [...]}  ← 기존 포맷 동일
@@ -358,24 +391,28 @@ class ProductClient:
             logger.warning("search_persona_dimensions_multivector.no_product_ids")
             return {"need": [], "preference": [], "persona": []}
 
+        query_vectors = query_vectors or {}
         need_result, preference_result, persona_result = await asyncio.gather(
             self._search_multivector(
                 query=queries["user_need_query"],
                 index_name=self._get_v4_indices()["function_desc"],
                 product_ids=product_ids,
                 top_k=top_k,
+                query_vector=query_vectors.get("user_need_query"),
             ),
             self._search_multivector(
                 query=queries["user_preference_query"],
                 index_name=self._get_v4_indices()["attribute_desc"],
                 product_ids=product_ids,
                 top_k=top_k,
+                query_vector=query_vectors.get("user_preference_query"),
             ),
             self._search_multivector(
                 query=queries["persona"],
                 index_name=self._get_v4_indices()["target_user"],
                 product_ids=product_ids,
                 top_k=top_k,
+                query_vector=query_vectors.get("persona"),
             ),
         )
 

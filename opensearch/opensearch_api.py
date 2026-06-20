@@ -358,6 +358,10 @@ class MultiVectorSearchRequest(BaseModel):
     top_k: int = Field(default=100, ge=1, le=200, description="반환할 상품 수")
     aggregation: Literal["max", "topk_avg"] = Field(default="max", description="집계 방식")
     pipeline_id: ValidatedPipelineId = Field(default="hybrid-minmax-pipeline")
+    query_vector: Optional[List[float]] = Field(
+        default=None,
+        description="미리 계산된 쿼리 임베딩. 주어지면 서버 측 인코딩을 스킵하고 이 벡터로 검색만 수행",
+    )
 
 
 class MultiVectorSearchResponse(BaseModel):
@@ -366,6 +370,15 @@ class MultiVectorSearchResponse(BaseModel):
     query: str
     index_name: str
     results: List[FieldSearchResult]
+
+
+class EncodeBatchRequest(BaseModel):
+    texts: List[str] = Field(..., description="인코딩할 쿼리 텍스트 리스트", min_length=1, max_length=10)
+
+
+class EncodeBatchResponse(BaseModel):
+    success: bool
+    vectors: List[List[float]] = Field(..., description="texts와 동일한 순서의 임베딩 벡터")
 
 
 class IndexMultivectorRequest(BaseModel):
@@ -955,9 +968,12 @@ async def search_multivector(request: MultiVectorSearchRequest):
 
         pipeline_body = client._create_search_pipe_line_body()
         client.create_search_pipeline(pipeline_id=request.pipeline_id, pipeline_body=pipeline_body)
-        
-        async with _encode_semaphore:
-            query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
+
+        if request.query_vector is not None:
+            query_vector = request.query_vector
+        else:
+            async with _encode_semaphore:
+                query_vector = (await asyncio.to_thread(client.model.encode, request.query)).tolist()
 
         async with _search_semaphore:
             raw_results = await asyncio.to_thread(
@@ -989,6 +1005,24 @@ async def search_multivector(request: MultiVectorSearchRequest):
     except Exception as e:
         logger.error("search_multivector_failed", exc_info=True)
         raise HTTPException(status_code=500, detail="검색 중 오류가 발생했습니다.")
+
+
+@app.post("/api/search/encode/batch", response_model=EncodeBatchResponse)
+async def encode_batch(request: EncodeBatchRequest):
+    """
+    여러 쿼리 텍스트를 한 번에 인코딩만 수행(검색 없음). recommend_product_agent가
+    한 추천 요청당 여러 인덱스를 검색할 때, 텍스트마다 따로 인코딩을 호출하는 대신
+    한 번에 묶어 호출수를 줄이기 위한 용도 — 반환된 벡터는 /api/search/multivector의
+    query_vector로 재사용한다.
+    """
+    try:
+        client = get_opensearch_client()
+        async with _encode_semaphore:
+            vectors = (await asyncio.to_thread(client.model.encode, request.texts)).tolist()
+        return EncodeBatchResponse(success=True, vectors=vectors)
+    except Exception as e:
+        logger.error("encode_batch_failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="인코딩 중 오류가 발생했습니다.")
 
 
 _MULTIVECTOR_FIELD_NAMES = ["combined", "function_desc", "attribute_desc", "target_user", "spec_feature"]

@@ -183,16 +183,43 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
         parsed_data = state.get("parsed_data")
         search_queries = state.get("search_queries")
 
+        # 4개 쿼리 텍스트(retrieval + need/preference/persona)를 한 번에 배치 인코딩 —
+        # 이후 5번의 멀티벡터 검색 호출에서 재사용해 개별 인코딩(5회)을 1회로 줄인다.
+        # 실패 시 None으로 폴백해 기존처럼 호출마다 개별 인코딩하도록 둔다(가용성 우선).
+        retrieval_vector = None
+        query_vectors = None
+        try:
+            vectors = await recommender.product_client.encode_batch([
+                search_queries["retrieval"],
+                search_queries["user_need_query"],
+                search_queries["user_preference_query"],
+                search_queries["persona"],
+            ])
+            retrieval_vector = vectors[0]
+            query_vectors = {
+                "user_need_query": vectors[1],
+                "user_preference_query": vectors[2],
+                "persona": vectors[3],
+            }
+        except Exception as e:
+            logger.warning(
+                "encode_batch_fallback",
+                user_message=f"[{node_name}] 쿼리 배치 인코딩 실패, 개별 인코딩으로 폴백합니다.",
+                error_type=type(e).__name__,
+            )
+
         retrieval_product_ids = await recommender.product_retriever(
             retrieval_query=search_queries["retrieval"],
             brands=parsed_data.get("brands") or None,
-            sub_tags=parsed_data.get("product_categories") or None
+            sub_tags=parsed_data.get("product_categories") or None,
+            retrieval_vector=retrieval_vector,
         )
 
         recommended_products = await recommender.recommend(
             search_queries,
             retrieval_product_ids,
             product_tags=parsed_data.get("product_categories") or None,
+            query_vectors=query_vectors,
         )
         recommended_products = [
             {k: v for k, v in p.items() if not k.endswith("_vector")}
