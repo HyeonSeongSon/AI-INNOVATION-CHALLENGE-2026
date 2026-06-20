@@ -111,6 +111,7 @@ class ProductRecommender:
             retrieval_query: str,
             brands: Optional[List[str]],
             sub_tags: Optional[List[str]],
+            retrieval_vector: Optional[List[float]] = None,
         ):
         """필터링된 상품 풀에서 멀티벡터 검색으로 후보 product_id 목록을 반환한다.
 
@@ -118,6 +119,7 @@ class ProductRecommender:
             retrieval_query: 벡터 검색에 사용할 쿼리 문자열
             brands: 브랜드 필터 목록
             sub_tags: 카테고리 태그 목록
+            retrieval_vector: 미리 계산된 retrieval_query 임베딩 (중복 인코딩 방지용)
 
         Returns:
             검색 결과 상위 100개 product_id 문자열 리스트
@@ -127,15 +129,19 @@ class ProductRecommender:
                 sub_tags=sub_tags if sub_tags else None,
             )
 
-        retrieval_result = await self.product_client.search_by_multivector_combined(retrieval_query, filtered_product_ids, top_k=settings.product_retrieval_top_k)
+        retrieval_result = await self.product_client.search_by_multivector_combined(
+            retrieval_query, filtered_product_ids, top_k=settings.product_retrieval_top_k,
+            retrieval_vector=retrieval_vector,
+        )
         retrieval_result_ids = [p['product_id'] for p in retrieval_result]
-        
+
         return retrieval_result_ids
-    
+
     async def get_product_documents(
             self,
             queries: Dict,
-            retrieval_result_ids: List[str]
+            retrieval_result_ids: List[str],
+            query_vectors: Optional[Dict[str, List[float]]] = None,
     ) -> Dict:
         """
         product_retriever로 추려진 상품을 대상으로 페르소나 3개 차원 하이브리드 검색 (병렬)
@@ -146,6 +152,7 @@ class ProductRecommender:
                 - user_preference_query → attribute_desc 필드
                 - persona           → target_user 필드
             retrieval_result_ids: product_retriever 결과 상품 ID 리스트
+            query_vectors: queries와 동일한 키로 미리 계산된 임베딩 (중복 인코딩 방지용)
 
         Returns:
             {
@@ -161,6 +168,7 @@ class ProductRecommender:
         results = await self.product_client.search_persona_dimensions_multivector(
             queries=queries,
             product_ids=retrieval_result_ids,
+            query_vectors=query_vectors,
         )
         logger.info("get_product_documents.done")
         return results
@@ -259,6 +267,7 @@ class ProductRecommender:
         retrieval_result_ids: List[str],
         top_n: int | None = None,
         product_tags: Optional[List[str]] = None,
+        query_vectors: Optional[Dict[str, List[float]]] = None,
     ) -> List[Dict]:
         """
         3차원 하이브리드 검색 + RRF → 상위 top_n개 상품 정보 반환
@@ -268,6 +277,7 @@ class ProductRecommender:
             retrieval_result_ids: product_retriever 결과 상품 ID 리스트
             top_n: 최종 반환할 상품 수 (기본값 3)
             product_tags: 카테고리 태그 리스트. 복수 시 카테고리별 독립 RRF 후 병합
+            query_vectors: queries와 동일한 키로 미리 계산된 임베딩 (중복 인코딩 방지용)
 
         Returns:
             List[Dict]: RRF 순위 기준 상위 top_n개 상품 전체 정보
@@ -275,7 +285,7 @@ class ProductRecommender:
         top_n = top_n if top_n is not None else settings.product_recommendation_top_n
 
         # 3차원 병렬 하이브리드 검색
-        dimension_results = await self.get_product_documents(queries, retrieval_result_ids)
+        dimension_results = await self.get_product_documents(queries, retrieval_result_ids, query_vectors=query_vectors)
 
         # 1차 retrieval 순위를 4번째 차원으로 추가 (추가 API 호출 없음)
         dimension_results["retrieval"] = [
