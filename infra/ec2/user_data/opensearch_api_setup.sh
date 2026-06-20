@@ -98,6 +98,7 @@ Environment=OPENSEARCH_USE_SSL=true
 Environment=OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
 Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
 Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
+Environment=OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER=80
 ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
 TimeoutStartSec=120
 Restart=always
