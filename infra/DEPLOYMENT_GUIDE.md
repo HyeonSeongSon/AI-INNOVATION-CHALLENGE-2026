@@ -506,7 +506,7 @@ terraform apply -var="ecr_image_tag=<직전_정상_SHA>" \
 | crm-service만 안 뜸 | 5432 인바운드 규칙 확인 — LangGraph checkpointer가 PostgreSQL에 직접 연결([security_groups.tf](ec2/security_groups.tf) `ecs_to_postgres`) |
 | ALB 502/503 | Target group unhealthy. `/health` 200 여부, 태스크 기동 여부 확인 |
 | SSE 20초+에서 끊김 | ALB `idle_timeout=300` 적용됐는지([alb.tf](ec2/alb.tf)). CloudFront 경유면 CF 타임아웃도 확인 |
-| OpenSearch OOM | JVM heap 1500m 설정 확인(opensearch_server.sh). t3.medium 메모리 경합 |
+| OpenSearch OOM | JVM heap 4000m 설정 확인(opensearch_setup.sh). c5.xlarge(8GB) 기준 |
 | DB/OpenSearch API 연결 거부 | Phase 6 미수행 — 앱 코드 배포 + `systemctl start` 필요 |
 | terraform `Error acquiring state lock` | DynamoDB 잠금 잔류. `terraform force-unlock <ID>` (신중히) |
 | GitHub Actions OIDC 거부 | Secret `AWS_ROLE_ARN` 오타 또는 부트스트랩 org/repo 불일치 |

@@ -15,7 +15,7 @@ ecr_image_tag = "latest"
 # ---- EC2 ----
 ec2_key_name             = ""           # SSH 키 페어 이름 (없으면 SSM으로 접근)
 db_instance_type         = "t3.medium"
-opensearch_instance_type = "t3.medium"
+opensearch_instance_type = "c5.xlarge"
 ebs_volume_size_gb       = 50
 
 # ---- ECS ----
