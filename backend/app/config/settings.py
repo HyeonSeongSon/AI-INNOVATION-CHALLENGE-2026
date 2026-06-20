@@ -149,7 +149,7 @@ class Settings(BaseSettings):
     port: int = 8005
 
     # HTTP client timeouts (seconds)
-    http_timeout_short: float = 10.0
+    http_timeout_short: float = 120.0
     http_timeout_default: float = 15.0
     http_timeout_long: float = 30.0
     http_timeout_upload: float = 60.0
