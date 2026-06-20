@@ -189,7 +189,7 @@ async def recommend_products_node(state: RecommendProductState, config: Runnable
         retrieval_vector = None
         query_vectors = None
         try:
-            vectors = await recommender.product_client._encode_batch([
+            vectors = await recommender.product_client.encode_batch([
                 search_queries["retrieval"],
                 search_queries["user_need_query"],
                 search_queries["user_preference_query"],

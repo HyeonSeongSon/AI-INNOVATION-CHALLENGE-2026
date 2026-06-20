@@ -255,7 +255,7 @@ class ProductClient:
             "spec_feature":   settings.opensearch_v4_spec_feature_index,
         }
 
-    async def _encode_batch(self, texts: List[str]) -> List[List[float]]:
+    async def encode_batch(self, texts: List[str]) -> List[List[float]]:
         """POST /api/search/encode/batch 호출 — 여러 쿼리 텍스트를 한 번에 인코딩(검색 없음)"""
         async with _get_opensearch_semaphore():
             try:
