@@ -70,11 +70,13 @@ variable "db_instance_type" {
 variable "opensearch_instance_type" {
   description = <<-EOT
     OpenSearch EC2 인스턴스 타입. opensearch-api(임베딩 추론)는 별도 EC2로 분리되어
-    이 인스턴스엔 OpenSearch JVM(~1.5GB)만 상주 — t3.medium(4GB)+swap로 충분히 여유.
-    (과거 색인 크래시는 메모리가 아니라 knn nmslib 네이티브 미탑재 문제였고 lucene 엔진으로 해결됨)
+    이 인스턴스엔 OpenSearch JVM만 상주하지만, 28차 부하테스트에서 t3.medium(2 vCPU)
+    자체가 CPU 99~100% 포화 + 메모리 스와핑으로 병목임이 확인됨(burst 크레딧은
+    소진되지 않아 순수 연산량 부족, throttling 문제가 아님). opensearch-api와 동일하게
+    c5.xlarge(4 vCPU, 8GB)로 증설 — vCPU 2배 + JVM 힙을 1GB 하드캡에서 늘릴 메모리 여유 확보.
   EOT
   type        = string
-  default     = "t3.medium"
+  default     = "c5.xlarge"
 }
 
 variable "opensearch_api_instance_type" {

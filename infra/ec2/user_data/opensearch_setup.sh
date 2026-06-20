@@ -7,10 +7,10 @@
 # opensearch-api(임베딩 추론, KURE-v1)는 더 이상 이 인스턴스에 같이 뜨지 않는다 —
 # opensearch_api_setup.sh로 분리된 별도 EC2에서 돈다(CPU 경합 해소 목적).
 #
-# 메모리 예산 (t3.medium 4GB):
-#   OpenSearch JVM heap: 1000m (실사용 ~1200MB)
-#   OS + SSM: ~600MB
-#   여유: 스왑 4GB로 보완(분리 이후 여유 폭 확대 — 필요 시 heap 상향 검토 가능)
+# 메모리 예산 (c5.xlarge 8GB, 28차 부하테스트에서 t3.medium 2vCPU/4GB가
+# CPU 99~100% 포화 + 스와핑으로 병목 확인되어 증설):
+#   OpenSearch JVM heap: 4000m (50% 룰)
+#   OS + Lucene 파일 캐시 + SSM: 나머지 ~4GB
 set -euo pipefail
 
 DATA_MOUNT="/data"
@@ -161,11 +161,11 @@ plugins.security.nodes_dn:
   - "CN=opensearch-node-1,O=ai-innovation,C=KR"
 EOF
 
-# JVM heap 1000m — 반드시 1000m 이하 유지 (SSM 에이전트 OOM 방지)
-sed -i 's/-Xms[0-9]*[gGmM]/-Xms1000m/g' /opt/opensearch/config/jvm.options
-sed -i 's/-Xmx[0-9]*[gGmM]/-Xmx1000m/g' /opt/opensearch/config/jvm.options
-grep -q "Xms" /opt/opensearch/config/jvm.options || echo "-Xms1000m" >> /opt/opensearch/config/jvm.options
-grep -q "Xmx" /opt/opensearch/config/jvm.options || echo "-Xmx1000m" >> /opt/opensearch/config/jvm.options
+# JVM heap 4000m — c5.xlarge(8GB) 기준 50% 룰 (나머지는 OS/Lucene 캐시용)
+sed -i 's/-Xms[0-9]*[gGmM]/-Xms4000m/g' /opt/opensearch/config/jvm.options
+sed -i 's/-Xmx[0-9]*[gGmM]/-Xmx4000m/g' /opt/opensearch/config/jvm.options
+grep -q "Xms" /opt/opensearch/config/jvm.options || echo "-Xms4000m" >> /opt/opensearch/config/jvm.options
+grep -q "Xmx" /opt/opensearch/config/jvm.options || echo "-Xmx4000m" >> /opt/opensearch/config/jvm.options
 
 # ---- 플러그인 설치 (반드시 OpenSearch 시작 전) ----
 # 보존 EBS의 product_v4_* 인덱스는 korean_analyzer(nori_tokenizer)에 의존한다.
@@ -214,7 +214,7 @@ systemctl daemon-reload
 systemctl enable opensearch
 systemctl start opensearch
 
-# OpenSearch 기동 대기 (최대 300초 — t3.medium JVM 콜드 스타트 60~150초)
+# OpenSearch 기동 대기 (최대 300초 — c5.xlarge 기준 JVM 콜드 스타트 여유 포함)
 log "Waiting for OpenSearch to be ready..."
 OS_READY=false
 for i in $(seq 1 60); do
