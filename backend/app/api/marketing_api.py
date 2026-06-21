@@ -386,14 +386,14 @@ async def chat_v2_stream(
                 })
 
             if new_entries:
-                asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
+                await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
 
             if status == "completed":
-                asyncio.create_task(asyncio.to_thread(
+                await asyncio.to_thread(
                     _save_generated_messages_best_effort,
                     conv_id, user_id, result_data.get("generated_tasks", []),
                     request.user_input, thread_id, [],
-                ))
+                )
 
             logger.info(
                 "chat_v2_stream_completed",
@@ -428,6 +428,8 @@ async def chat_v2_stream(
                 role=current_user.role,
                 model=request.model,
                 file_records=request.file_records,
+                on_late_result=_persist_results,
+                release_semaphore=semaphore.release,
             ):
                 if chunk.startswith("data: "):
                     try:
@@ -464,6 +466,7 @@ async def chat_v2_stream(
             return
         except Exception as e:
             logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
+            semaphore.release()
             asyncio.create_task(asyncio.to_thread(
                 _save_conversation_messages_best_effort, conv_id,
                 [{"role": "assistant", "content": "스트리밍 중 오류가 발생했습니다.", "type": "error",
@@ -472,8 +475,6 @@ async def chat_v2_stream(
             yield 'data: {"type":"error","message":"스트리밍 중 오류가 발생했습니다."}\n\n'
             yield 'data: {"type":"done"}\n\n'
             return
-        finally:
-            semaphore.release()
 
     return StreamingResponse(
         generate(),

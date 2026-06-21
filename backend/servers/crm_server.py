@@ -153,6 +153,14 @@ async def lifespan(app: FastAPI):
             await asyncio.gather(upload_cleanup_task, checkpoint_cleanup_task, return_exceptions=True)
         except asyncio.CancelledError:
             pass
+
+        # SSE 데드라인 초과 후 백그라운드로 넘어간 chat_stream 작업들 — db_executor를
+        # 죽이기 전에 끝낼 기회를 준다(완료 시 결과를 DB에 저장하므로, 먼저 죽이면
+        # 그 저장이 끊긴다). 못 끝나면 깨끗이 포기 — 다음 배포에서 자연히 해소된다.
+        background_tasks = app.state.agent_v2._background_tasks
+        if background_tasks:
+            await asyncio.wait(background_tasks, timeout=settings.graph_execution_timeout)
+
         db_executor.shutdown(wait=False)
         await close_all()
 
