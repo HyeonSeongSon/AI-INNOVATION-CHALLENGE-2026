@@ -161,6 +161,10 @@ async def lifespan(app: FastAPI):
         if background_tasks:
             await asyncio.wait(background_tasks, timeout=settings.graph_execution_timeout)
 
+        # DB 저장 task — 단순 INSERT라 짧게만 기다린다
+        if marketing_api._db_save_tasks:
+            await asyncio.wait(marketing_api._db_save_tasks, timeout=10)
+
         db_executor.shutdown(wait=False)
         await close_all()
 

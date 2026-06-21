@@ -33,6 +33,16 @@ def get_chat_stream_semaphore(request: Request) -> "asyncio.Semaphore":
     return request.app.state.chat_stream_semaphore
 
 
+_db_save_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_db_save_task(coro) -> None:
+    """fire-and-forget DB 저장 task를 추적한다 — 참조가 없으면 GC될 수 있고,
+    배포 중 종료 시 lifespan이 기다려줄 대상도 없어진다."""
+    task = asyncio.create_task(coro)
+    _db_save_tasks.add(task)
+    task.add_done_callback(_db_save_tasks.discard)
+
 
 # ============================================================
 # 대화 이력 헬퍼
@@ -292,12 +302,12 @@ async def chat_v2(
                 "thread_id": thread_id,
             })
 
-        asyncio.create_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
+        _spawn_db_save_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
 
         # 품질 검사 통과 메시지만 generated_messages 저장
         if status == "completed" and conv_id:
             generated_tasks = result.get("generated_tasks", [])
-            asyncio.create_task(asyncio.to_thread(
+            _spawn_db_save_task(asyncio.to_thread(
                 _save_generated_messages_best_effort,
                 conv_id, user_id, generated_tasks,
                 request.user_input, thread_id,
@@ -356,7 +366,7 @@ async def chat_v2_stream(
         raise HTTPException(status_code=500, detail="내부 서버 오류가 발생했습니다.")
 
     # Write-ahead: 유저 메시지를 AI 처리 시작 전에 즉시 저장
-    asyncio.create_task(asyncio.to_thread(
+    _spawn_db_save_task(asyncio.to_thread(
         _save_conversation_messages_best_effort,
         conv_id,
         [{"role": "user", "content": request.user_input, "type": "text",
@@ -451,7 +461,7 @@ async def chat_v2_stream(
                                     _result_data = None
                                 elif _error_payload is not None:
                                     error_msg = _error_payload.get("message") or "처리 중 오류가 발생했습니다."
-                                    asyncio.create_task(asyncio.to_thread(
+                                    _spawn_db_save_task(asyncio.to_thread(
                                         _save_conversation_messages_best_effort, conv_id,
                                         [{"role": "assistant", "content": error_msg, "type": "error",
                                           "timestamp": datetime.now(timezone.utc).isoformat(), "thread_id": conv_id}],
@@ -467,7 +477,7 @@ async def chat_v2_stream(
         except Exception as e:
             logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
             semaphore.release()
-            asyncio.create_task(asyncio.to_thread(
+            _spawn_db_save_task(asyncio.to_thread(
                 _save_conversation_messages_best_effort, conv_id,
                 [{"role": "assistant", "content": "스트리밍 중 오류가 발생했습니다.", "type": "error",
                   "timestamp": datetime.now(timezone.utc).isoformat(), "thread_id": conv_id}],

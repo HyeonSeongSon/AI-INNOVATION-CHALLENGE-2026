@@ -368,8 +368,12 @@ class CRMMessageAgent:
                                     _accumulate(node_name, event.get("data", {}).get("output"))
                 except TimeoutError:
                     _logger.warning("chat_stream_late_completion_timeout", thread_id=thread_id)
+                    producer.cancel()
+                    await asyncio.gather(producer, return_exceptions=True)
                     return
                 except asyncio.CancelledError:
+                    producer.cancel()
+                    await asyncio.gather(producer, return_exceptions=True)
                     return
 
                 _logger.info("chat_stream_late_completion", thread_id=thread_id)
