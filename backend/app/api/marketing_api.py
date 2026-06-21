@@ -255,6 +255,47 @@ async def chat_v2(
                 db_executor, _verify_conversation_ownership, conv_id, user_id, current_user.role
             )
 
+        async def _persist_late_chat_result(result_data: dict) -> None:
+            """데드라인 초과로 실패 응답을 먼저 보낸 뒤, 백그라운드에서 늦게 완료된
+            결과를 DB에 저장한다(클라이언트에는 이미 응답이 나갔으므로 다음 대화
+            조회 시에만 노출된다)."""
+            try:
+                late_status = result_data.get("status")
+                late_thread_id = result_data.get("thread_id", conv_id)
+                late_now = datetime.now(timezone.utc).isoformat()
+
+                late_entries = []
+                if late_status == "completed":
+                    ai_messages = result_data.get("messages", [])
+                    content = ai_messages[0].get("content", "") if ai_messages else ""
+                    late_entries.append({
+                        "role": "assistant", "content": content,
+                        "type": "text", "timestamp": late_now, "thread_id": late_thread_id,
+                    })
+                elif late_status == "failed":
+                    error_msg = result_data.get("error") or "메시지 품질 검사를 통과하지 못했습니다."
+                    late_entries.append({
+                        "role": "assistant", "content": error_msg,
+                        "type": "error", "timestamp": late_now, "thread_id": late_thread_id,
+                    })
+
+                if late_entries:
+                    await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, late_entries)
+
+                if late_status == "completed":
+                    await asyncio.to_thread(
+                        _save_generated_messages_best_effort,
+                        conv_id, user_id, result_data.get("generated_tasks", []),
+                        request.user_input, late_thread_id, result_data.get("regeneration_history"),
+                    )
+
+                logger.info(
+                    "chat_v2_late_completion_persisted",
+                    status=late_status, thread_id=late_thread_id, conv_id=conv_id, user_id=user_id,
+                )
+            except Exception as e:
+                logger.warning("chat_v2_late_persist_failed", error_type=type(e).__name__, conv_id=conv_id)
+
         # 2. 에이전트 호출 — conversation_id 전달, history 제거
         result = await agent.chat(
             user_input=request.user_input,
@@ -264,6 +305,7 @@ async def chat_v2(
             conversation_id=conv_id,
             model=request.model,
             file_records=request.file_records,
+            on_late_result=_persist_late_chat_result,
         )
 
         result["conversation_id"] = conv_id
@@ -429,6 +471,14 @@ async def chat_v2_stream(
             yield 'data: {"type":"done"}\n\n'
             return
 
+        _semaphore_released = False
+
+        def _release_semaphore_once() -> None:
+            nonlocal _semaphore_released
+            if not _semaphore_released:
+                _semaphore_released = True
+                semaphore.release()
+
         try:
             async for chunk in agent.chat_stream(
                 user_input=request.user_input,
@@ -439,7 +489,7 @@ async def chat_v2_stream(
                 model=request.model,
                 file_records=request.file_records,
                 on_late_result=_persist_results,
-                release_semaphore=semaphore.release,
+                release_semaphore=_release_semaphore_once,
             ):
                 if chunk.startswith("data: "):
                     try:
@@ -476,7 +526,7 @@ async def chat_v2_stream(
             return
         except Exception as e:
             logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
-            semaphore.release()
+            _release_semaphore_once()
             _spawn_db_save_task(asyncio.to_thread(
                 _save_conversation_messages_best_effort, conv_id,
                 [{"role": "assistant", "content": "스트리밍 중 오류가 발생했습니다.", "type": "error",

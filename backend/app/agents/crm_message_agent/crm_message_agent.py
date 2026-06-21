@@ -138,6 +138,85 @@ class CRMMessageAgent:
                 return [{"role": "assistant", "content": msg.content}]
         return []
 
+    def _build_chat_result_payload(
+        self,
+        result: Dict[str, Any],
+        thread_id: str,
+        session_id: str,
+    ) -> Dict[str, Any]:
+        try:
+            raw_status = result.get("status")
+            api_status = "failed" if raw_status == "failed" else "completed"
+
+            return {
+                "status": api_status,
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "recommended_products": result.get("recommended_products", []),
+                "messages": self._extract_response_messages(result),
+                "generated_tasks": result.get("generated_tasks", []),
+                "regeneration_history": [],
+                "logs": result.get("logs", []),
+                "error": result.get("error"),
+            }
+        except Exception as e:
+            _logger.error("chat_failed", error_type=type(e).__name__, exc_info=True)
+            return {
+                "status": "failed",
+                "thread_id": thread_id,
+                "session_id": session_id,
+                "recommended_products": [],
+                "messages": [],
+                "generated_tasks": [],
+                "regeneration_history": [],
+                "logs": ["[ERROR] 대화 처리 실패"],
+            }
+
+    def _detach_chat_to_background(
+        self,
+        task: asyncio.Task,
+        thread_id: str,
+        session_id: str,
+        on_late_result: Callable[[Dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        """데드라인 초과로 호출자에게는 이미 실패 응답을 보냈지만, 워크플로우는 취소하지
+        않고 끝까지 진행시켜 결과를 늦게라도 저장한다(A2A 너머 recommend/generate는
+        로컬 task 취소와 무관하게 계속 실행되므로, 취소해도 자원이 절약되지 않고
+        결과만 버려짐)."""
+        async def _continue() -> None:
+            try:
+                async with asyncio.timeout(settings.graph_execution_timeout):
+                    result = await task
+            except (TimeoutError, asyncio.CancelledError):
+                _logger.warning("chat_late_completion_timeout", thread_id=thread_id)
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                return
+            except Exception as e:
+                _logger.error(
+                    "chat_late_completion_failed",
+                    error_type=type(e).__name__,
+                    thread_id=thread_id,
+                    exc_info=True,
+                )
+                return
+
+            _logger.info("chat_late_completion", thread_id=thread_id)
+            payload = self._build_chat_result_payload(result, thread_id, session_id)
+            try:
+                await on_late_result(payload)
+            except Exception as e:
+                _logger.warning(
+                    "chat_late_result_callback_failed",
+                    thread_id=thread_id,
+                    error_type=type(e).__name__,
+                )
+
+        continuation = asyncio.create_task(_continue())
+        for t in (task, continuation):
+            self._background_tasks.add(t)
+            t.add_done_callback(self._background_tasks.discard)
+
     async def chat(
         self,
         user_input: str,
@@ -148,6 +227,7 @@ class CRMMessageAgent:
         model: Optional[str] = None,
         file_records: Optional[List[Dict[str, Any]]] = None,
         services: Any = None,
+        on_late_result: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
     ) -> Dict[str, Any]:
         """
         대화 처리
@@ -156,6 +236,13 @@ class CRMMessageAgent:
         - 현재 사용자 메시지만 initial_state에 포함 (이력은 checkpoint에서 자동 복원)
         - file_records 제공 시 supervisor가 data_registration_agent로 라우팅
         - generated_tasks, recommended_products는 state["intermediate"]에서 추출
+
+        on_late_result: 데드라인(graph_execution_timeout) 초과로 이미 실패 응답을
+            반환한 뒤에도, 워크플로우가 실제로는 완료될 수 있다(A2A로 분리된
+            recommend/generate 서비스는 로컬 task를 취소해도 멈추지 않음). 이 콜백이
+            주어지면 데드라인 초과 시 워크플로우를 취소하지 않고 백그라운드에서 끝까지
+            진행시켜, 완료되면 이 콜백에 result payload를 전달한다(예: DB에 늦게라도
+            저장). 주어지지 않으면 기존과 동일하게 취소한다.
 
         Returns:
             {
@@ -184,13 +271,15 @@ class CRMMessageAgent:
             **({"file_records": file_records} if file_records else {}),
         }
 
-        try:
-            result = await asyncio.wait_for(
-                self.workflow.ainvoke(initial_state, config),
-                timeout=settings.graph_execution_timeout,
-            )
-        except asyncio.TimeoutError:
+        task = asyncio.create_task(self.workflow.ainvoke(initial_state, config))
+        done, _ = await asyncio.wait({task}, timeout=settings.graph_execution_timeout)
+        if task not in done:
             _logger.error("workflow_timeout", thread_id=thread_id)
+            if on_late_result is not None:
+                self._detach_chat_to_background(task, thread_id, session_id, on_late_result)
+            else:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
             return {
                 "status": "failed",
                 "thread_id": thread_id,
@@ -202,25 +291,11 @@ class CRMMessageAgent:
                 "logs": ["[ERROR] 처리 시간이 초과되었습니다."],
                 "error": "처리 시간이 초과되었습니다.",
             }
+
         try:
-            intermediate = result.get("intermediate", {})
-            raw_status = result.get("status")
-            api_status = "failed" if raw_status == "failed" else "completed"
-
-            return {
-                "status": api_status,
-                "thread_id": thread_id,
-                "session_id": session_id,
-                "recommended_products": result.get("recommended_products", []),
-                "messages": self._extract_response_messages(result),
-                "generated_tasks": result.get("generated_tasks", []),
-                "regeneration_history": [],
-                "logs": result.get("logs", []),
-                "error": result.get("error"),
-            }
-
+            result = task.result()
         except Exception as e:
-            _logger.error("chat_failed", error_type=type(e).__name__, exc_info=True)
+            _logger.error("workflow_failed", error_type=type(e).__name__, thread_id=thread_id, exc_info=True)
             return {
                 "status": "failed",
                 "thread_id": thread_id,
@@ -231,6 +306,8 @@ class CRMMessageAgent:
                 "regeneration_history": [],
                 "logs": ["[ERROR] 대화 처리 실패"],
             }
+
+        return self._build_chat_result_payload(result, thread_id, session_id)
 
     async def chat_stream(
         self,
