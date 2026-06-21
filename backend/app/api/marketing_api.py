@@ -429,6 +429,14 @@ async def chat_v2_stream(
             yield 'data: {"type":"done"}\n\n'
             return
 
+        _semaphore_released = False
+
+        def _release_semaphore_once() -> None:
+            nonlocal _semaphore_released
+            if not _semaphore_released:
+                _semaphore_released = True
+                semaphore.release()
+
         try:
             async for chunk in agent.chat_stream(
                 user_input=request.user_input,
@@ -439,7 +447,7 @@ async def chat_v2_stream(
                 model=request.model,
                 file_records=request.file_records,
                 on_late_result=_persist_results,
-                release_semaphore=semaphore.release,
+                release_semaphore=_release_semaphore_once,
             ):
                 if chunk.startswith("data: "):
                     try:
@@ -476,7 +484,7 @@ async def chat_v2_stream(
             return
         except Exception as e:
             logger.error("chat_v2_stream_generate_failed", error_type=type(e).__name__, exc_info=True)
-            semaphore.release()
+            _release_semaphore_once()
             _spawn_db_save_task(asyncio.to_thread(
                 _save_conversation_messages_best_effort, conv_id,
                 [{"role": "assistant", "content": "스트리밍 중 오류가 발생했습니다.", "type": "error",
