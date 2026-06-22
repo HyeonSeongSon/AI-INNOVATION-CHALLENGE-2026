@@ -387,7 +387,7 @@ jobs:
         run: |
           BUILDER_ID=$(aws ec2 run-instances \
             --launch-template "LaunchTemplateId=${{ needs.terraform.outputs.opensearch_api_launch_template_id }},Version=\$Latest" \
-            --min-count 1 --max-count 1 \
+            --count 1 \
             --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${{ env.PROJECT_NAME }}-opensearch-api-builder}]" \
             --query "Instances[0].InstanceId" --output text)
           echo "builder_id=$BUILDER_ID" >> "$GITHUB_OUTPUT"
