@@ -17,8 +17,11 @@
 
 locals {
   # EC2 프라이빗 IP 기반 URL — ECS 태스크 환경변수에 주입
-  db_api_url         = "http://${aws_instance.db.private_ip}:8020"
-  opensearch_api_url = "http://${aws_instance.opensearch_api.private_ip}:8010"
+  db_api_url = "http://${aws_instance.db.private_ip}:8020"
+  # opensearch_api_use_nlb=false(기본): 기존 단일 EC2의 IP를 그대로 가리킨다 — ASG/NLB
+  # (opensearch_api_asg.tf, opensearch_api_nlb.tf)는 health-check만 통과시켜보는 단계.
+  # true로 바꾸면 이 순간부터 실제 트래픽이 NLB→ASG로 전환된다(무중단 컷오버 플래그).
+  opensearch_api_url = var.opensearch_api_use_nlb ? "http://${aws_lb.opensearch_api.dns_name}:8010" : "http://${aws_instance.opensearch_api.private_ip}:8010"
   postgres_url       = "postgresql://${var.postgres_user}:${var.postgres_password}@${aws_instance.db.private_ip}:5432/ai_innovation_db"
 }
 

@@ -49,8 +49,27 @@ output "opensearch_ec2_instance_id" {
 }
 
 output "opensearch_api_ec2_instance_id" {
-  description = "OpenSearch API EC2 인스턴스 ID (SSM Run Command 타겟)"
+  description = <<-EOT
+    OpenSearch API 단일 EC2 인스턴스 ID (SSM Run Command 타겟) — ASG 전환 롤아웃이 끝나고
+    이 단일 인스턴스 리소스를 제거하면 이 output도 같이 삭제한다. 그 전까지는 빌더 인스턴스의
+    "최초 1회" 소스로도 쓰인다(opensearch_api_asg.tf 주석 참고).
+  EOT
   value       = aws_instance.opensearch_api.id
+}
+
+output "opensearch_api_launch_template_id" {
+  description = "OpenSearch API ASG launch template ID — CI가 create-launch-template-version 호출 시 사용"
+  value       = aws_launch_template.opensearch_api.id
+}
+
+output "opensearch_api_asg_name" {
+  description = "OpenSearch API Auto Scaling Group 이름 — CI가 start-instance-refresh 호출 시 사용. 단일 인스턴스 ID와 달리 인스턴스 목록은 그때그때 aws autoscaling describe-auto-scaling-groups로 조회해야 한다."
+  value       = aws_autoscaling_group.opensearch_api.name
+}
+
+output "opensearch_api_nlb_dns_name" {
+  description = "OpenSearch API 내부 NLB DNS 이름"
+  value       = aws_lb.opensearch_api.dns_name
 }
 
 output "deploy_s3_bucket" {

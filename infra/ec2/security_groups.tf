@@ -168,7 +168,8 @@ resource "aws_security_group" "opensearch_api_ec2" {
   tags = { Name = "${var.project_name}-sg-opensearch-api-ec2" }
 }
 
-# OpenSearch API(8010) — ECS tasks에서 HTTP 호출
+# OpenSearch API(8010) — ECS tasks에서 HTTP 호출 (NLB가 instance 타깃 타입이라 클라이언트
+# IP가 보존되므로, 실제 트래픽 출처는 여전히 ECS 태스크로 보인다 — 이 규칙 그대로 유지)
 resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   type                     = "ingress"
   description              = "OpenSearch API server - ECS to OpenSearch API"
@@ -177,6 +178,18 @@ resource "aws_security_group_rule" "ecs_to_opensearch_api" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.ecs_tasks.id
   security_group_id        = aws_security_group.opensearch_api_ec2.id
+}
+
+# OpenSearch API(8010) — 내부 NLB 헬스체크 트래픽은 ECS 태스크가 아니라 NLB 노드에서 오므로
+# (ASG 전환, opensearch_api_nlb.tf) 별도로 프라이빗 서브넷 CIDR 전체를 허용해야 한다.
+resource "aws_security_group_rule" "nlb_healthcheck_to_opensearch_api" {
+  type              = "ingress"
+  description       = "OpenSearch API NLB health check"
+  from_port         = 8010
+  to_port           = 8010
+  protocol          = "tcp"
+  cidr_blocks       = aws_subnet.private[*].cidr_block
+  security_group_id = aws_security_group.opensearch_api_ec2.id
 }
 
 
