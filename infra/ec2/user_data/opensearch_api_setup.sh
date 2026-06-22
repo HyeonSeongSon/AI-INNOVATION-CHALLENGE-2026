@@ -84,6 +84,12 @@ fi
 touch /var/log/venv-ready
 chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" "$DATA_MOUNT/opensearch-api-venv"
 
+# HF_HOME/SENTENCE_TRANSFORMERS_HOME이 가리키는 캐시 디렉터리를 미리 만들어둔다 — /data는
+# root 소유(755)라서 서비스가 ubuntu 사용자로 도는 동안 이 디렉터리를 스스로 만들 권한이 없다.
+# 없으면 모델 로드/인코딩 호출마다 PermissionError로 500이 난다.
+mkdir -p "$DATA_MOUNT/hf-cache"
+chown -R ubuntu:ubuntu "$DATA_MOUNT/hf-cache"
+
 # ---- 4. 환경변수 파일 + OpenSearch API systemd 서비스 ----
 # 시크릿/피어 IP(OPENSEARCH_HOST 등)는 유닛 파일에 직접 박지 않고 별도 EnvironmentFile로
 # 분리한다 — 이 파일은 골든 AMI를 ASG로 띄울 때 가벼운 부팅 스크립트(opensearch_api_asg_boot.sh)가
