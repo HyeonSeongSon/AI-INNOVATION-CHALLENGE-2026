@@ -112,8 +112,13 @@ resource "aws_iam_role" "github_actions" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          # main 브랜치 push와 PR에서만 권한 부여
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main"
+          # main 브랜치 push/PR + son_branch(plan_only 검토용 workflow_dispatch)에서만 권한 부여.
+          # 이 역할은 AdministratorAccess라 브랜치를 와일드카드(refs/heads/*)로 열면 어떤 브랜치든
+          # 그 권한을 가져갈 수 있어 노출 범위가 커진다 — 그래서 지금 실제로 쓰는 브랜치만 명시.
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main",
+            "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/son_branch",
+          ]
         }
       }
     }]

@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      plan_only:
+        description: "true면 terraform plan만 실행하고 apply/배포는 건너뜀 (운영 시크릿으로 안전하게 변경분 검토용)"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write   # OIDC 토큰 발급 필수
@@ -113,9 +118,14 @@ jobs:
             "s3://${PROJECT_NAME}-deploy/opensearch_api_setup.${HASH}.sh" \
             || echo "bucket not ready (first deploy) — package job will upload"
 
-      - name: Terraform Apply
+      - name: Terraform Plan or Apply
         working-directory: infra/ec2
-        run: terraform apply -auto-approve
+        run: |
+          if [ "${{ inputs.plan_only }}" = "true" ]; then
+            terraform plan -no-color
+          else
+            terraform apply -auto-approve
+          fi
         env:
           # ── 인프라 설정 ──
           TF_VAR_aws_region:    ${{ env.AWS_REGION }}
@@ -142,20 +152,25 @@ jobs:
 
       - name: Export Terraform outputs
         id: tf-outputs
+        if: ${{ !inputs.plan_only }}
         working-directory: infra/ec2
         run: |
           echo "db_instance_id=$(terraform output -raw db_ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "opensearch_instance_id=$(terraform output -raw opensearch_ec2_instance_id)" >> $GITHUB_OUTPUT
           echo "opensearch_api_instance_id=$(terraform output -raw opensearch_api_ec2_instance_id)" >> $GITHUB_OUTPUT
+          echo "opensearch_api_launch_template_id=$(terraform output -raw opensearch_api_launch_template_id)" >> $GITHUB_OUTPUT
+          echo "opensearch_api_asg_name=$(terraform output -raw opensearch_api_asg_name)" >> $GITHUB_OUTPUT
           echo "cloudfront_dist_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(terraform output -raw frontend_s3_bucket)" >> $GITHUB_OUTPUT
 
     outputs:
-      db_instance_id:             ${{ steps.tf-outputs.outputs.db_instance_id }}
-      opensearch_instance_id:     ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
-      opensearch_api_instance_id: ${{ steps.tf-outputs.outputs.opensearch_api_instance_id }}
-      cloudfront_dist_id:         ${{ steps.tf-outputs.outputs.cloudfront_dist_id }}
-      frontend_bucket:            ${{ steps.tf-outputs.outputs.frontend_bucket }}
+      db_instance_id:                     ${{ steps.tf-outputs.outputs.db_instance_id }}
+      opensearch_instance_id:             ${{ steps.tf-outputs.outputs.opensearch_instance_id }}
+      opensearch_api_instance_id:         ${{ steps.tf-outputs.outputs.opensearch_api_instance_id }}
+      opensearch_api_launch_template_id:  ${{ steps.tf-outputs.outputs.opensearch_api_launch_template_id }}
+      opensearch_api_asg_name:            ${{ steps.tf-outputs.outputs.opensearch_api_asg_name }}
+      cloudfront_dist_id:                 ${{ steps.tf-outputs.outputs.cloudfront_dist_id }}
+      frontend_bucket:                    ${{ steps.tf-outputs.outputs.frontend_bucket }}
 
   # ────────────────────────────────────────────
   # Job 3: 데이터 서비스 코드 패키징 → S3 업로드
@@ -166,6 +181,7 @@ jobs:
     name: Package & Upload Data Services
     runs-on: ubuntu-latest
     needs: terraform
+    if: ${{ !inputs.plan_only }}
 
     steps:
       - uses: actions/checkout@v4
@@ -228,6 +244,7 @@ jobs:
     name: Deploy Data Services via SSM
     runs-on: ubuntu-latest
     needs: [terraform, package-data-services]
+    if: ${{ !inputs.plan_only }}
 
     steps:
       - name: Configure AWS credentials (OIDC)
@@ -359,36 +376,59 @@ jobs:
             fi
           done
 
-      - name: Wait for OpenSearch API EC2 user_data to complete
+      # ── OpenSearch API: 골든 AMI 빌드 + ASG 인스턴스 리프레시 ──────────────
+      # 단일 EC2에 직접 SSM 배포하던 방식(위 OpenSearch EC2/DB EC2와 동일 패턴)을 더는
+      # 쓰지 않는다 — ASG가 매번 새로 띄우는 인스턴스는 그 SSM 배포를 받을 기회가 없어
+      # 코드 없이 부팅→크래시 루프에 빠지기 때문(opensearch_api_setup.sh:118 주석).
+      # 대신: 빌더 인스턴스를 하나 띄워 거기에만 SSM으로 코드를 배포하고, 그 결과를
+      # AMI로 굽어 ASG 전체에 instance refresh로 퍼뜨린다.
+      - name: Launch OpenSearch API builder instance
+        id: launch-builder
         run: |
-          echo "Waiting for OpenSearch API EC2 user_data to complete..."
+          BUILDER_ID=$(aws ec2 run-instances \
+            --launch-template "LaunchTemplateId=${{ needs.terraform.outputs.opensearch_api_launch_template_id }},Version=\$Latest" \
+            --min-count 1 --max-count 1 \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${{ env.PROJECT_NAME }}-opensearch-api-builder}]" \
+            --query "Instances[0].InstanceId" --output text)
+          echo "builder_id=$BUILDER_ID" >> "$GITHUB_OUTPUT"
+          echo "Builder instance: $BUILDER_ID"
+
+      - name: Wait for builder boot script to complete
+        run: |
+          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          echo "Waiting for builder ($BUILDER_ID) user_data to complete..."
           for i in $(seq 1 80); do
             RESULT=$(aws ssm send-command \
-              --instance-ids "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+              --instance-ids "$BUILDER_ID" \
               --document-name "AWS-RunShellScript" \
               --parameters '{"commands":["test -f /var/log/user-data-complete && echo OK || echo WAIT"]}' \
-              --output text --query "Command.CommandId")
-            sleep 5
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$RESULT" \
-              --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
-              --query "StandardOutputContent" --output text 2>/dev/null || echo "WAIT")
-            echo "Attempt $i: $STATUS"
-            if echo "$STATUS" | grep -q "OK"; then
-              echo "OpenSearch API EC2 user_data complete."
-              break
+              --output text --query "Command.CommandId" 2>/dev/null || echo "")
+            if [ -n "$RESULT" ]; then
+              sleep 5
+              STATUS=$(aws ssm get-command-invocation \
+                --command-id "$RESULT" \
+                --instance-id "$BUILDER_ID" \
+                --query "StandardOutputContent" --output text 2>/dev/null || echo "WAIT")
+              echo "Attempt $i: $STATUS"
+              if echo "$STATUS" | grep -q "OK"; then
+                echo "Builder boot script complete."
+                break
+              fi
+            else
+              echo "Attempt $i: SSM not reachable yet"
             fi
             if [ "$i" = "80" ]; then
-              echo "ERROR: OpenSearch API EC2 user_data did not complete within 40 minutes."
+              echo "ERROR: Builder boot script did not complete within 40 minutes."
               exit 1
             fi
             sleep 25
           done
 
-      - name: Deploy to OpenSearch API EC2 via SSM
+      - name: Deploy code to builder via SSM
         run: |
+          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+            --instance-ids "$BUILDER_ID" \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 1800 \
             --parameters '{"commands":[
@@ -405,27 +445,98 @@ jobs:
               "systemctl restart opensearch-api"
             ]}' \
             --output text --query "Command.CommandId")
-          echo "SSM Command ID (opensearch-api): $COMMAND_ID"
+          echo "SSM Command ID (opensearch-api builder): $COMMAND_ID"
           for i in $(seq 1 120); do
             sleep 15
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
-              --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+              --instance-id "$BUILDER_ID" \
               --query "Status" --output text 2>/dev/null || echo "Pending")
             echo "Attempt $i: $STATUS"
-            if [ "$STATUS" = "Success" ]; then echo "OpenSearch API deploy success."; break; fi
+            if [ "$STATUS" = "Success" ]; then echo "Builder deploy success."; break; fi
             if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
               aws ssm get-command-invocation \
                 --command-id "$COMMAND_ID" \
-                --instance-id "${{ needs.terraform.outputs.opensearch_api_instance_id }}" \
+                --instance-id "$BUILDER_ID" \
                 --query "StandardErrorContent" --output text
               exit 1
             fi
             if [ "$i" = "120" ]; then
-              echo "ERROR: OpenSearch API deploy did not complete within 30 minutes."
+              echo "ERROR: Builder deploy did not complete within 30 minutes."
               exit 1
             fi
           done
+
+      - name: Verify builder health before baking AMI
+        run: |
+          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$BUILDER_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["curl -sf http://localhost:8010/health && echo HEALTH_OK"]}' \
+            --output text --query "Command.CommandId")
+          sleep 10
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$BUILDER_ID" \
+            --query "StandardOutputContent" --output text 2>/dev/null || echo "")
+          echo "$STATUS"
+          echo "$STATUS" | grep -q "HEALTH_OK" || { echo "ERROR: builder /health check failed — aborting before AMI bake"; exit 1; }
+
+      - name: Bake golden AMI from builder
+        id: bake-ami
+        run: |
+          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          AMI_ID=$(aws ec2 create-image \
+            --instance-id "$BUILDER_ID" \
+            --name "${{ env.PROJECT_NAME }}-opensearch-api-${{ github.sha }}" \
+            --query "ImageId" --output text)
+          echo "ami_id=$AMI_ID" >> "$GITHUB_OUTPUT"
+          echo "Waiting for AMI $AMI_ID to become available..."
+          aws ec2 wait image-available --image-ids "$AMI_ID"
+          echo "AMI $AMI_ID available."
+
+      - name: Publish new launch template version
+        run: |
+          # --source-version 1: Terraform이 관리하는 버전 1(보안그룹/IAM/user_data 등)을
+          # 그대로 물려받고 ImageId만 갱신한다 — $Latest를 source로 쓰면 이전 CI 실행의
+          # 버전을 계속 물고 가게 되어 의도치 않은 드리프트가 누적될 수 있다.
+          aws ec2 create-launch-template-version \
+            --launch-template-id "${{ needs.terraform.outputs.opensearch_api_launch_template_id }}" \
+            --source-version 1 \
+            --launch-template-data "{\"ImageId\":\"${{ steps.bake-ami.outputs.ami_id }}\"}" \
+            --version-description "${{ github.sha }}"
+
+      - name: Roll ASG instances to new AMI
+        run: |
+          ASG_NAME="${{ needs.terraform.outputs.opensearch_api_asg_name }}"
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name "$ASG_NAME" \
+            --preferences '{"MinHealthyPercentage":90,"InstanceWarmup":90}' \
+            --query "InstanceRefreshId" --output text)
+          echo "Instance refresh: $REFRESH_ID"
+          for i in $(seq 1 60); do
+            sleep 30
+            STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --instance-refresh-ids "$REFRESH_ID" \
+              --query "InstanceRefreshes[0].Status" --output text)
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "Successful" ]; then echo "Instance refresh complete."; break; fi
+            if [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
+              echo "ERROR: instance refresh $STATUS"
+              exit 1
+            fi
+            if [ "$i" = "60" ]; then
+              echo "ERROR: instance refresh did not complete within 30 minutes."
+              exit 1
+            fi
+          done
+
+      - name: Terminate builder instance
+        if: always()
+        run: |
+          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          [ -n "$BUILDER_ID" ] && aws ec2 terminate-instances --instance-ids "$BUILDER_ID" || true
 
       - name: Restore OpenSearch indices from S3 snapshot if empty
         run: |
@@ -465,6 +576,7 @@ jobs:
     name: Build & Deploy Frontend
     runs-on: ubuntu-latest
     needs: terraform
+    if: ${{ !inputs.plan_only }}
 
     steps:
       - uses: actions/checkout@v4

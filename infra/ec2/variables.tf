@@ -141,6 +141,34 @@ variable "opensearch_api_ebs_volume_size_gb" {
   default     = 25
 }
 
+variable "opensearch_api_golden_ami_id" {
+  description = <<-EOT
+    OpenSearch API ASG가 띄울 골든 AMI ID — 코드/venv/모델/데이터가 전부 포함된 이미지.
+    빈 문자열이면 launch template 최초 생성 시 var.ec2_ami(베이스 우분투)를 쓴다.
+    CI가 빌드 후 aws ec2 create-launch-template-version으로 새 버전을 만들고, ASG는
+    launch_template.version="$Latest"를 쓰므로 이 변수는 "처음 한 번"만 의미가 있다 —
+    이후 버전은 Terraform이 아니라 CI가 관리한다(드리프트 방지).
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "opensearch_api_asg_max_size" {
+  description = "OpenSearch API ASG 최대 인스턴스 수 — 32~33차 부하테스트에서 recommend 3대/generate 2대까지 스케일했던 비율 참고"
+  type        = number
+  default     = 4
+}
+
+variable "opensearch_api_use_nlb" {
+  description = <<-EOT
+    true면 ECS 태스크의 OPENSEARCH_API_URL이 NLB DNS(ASG)를 가리키고, false면 기존 단일
+    EC2의 private IP를 그대로 가리킨다. ASG/NLB 구성을 먼저 적용해 헬스체크만 통과시켜본
+    뒤, 검증되면 이 값을 true로 바꿔 트래픽을 전환한다(무중단 컷오버용 플래그).
+  EOT
+  type        = bool
+  default     = false
+}
+
 # ---- ECS ----
 
 variable "ecs_task_cpu" {

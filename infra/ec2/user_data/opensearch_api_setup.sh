@@ -59,7 +59,12 @@ if ! mountpoint -q "$DATA_MOUNT"; then
   log "ERROR: Failed to mount $DATA_DISK to $DATA_MOUNT (volume may be unrecoverable — recreate EBS)"
   exit 1
 fi
-grep -q "$DATA_DISK" /etc/fstab || echo "$DATA_DISK $DATA_MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+# 경로(예: /dev/nvme1n1) 대신 UUID로 fstab에 기록한다 — 이 스크립트가 골든 AMI로 구워지면
+# 새로 띄운 인스턴스의 NVMe 디바이스 열거 순서가 달라져도(Nitro 인스턴스에서 흔함) 항상
+# 같은 파일시스템을 정확히 찾는다. lsblk 사이즈 탐색(위)은 디바이스를 찾는 용도로만 쓰고,
+# fstab에는 그 디바이스의 UUID만 남긴다.
+DATA_UUID=$(blkid -s UUID -o value "$DATA_DISK")
+grep -q "$DATA_UUID" /etc/fstab || echo "UUID=$DATA_UUID $DATA_MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
 
 # ---- 3. OpenSearch API venv ----
 log "Setting up OpenSearch API venv..."
@@ -79,7 +84,22 @@ fi
 touch /var/log/venv-ready
 chown -R ubuntu:ubuntu "$OPENSEARCH_API_DIR" "$DATA_MOUNT/opensearch-api-venv"
 
-# ---- 4. OpenSearch API systemd 서비스 ----
+# ---- 4. 환경변수 파일 + OpenSearch API systemd 서비스 ----
+# 시크릿/피어 IP(OPENSEARCH_HOST 등)는 유닛 파일에 직접 박지 않고 별도 EnvironmentFile로
+# 분리한다 — 이 파일은 골든 AMI를 ASG로 띄울 때 가벼운 부팅 스크립트(opensearch_api_asg_boot.sh)가
+# 매번 새로 덮어쓸 수 있어야 해서, "무거운 설치(이 스크립트)"와 "가벼운 환경값 주입(부팅 시)"을
+# 분리하는 경계가 된다. 지금 이 시점(빌더/단일 인스턴스 최초 부팅)에는 이 스크립트가 직접 쓴다.
+log "Writing /etc/opensearch-api.env..."
+cat > /etc/opensearch-api.env <<ENVFILE
+OPENSEARCH_URL=https://$OPENSEARCH_HOST:9200
+OPENSEARCH_HOST=$OPENSEARCH_HOST
+OPENSEARCH_PORT=9200
+OPENSEARCH_USE_SSL=true
+OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
+INTERNAL_TOKEN=$INTERNAL_TOKEN
+ENVFILE
+chmod 600 /etc/opensearch-api.env
+
 log "Registering opensearch-api service..."
 cat > /etc/systemd/system/opensearch-api.service <<UNIT
 [Unit]
@@ -91,14 +111,11 @@ Type=simple
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/opensearch-api
-Environment=OPENSEARCH_URL=https://$OPENSEARCH_HOST:9200
-Environment=OPENSEARCH_HOST=$OPENSEARCH_HOST
-Environment=OPENSEARCH_PORT=9200
-Environment=OPENSEARCH_USE_SSL=true
-Environment=OPENSEARCH_ADMIN_PASSWORD=$OPENSEARCH_ADMIN_PASSWORD
-Environment=INTERNAL_TOKEN=$INTERNAL_TOKEN
+EnvironmentFile=/etc/opensearch-api.env
 Environment=FORBIDDEN_KEYWORD_JSON_PATH=/opt/opensearch-api/data/forbidden_keyword.json
 Environment=OPENSEARCH_MAX_CONCURRENT_SEARCHES_PER_WORKER=80
+Environment=HF_HOME=/data/hf-cache
+Environment=SENTENCE_TRANSFORMERS_HOME=/data/hf-cache
 ExecStart=$DATA_MOUNT/opensearch-api-venv/bin/uvicorn opensearch_api:app --host 0.0.0.0 --port 8010 --workers 1
 TimeoutStartSec=120
 Restart=always
