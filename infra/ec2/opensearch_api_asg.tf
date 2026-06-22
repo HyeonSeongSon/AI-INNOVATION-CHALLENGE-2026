@@ -23,7 +23,16 @@ resource "aws_launch_template" "opensearch_api" {
     name = aws_iam_instance_profile.ec2.name
   }
 
-  vpc_security_group_ids = [aws_security_group.opensearch_api_ec2.id]
+  # subnet_id를 여기 network_interfaces에 박아둔다 — CI가 빌더를 띄울 때
+  # (aws ec2 run-instances --launch-template, ASG 밖에서 단독 실행) subnet을 따로 지정하지
+  # 않아도 항상 ASG와 같은 서브넷/보안그룹으로 뜬다. subnet 없이 vpc_security_group_ids만
+  # 쓰면 AWS가 기본 VPC의 기본 서브넷으로 보내버려 "보안그룹과 서브넷이 다른 네트워크"
+  # 에러가 난다.
+  network_interfaces {
+    associate_public_ip_address = false
+    subnet_id                   = aws_subnet.private[0].id
+    security_groups             = [aws_security_group.opensearch_api_ec2.id]
+  }
 
   # 평소엔 가벼운 경로(시크릿/피어 IP를 env 파일에 써주고 서비스 재시작)만 탄다 — 무거운
   # 설치(apt/venv/torch/모델/코드)는 골든 AMI에 이미 포함돼 있다. 골든 AMI가 아직 없는

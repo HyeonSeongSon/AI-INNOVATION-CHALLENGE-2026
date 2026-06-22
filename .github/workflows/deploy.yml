@@ -380,53 +380,17 @@ jobs:
       # 단일 EC2에 직접 SSM 배포하던 방식(위 OpenSearch EC2/DB EC2와 동일 패턴)을 더는
       # 쓰지 않는다 — ASG가 매번 새로 띄우는 인스턴스는 그 SSM 배포를 받을 기회가 없어
       # 코드 없이 부팅→크래시 루프에 빠지기 때문(opensearch_api_setup.sh:118 주석).
-      # 대신: 빌더 인스턴스를 하나 띄워 거기에만 SSM으로 코드를 배포하고, 그 결과를
-      # AMI로 굽어 ASG 전체에 instance refresh로 퍼뜨린다.
-      - name: Launch OpenSearch API builder instance
-        id: launch-builder
+      # 대신: 빌더 역할을 기존 단일 인스턴스(aws_instance.opensearch_api)가 그대로 맡는다 —
+      # launch template으로 새 빌더를 매번 띄우면 보조 25GB EBS 데이터 볼륨이 launch
+      # template에 정의돼 있지 않아(block_device_mappings 없음) venv/모델을 찾지 못해 콜드
+      # 부트스트랩이 실패한다. 그 볼륨을 영구히 launch template에 추가하면 골든 AMI가 생긴
+      # 뒤에는 반대로 AMI의 데이터 스냅샷을 빈 볼륨으로 덮어써버리는 문제가 생겨, 두 상태를
+      # 동시에 만족시킬 수 없다. 이미 볼륨/venv/모델이 정상 구성된 기존 인스턴스를 빌더로
+      # 고정하면 이 문제가 원천적으로 없어진다 — 컷오버(opensearch_api_use_nlb=true) 이후
+      # 이 인스턴스를 정리할 때 빌더 전략을 다시 설계해야 한다(지금은 범위 밖).
+      - name: Deploy code to OpenSearch API builder (existing instance) via SSM
         run: |
-          BUILDER_ID=$(aws ec2 run-instances \
-            --launch-template "LaunchTemplateId=${{ needs.terraform.outputs.opensearch_api_launch_template_id }},Version=\$Latest" \
-            --count 1 \
-            --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${{ env.PROJECT_NAME }}-opensearch-api-builder}]" \
-            --query "Instances[0].InstanceId" --output text)
-          echo "builder_id=$BUILDER_ID" >> "$GITHUB_OUTPUT"
-          echo "Builder instance: $BUILDER_ID"
-
-      - name: Wait for builder boot script to complete
-        run: |
-          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
-          echo "Waiting for builder ($BUILDER_ID) user_data to complete..."
-          for i in $(seq 1 80); do
-            RESULT=$(aws ssm send-command \
-              --instance-ids "$BUILDER_ID" \
-              --document-name "AWS-RunShellScript" \
-              --parameters '{"commands":["test -f /var/log/user-data-complete && echo OK || echo WAIT"]}' \
-              --output text --query "Command.CommandId" 2>/dev/null || echo "")
-            if [ -n "$RESULT" ]; then
-              sleep 5
-              STATUS=$(aws ssm get-command-invocation \
-                --command-id "$RESULT" \
-                --instance-id "$BUILDER_ID" \
-                --query "StandardOutputContent" --output text 2>/dev/null || echo "WAIT")
-              echo "Attempt $i: $STATUS"
-              if echo "$STATUS" | grep -q "OK"; then
-                echo "Builder boot script complete."
-                break
-              fi
-            else
-              echo "Attempt $i: SSM not reachable yet"
-            fi
-            if [ "$i" = "80" ]; then
-              echo "ERROR: Builder boot script did not complete within 40 minutes."
-              exit 1
-            fi
-            sleep 25
-          done
-
-      - name: Deploy code to builder via SSM
-        run: |
-          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          BUILDER_ID="${{ needs.terraform.outputs.opensearch_api_instance_id }}"
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$BUILDER_ID" \
             --document-name "AWS-RunShellScript" \
@@ -469,7 +433,7 @@ jobs:
 
       - name: Verify builder health before baking AMI
         run: |
-          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          BUILDER_ID="${{ needs.terraform.outputs.opensearch_api_instance_id }}"
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$BUILDER_ID" \
             --document-name "AWS-RunShellScript" \
@@ -485,10 +449,17 @@ jobs:
       - name: Bake golden AMI from builder
         id: bake-ami
         run: |
-          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
+          BUILDER_ID="${{ needs.terraform.outputs.opensearch_api_instance_id }}"
+          # --no-reboot: opensearch_api_use_nlb=false(기본값)인 동안은 ECS가 여전히 이
+          # 인스턴스의 private IP로 운영 트래픽을 직접 보낸다. --no-reboot 없이 create-image를
+          # 호출하면 AWS가 파일시스템 일관성을 위해 기본적으로 이 인스턴스를 재부팅시켜,
+          # 컷오버 전까지 배포마다 운영 중인 opensearch-api가 짧게 끊긴다. 직전 SSM 스텝에서
+          # 이미 systemctl restart로 서비스를 깨끗하게 재시작했으므로 --no-reboot로 스냅샷을
+          # 떠도 파일시스템 일관성 위험은 낮다.
           AMI_ID=$(aws ec2 create-image \
             --instance-id "$BUILDER_ID" \
             --name "${{ env.PROJECT_NAME }}-opensearch-api-${{ github.sha }}" \
+            --no-reboot \
             --query "ImageId" --output text)
           echo "ami_id=$AMI_ID" >> "$GITHUB_OUTPUT"
           echo "Waiting for AMI $AMI_ID to become available..."
@@ -531,12 +502,6 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Terminate builder instance
-        if: always()
-        run: |
-          BUILDER_ID="${{ steps.launch-builder.outputs.builder_id }}"
-          [ -n "$BUILDER_ID" ] && aws ec2 terminate-instances --instance-ids "$BUILDER_ID" || true
 
       - name: Restore OpenSearch indices from S3 snapshot if empty
         run: |
