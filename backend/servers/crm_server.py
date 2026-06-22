@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
         logger.info("crm_services_initialized")
 
         # /chat/v2/stream 진입 동시성 게이팅 — OpenSearch 동시 부하를 세마포어로 제한
-        app.state.chat_stream_semaphore = asyncio.Semaphore(settings.chat_stream_max_concurrent)
+        app.state.chat_stream_semaphore = asyncio.BoundedSemaphore(settings.chat_stream_max_concurrent)
         logger.info("chat_stream_semaphore_initialized", max_concurrent=settings.chat_stream_max_concurrent)
 
         async def _upload_cleanup_loop() -> None:
@@ -153,6 +153,19 @@ async def lifespan(app: FastAPI):
             await asyncio.gather(upload_cleanup_task, checkpoint_cleanup_task, return_exceptions=True)
         except asyncio.CancelledError:
             pass
+
+        # SSE 데드라인 초과 후 백그라운드로 넘어간 chat_stream 작업들 — DB pool(close_all)을
+        # 닫기 전에 끝낼 기회를 준다(완료 시 _persist_results가 DB에 저장하므로, pool을
+        # 먼저 닫으면 그 저장이 끊긴다). db_executor와는 무관 — 백그라운드 저장은
+        # asyncio.to_thread(기본 executor)를 쓴다. 못 끝나면 깨끗이 포기 — 다음 배포에서 자연히 해소된다.
+        background_tasks = app.state.agent_v2._background_tasks
+        if background_tasks:
+            await asyncio.wait(background_tasks, timeout=settings.graph_execution_timeout)
+
+        # DB 저장 task — 단순 INSERT라 짧게만 기다린다
+        if marketing_api._db_save_tasks:
+            await asyncio.wait(marketing_api._db_save_tasks, timeout=10)
+
         db_executor.shutdown(wait=False)
         await close_all()
 
