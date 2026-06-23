@@ -42,6 +42,34 @@ class LLMJudgeOutput(BaseModel):
 
 
 # ============================================================
+# 스테이지2 헷지 표현 오탐 방지
+# ============================================================
+
+# 화장품법이 허용하는 헷지 어미 — 확정적 주장이 아니므로 의미 유사도만으로
+# 위반 처리하지 않기 위한 예외 조건에 쓴다.
+_HEDGE_MARKERS = (
+    "도움을 줍니다", "도움이 됩니다", "돕습니다", "도움을 드립니다",
+    "도움을 주는", "돕는", "가꿔줍니다", "가꿔주는",
+)
+
+# forbidden_keyword.json의 medical_drug_claims/absolute_claims/false_certification/
+# safety_misrepresentation 카테고리에서 추출한 파생 목록 — 그 JSON이 바뀌면 같이
+# 검토해야 한다. 스테이지1 키워드(정확 구문)와 겹치는 단독 어근은 스테이지1에서
+# 이미 막혀 죽은 코드가 되므로 넣지 않는다(예: "완치"는 제외).
+_ASSERTION_OVERRIDE_ROOTS = (
+    "의학적", "처방", "치료", "치유", "질환", "면역",
+    "보장", "100%", "완벽", "즉각", "단번", "영구", "근본적",
+    "공식 인정", "의료급", "임상적으로 입증", "안심", "부담없이",
+)
+
+
+def _is_hedge_without_assertion(query_sentence: str) -> bool:
+    has_hedge = any(marker in query_sentence for marker in _HEDGE_MARKERS)
+    has_assertion = any(root in query_sentence for root in _ASSERTION_OVERRIDE_ROOTS)
+    return has_hedge and not has_assertion
+
+
+# ============================================================
 # 품질 검사 서비스 클래스
 # ============================================================
 
@@ -434,7 +462,11 @@ class QualityChecker:
         )
 
         # 임계값 초과 결과 필터
-        triggered = [r for r in all_results if r["score"] > settings.quality_check_semantic_threshold]
+        triggered = [
+            r for r in all_results
+            if r["score"] > settings.quality_check_semantic_threshold
+            and not _is_hedge_without_assertion(r["query_sentence"])
+        ]
 
         if triggered:
             logger.info(

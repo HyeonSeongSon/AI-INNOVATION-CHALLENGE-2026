@@ -152,7 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_conv_messages_conv_id
 
 -- ============================================================
 -- 6. 생성된 마케팅 메시지 테이블 (generated_messages)
--- 품질 검사(3단계)를 통과한 최종 메시지만 저장
+-- 품질 검사(3단계) 통과/실패 메시지 모두 저장 (quality_passed로 구분, 실패 사유 분석용)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS generated_messages (
     id              VARCHAR(36) PRIMARY KEY,

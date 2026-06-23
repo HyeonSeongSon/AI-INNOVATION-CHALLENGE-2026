@@ -124,13 +124,6 @@ def _save_generated_messages_best_effort(
             content = msg.get("message") or msg.get("content", "")
             if not content:
                 continue
-            if not _quality.get("passed"):
-                logger.info(
-                    "generated_message_skip_quality_failed",
-                    product_id=task.get("product_id"),
-                    failed_stage=_quality.get("failed_stage"),
-                )
-                continue
             gm = GeneratedMessage(
                 conversation_id=conv_id,
                 user_id=user_id,
@@ -282,10 +275,11 @@ async def chat_v2(
                 if late_entries:
                     await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, late_entries)
 
-                if late_status == "completed":
+                if late_status in ("completed", "failed") and conv_id:
                     await asyncio.to_thread(
                         _save_generated_messages_best_effort,
-                        conv_id, user_id, result_data.get("generated_tasks", []),
+                        conv_id, user_id,
+                        result_data.get("generated_tasks", []) + result_data.get("quality_failed_tasks", []),
                         request.user_input, late_thread_id, result_data.get("regeneration_history"),
                     )
 
@@ -346,9 +340,9 @@ async def chat_v2(
 
         _spawn_db_save_task(asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries))
 
-        # 품질 검사 통과 메시지만 generated_messages 저장
-        if status == "completed" and conv_id:
-            generated_tasks = result.get("generated_tasks", [])
+        # 품질 검사 통과/실패 메시지 모두 generated_messages에 저장 (실패 사유 분석용)
+        if conv_id:
+            generated_tasks = result.get("generated_tasks", []) + result.get("quality_failed_tasks", [])
             _spawn_db_save_task(asyncio.to_thread(
                 _save_generated_messages_best_effort,
                 conv_id, user_id, generated_tasks,
@@ -440,10 +434,11 @@ async def chat_v2_stream(
             if new_entries:
                 await asyncio.to_thread(_save_conversation_messages_best_effort, conv_id, new_entries)
 
-            if status == "completed":
+            if conv_id:
                 await asyncio.to_thread(
                     _save_generated_messages_best_effort,
-                    conv_id, user_id, result_data.get("generated_tasks", []),
+                    conv_id, user_id,
+                    result_data.get("generated_tasks", []) + result_data.get("quality_failed_tasks", []),
                     request.user_input, thread_id, [],
                 )
 
