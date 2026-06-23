@@ -463,9 +463,21 @@ jobs:
           # --no-reboot: opensearch_api_use_nlb=false(기본값)인 동안은 ECS가 여전히 이
           # 인스턴스의 private IP로 운영 트래픽을 직접 보낸다. --no-reboot 없이 create-image를
           # 호출하면 AWS가 파일시스템 일관성을 위해 기본적으로 이 인스턴스를 재부팅시켜,
-          # 컷오버 전까지 배포마다 운영 중인 opensearch-api가 짧게 끊긴다. 직전 SSM 스텝에서
-          # 이미 systemctl restart로 서비스를 깨끗하게 재시작했으므로 --no-reboot로 스냅샷을
-          # 떠도 파일시스템 일관성 위험은 낮다.
+          # 컷오버 전까지 배포마다 운영 중인 opensearch-api가 짧게 끊긴다.
+          #
+          # sync 선행: --no-reboot는 재부팅도, 디스크 캐시 flush도 보장하지 않는다 — 직전
+          # 배포 스텝에서 막 tar 압축 해제로 쓴 파일들이 디스크에 완전히 반영되기 전에
+          # 스냅샷이 뜨면, AMI 안 파일이 0바이트로 남는 일이 실제로 발생했다(2026-06-23,
+          # ami-03dfedb55a29740b6 — 배포 종료 13초 후 베이크해서 /opt/opensearch-api 전체가
+          # 0바이트로 굳어버림). systemctl restart만으로는 디스크 flush를 보장하지 않으므로
+          # create-image 호출 전에 SSM으로 sync를 명시적으로 실행한다.
+          SYNC_COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$BUILDER_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["sync"]}' \
+            --output text --query "Command.CommandId")
+          aws ssm wait command-executed --command-id "$SYNC_COMMAND_ID" --instance-id "$BUILDER_ID"
+          echo "Disk sync complete on builder."
           AMI_ID=$(aws ec2 create-image \
             --instance-id "$BUILDER_ID" \
             --name "${{ env.PROJECT_NAME }}-opensearch-api-${{ github.sha }}" \
@@ -478,12 +490,14 @@ jobs:
 
       - name: Publish new launch template version
         run: |
-          # --source-version 1: Terraform이 관리하는 버전 1(보안그룹/IAM/user_data 등)을
-          # 그대로 물려받고 ImageId만 갱신한다 — $Latest를 source로 쓰면 이전 CI 실행의
-          # 버전을 계속 물고 가게 되어 의도치 않은 드리프트가 누적될 수 있다.
+          # --source-version $Latest: aws_launch_template은 update_default_version=true라서
+          # Terraform이 보안그룹/인스턴스 타입 등을 바꿀 때마다 버전 1을 덮어쓰지 않고 새 버전을
+          # 만들어 default로 승격시킨다. 이 스텝은 직전 terraform apply 이후에 실행되므로
+          # $Latest는 항상 그 최신 Terraform 설정을 가리킨다 — 버전 1로 고정하면 그 이후
+          # Terraform이 만든 모든 변경이 매 배포마다 조용히 되돌려진다.
           aws ec2 create-launch-template-version \
             --launch-template-id "${{ needs.terraform.outputs.opensearch_api_launch_template_id }}" \
-            --source-version 1 \
+            --source-version '$Latest' \
             --launch-template-data "{\"ImageId\":\"${{ steps.bake-ami.outputs.ami_id }}\"}" \
             --version-description "${{ github.sha }}"
 
