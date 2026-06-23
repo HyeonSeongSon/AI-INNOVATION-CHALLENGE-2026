@@ -120,15 +120,24 @@ def list_generated_messages(
     purpose: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
+    quality_passed: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ):
-    """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)"""
+    """생성 메시지 목록 조회 (user_id 없으면 전체, 있으면 해당 사용자만)
+
+    quality_passed 미지정 시 품질 검사 실패 건은 기본적으로 제외된다(운영 화면 노출 방지).
+    분석 목적으로 실패 건을 보려면 quality_passed=false를 명시한다."""
     header_role = resolve_role(db, x_user_id)
     effective_user_id = user_id if header_role == "admin" else x_user_id
     query = db.query(GeneratedMessage)
     if effective_user_id:
         query = query.filter(GeneratedMessage.user_id == effective_user_id)
+
+    if quality_passed is not None:
+        query = query.filter(GeneratedMessage.quality_passed == quality_passed)
+    else:
+        query = query.filter(GeneratedMessage.quality_passed.isnot(False))
 
     if brand:
         query = query.filter(GeneratedMessage.brand == brand)
@@ -205,10 +214,10 @@ def count_generated_messages(
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ):
-    """user_id 기준 생성 메시지 총 개수 조회"""
+    """user_id 기준 생성 메시지 총 개수 조회 (품질 검사 실패 건은 제외)"""
     header_role = resolve_role(db, x_user_id)
     effective_user_id = user_id if header_role == "admin" else x_user_id
-    query = db.query(GeneratedMessage)
+    query = db.query(GeneratedMessage).filter(GeneratedMessage.quality_passed.isnot(False))
     if effective_user_id:
         query = query.filter(GeneratedMessage.user_id == effective_user_id)
     return {"count": query.count()}
@@ -221,11 +230,12 @@ def get_latest(
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ):
-    """conversation_id + product_id 기준 가장 최근 생성 메시지 조회"""
+    """conversation_id + product_id 기준 가장 최근 생성 메시지 조회 (품질 검사 실패 건은 제외)"""
     role = resolve_role(db, x_user_id)
     query = db.query(GeneratedMessage).filter(
         GeneratedMessage.conversation_id == conversation_id,
         GeneratedMessage.product_id == product_id,
+        GeneratedMessage.quality_passed.isnot(False),
     )
     if role != "admin":
         query = query.filter(GeneratedMessage.user_id == x_user_id)

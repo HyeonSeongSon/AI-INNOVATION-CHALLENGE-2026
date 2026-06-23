@@ -155,6 +155,7 @@ class CRMMessageAgent:
                 "recommended_products": result.get("recommended_products", []),
                 "messages": self._extract_response_messages(result),
                 "generated_tasks": result.get("generated_tasks", []),
+                "quality_failed_tasks": result.get("quality_failed_tasks", []),
                 "regeneration_history": [],
                 "logs": result.get("logs", []),
                 "error": result.get("error"),
@@ -168,6 +169,7 @@ class CRMMessageAgent:
                 "recommended_products": [],
                 "messages": [],
                 "generated_tasks": [],
+                "quality_failed_tasks": [],
                 "regeneration_history": [],
                 "logs": ["[ERROR] 대화 처리 실패"],
             }
@@ -264,6 +266,7 @@ class CRMMessageAgent:
             "messages": [HumanMessage(content=user_input)],
             "recommended_products": [],  # 턴 시작 시 리셋 (_overwrite reducer가 체크포인트 값을 덮어씀)
             "generated_tasks": [],       # 턴 시작 시 리셋
+            "quality_failed_tasks": [],  # 턴 시작 시 리셋
             "task_plan": [],             # 턴 시작 시 리셋 (새 요청마다 LLM이 다시 플랜 결정)
             "status": None,              # 턴 시작 시 리셋 (이전 turn의 error 상태 승계 방지)
             "error": None,
@@ -287,6 +290,7 @@ class CRMMessageAgent:
                 "recommended_products": [],
                 "messages": [],
                 "generated_tasks": [],
+                "quality_failed_tasks": [],
                 "regeneration_history": [],
                 "logs": ["[ERROR] 처리 시간이 초과되었습니다."],
                 "error": "처리 시간이 초과되었습니다.",
@@ -303,6 +307,7 @@ class CRMMessageAgent:
                 "recommended_products": [],
                 "messages": [],
                 "generated_tasks": [],
+                "quality_failed_tasks": [],
                 "regeneration_history": [],
                 "logs": ["[ERROR] 대화 처리 실패"],
             }
@@ -357,6 +362,7 @@ class CRMMessageAgent:
             "messages": [HumanMessage(content=user_input)],
             "recommended_products": [],
             "generated_tasks": [],
+            "quality_failed_tasks": [],
             "task_plan": [],
             "status": None,
             "error": None,
@@ -367,7 +373,7 @@ class CRMMessageAgent:
         # DB 저장 및 result 이벤트용 state 누적
         _acc: Dict[str, Any] = {
             "logs": [], "status": None, "recommended_products": [],
-            "generated_tasks": [], "messages": [], "error": None,
+            "generated_tasks": [], "quality_failed_tasks": [], "messages": [], "error": None,
         }
         _started_nodes: set[str] = set()  # supervisor 다중 실행 시 node_start 중복 방지
         step = 0
@@ -385,6 +391,8 @@ class CRMMessageAgent:
                 _acc["recommended_products"] = data["recommended_products"]
             if "generated_tasks" in data:
                 _acc["generated_tasks"] = data["generated_tasks"]
+            if "quality_failed_tasks" in data:
+                _acc["quality_failed_tasks"] = data["quality_failed_tasks"]
             if data.get("error") is not None:
                 _acc["error"] = data["error"]
             # supervisor 최종 패스(plain dict 반환)의 AIMessage만 캡처
@@ -411,6 +419,7 @@ class CRMMessageAgent:
                 "conversation_id": conversation_id,
                 "recommended_products": _acc["recommended_products"],
                 "generated_tasks": _acc["generated_tasks"],
+                "quality_failed_tasks": _acc["quality_failed_tasks"],
                 "messages": self._extract_response_messages({
                     "generated_tasks": _acc["generated_tasks"],
                     "messages": _acc["messages"],

@@ -11,6 +11,7 @@ class CRMMessageAgentState(BaseState):
     file_records: Optional[List[Dict[str, Any]]]
     recommended_products: Annotated[List[Dict[str, Any]], _overwrite]  # turn-scope
     generated_tasks: Annotated[List[Dict[str, Any]], _overwrite]        # turn-scope
+    quality_failed_tasks: Annotated[List[Dict[str, Any]], _overwrite]   # turn-scope: 품질 검사 실패 태스크 (DB 저장용, 사용자 비노출)
     active_persona_id: Optional[str]                                    # conversation-scope
     task_plan: Annotated[List[str], _overwrite]                         # turn-scope: 첫 LLM 라우팅 결과 저장
     summary: str                                                         # conversation-scope: 오래된 메시지 LLM 요약본

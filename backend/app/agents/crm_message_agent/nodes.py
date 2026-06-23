@@ -383,6 +383,7 @@ def make_generate_message_node(client: A2AClient):
                 update={
                     "messages": messages + [ai_msg, tool_msg],
                     "generated_tasks": result.get("generated_tasks", []),
+                    "quality_failed_tasks": result.get("quality_failed_tasks", []),
                     "status": "failed",
                     "task_plan": [],
                     "logs": result.get("logs", []),
@@ -394,6 +395,7 @@ def make_generate_message_node(client: A2AClient):
             update={
                 "messages": messages + [ai_msg, tool_msg],
                 "generated_tasks": result.get("generated_tasks", []),
+                "quality_failed_tasks": result.get("quality_failed_tasks", []),
                 "status": internal_status,
                 "logs": result.get("logs", []),
             },
