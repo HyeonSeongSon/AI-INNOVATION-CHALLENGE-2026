@@ -201,6 +201,8 @@ class Settings(BaseSettings):
     # Quality check — LLM judge scoring
     quality_check_llm_min_score: int = 3
     quality_check_llm_min_overall_score: int = 4
+    quality_check_llm_judge_max_retries: int = 2
+    quality_check_llm_judge_max_concurrency: int = 40
 
     # HTTP streaming timeouts (SSE proxy)
     http_timeout_stream_connect: float = 10.0
