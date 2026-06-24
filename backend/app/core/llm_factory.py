@@ -16,16 +16,22 @@ from ..config.settings import settings
 
 
 @lru_cache(maxsize=32)
-def _get_cached_llm(model_name: str, temperature: float) -> BaseChatModel:
-    return create_llm(model_name, temperature)
+def _get_cached_llm(model_name: str, temperature: float, reasoning_effort: str | None = None) -> BaseChatModel:
+    kwargs = {"reasoning_effort": reasoning_effort} if reasoning_effort is not None else {}
+    return create_llm(model_name, temperature, **kwargs)
 
 
-def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
+def get_llm(
+    model_name: str,
+    temperature: float = 0,
+    reasoning_effort: str | None = None,
+    **kwargs,
+) -> BaseChatModel:
     """
     캐시된 LLM 인스턴스 반환 (없으면 생성 후 캐싱)
 
-    동일한 (model_name, temperature) 조합은 항상 같은 인스턴스를 반환한다.
-    kwargs가 있는 경우 캐시를 우회하고 매번 새 인스턴스를 생성한다.
+    동일한 (model_name, temperature, reasoning_effort) 조합은 항상 같은 인스턴스를 반환한다.
+    그 외 kwargs가 있는 경우 캐시를 우회하고 매번 새 인스턴스를 생성한다.
 
     Args:
         model_name: 모델명. 접두사로 제공자를 자동 판별한다.
@@ -33,6 +39,7 @@ def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
                     - "claude-opus-4-6", "claude-sonnet-4-6"    → Anthropic
                     - "gemini-2.0-flash", "gemini-1.5-pro"      → Google
         temperature: 생성 온도. 제공자별로 허용 범위가 다를 수 있으니 주의.
+        reasoning_effort: OpenAI 추론 모델의 추론 강도("minimal"/"low"/"medium"/"high") — 캐시 키에 포함
         **kwargs   : 제공자별 추가 파라미터 (timeout, max_tokens 등) — 캐시 우회
 
     Returns:
@@ -47,8 +54,10 @@ def get_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
             "config['configurable']['model'] 또는 환경변수 CHATGPT_MODEL_NAME을 설정하세요."
         )
     if kwargs:
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         return create_llm(model_name, temperature, **kwargs)
-    return _get_cached_llm(model_name, temperature)
+    return _get_cached_llm(model_name, temperature, reasoning_effort)
 
 
 def create_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatModel:
@@ -78,10 +87,12 @@ def create_llm(model_name: str, temperature: float = 0, **kwargs) -> BaseChatMod
 
     elif model_name.startswith("claude-"):
         from langchain_anthropic import ChatAnthropic
+        kwargs.pop("reasoning_effort", None)  # Anthropic API에 없는 파라미터 — model_kwargs로 새어나가 400 에러 유발
         return ChatAnthropic(model=model_name, temperature=temperature, **kwargs)
 
     elif model_name.startswith("gemini-"):
         from langchain_google_genai import ChatGoogleGenerativeAI
+        kwargs.pop("reasoning_effort", None)  # Gemini API에 없는 파라미터 — model_kwargs로 새어나가 400 에러 유발
         return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, **kwargs)
 
     else:
