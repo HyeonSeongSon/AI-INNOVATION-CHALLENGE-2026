@@ -170,7 +170,7 @@ async def quality_check_node(state: GenerateMessageState, config: RunnableConfig
     checker = services.checker
     agent_logger = AgentLogger(state, node_name="quality_check_node")
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
-    judge_llm = get_llm(model, temperature=settings.llm_temperature_classifier)
+    judge_llm = get_llm(model, temperature=settings.llm_temperature_classifier, reasoning_effort="minimal")
 
     generated_tasks = state.get("generated_tasks") or []
     persona_id = state.get("persona_id") or state.get("active_persona_id")
