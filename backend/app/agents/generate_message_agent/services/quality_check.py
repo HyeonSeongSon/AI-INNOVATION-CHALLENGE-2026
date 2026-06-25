@@ -20,7 +20,7 @@ from ..prompts.quality_check_prompt import build_quality_check_prompt
 from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.data_loader import get_forbidden_keywords, get_brand_tone
-from ....core.llm_utils import ainvoke_with_timeout
+from ....core.llm_utils import ainvoke_with_retry
 from ....config.settings import settings
 from ....core.http_client_registry import register
 from ...shared.product.product_client import ProductClient
@@ -61,35 +61,6 @@ def _is_hedge_without_assertion(query_sentence: str) -> bool:
     has_assertion = any(root in query_sentence for root in _ASSERTION_OVERRIDE_ROOTS)
     return has_hedge and not has_assertion
 
-
-# ============================================================
-# 스테이지3 LLM judge 일시적 오류 재시도
-# ============================================================
-
-# provider 무관 재시도 판별 — openai.RateLimitError 등 provider 전용 클래스를 import하면
-# llm이 Anthropic/Gemini일 때 잡지 못한다. type(e).__name__만으로 판별한다.
-# "TimeoutError"는 OpenAI SDK 자체 타임아웃이 아니라 _run_llm_judge가 거치는
-# ainvoke_with_timeout(core/llm_utils.py:9)의 asyncio.wait_for가 던지는
-# asyncio.TimeoutError(3.11+에서 builtin TimeoutError와 동일 클래스)다. 부하로 호출이
-# 늦어지면 이 경로로도 떨어질 수 있어 반드시 포함해야 한다.
-_RETRYABLE_LLM_ERROR_NAMES = frozenset({
-    "RateLimitError", "APITimeoutError", "APIConnectionError", "InternalServerError",
-    "TimeoutError",
-})
-
-# judge 호출 전용 동시성 제한 — product_client.py의 _opensearch_semaphore와 동일한
-# lazy 초기화 패턴(opensearch_max_concurrent_searches:20 참고). 36차 부하테스트에서
-# reasoning_effort를 낮춰 judge 호출이 9배 빨라지자 동시 100개 요청이 단위 시간당
-# OpenAI로 보내는 호출량도 그만큼 늘어 RateLimitError가 다발했다 — 호출이 거치는
-# 외부 자원(OpenAI API)에만 별도 한도를 둬서 전체 파이프라인 동시성과 분리한다.
-_llm_judge_semaphore: asyncio.Semaphore | None = None
-
-
-def _get_llm_judge_semaphore() -> asyncio.Semaphore:
-    global _llm_judge_semaphore
-    if _llm_judge_semaphore is None:
-        _llm_judge_semaphore = asyncio.Semaphore(settings.quality_check_llm_judge_max_concurrency)
-    return _llm_judge_semaphore
 
 
 # ============================================================
@@ -621,38 +592,37 @@ class QualityChecker:
             logger.error("llm_judge_failed", error_type=type(e).__name__, exc_info=True)
             return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
 
-        async with _get_llm_judge_semaphore():
-            for attempt in range(1, settings.quality_check_llm_judge_max_retries + 1):
-                try:
-                    result: LLMJudgeOutput = await ainvoke_with_timeout(judge, prompt_messages)
+        try:
+            result: LLMJudgeOutput = await ainvoke_with_retry(
+                judge, prompt_messages,
+                semaphore_key="quality_check_llm_judge",
+                max_concurrency=settings.quality_check_llm_judge_max_concurrency,
+                max_retries=settings.quality_check_llm_judge_max_retries,
+                backoff_base=settings.quality_check_retry_backoff_base,
+                logger=logger, retry_event="llm_judge_retry",
+            )
+        except Exception as e:
+            logger.error("llm_judge_failed", error_type=type(e).__name__, exc_info=True)
+            return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
 
-                    scores = {
-                        "accuracy": result.accuracy,
-                        "tone": result.tone,
-                        "personalization": result.personalization,
-                        "naturalness": result.naturalness,
-                        "cta_clarity": result.cta_clarity,
-                        "overall": round(
-                            (result.accuracy + result.tone + result.personalization
-                             + result.naturalness + result.cta_clarity) / 5.0, 2
-                        ),
-                        "feedback": result.feedback,
-                    }
+        scores = {
+            "accuracy": result.accuracy,
+            "tone": result.tone,
+            "personalization": result.personalization,
+            "naturalness": result.naturalness,
+            "cta_clarity": result.cta_clarity,
+            "overall": round(
+                (result.accuracy + result.tone + result.personalization
+                 + result.naturalness + result.cta_clarity) / 5.0, 2
+            ),
+            "feedback": result.feedback,
+        }
 
-                    # 코드가 직접 판정: 모든 항목 3점 이상 AND 평균 4점 이상
-                    score_keys = ("accuracy", "tone", "personalization", "naturalness", "cta_clarity")
-                    passed = (
-                        all(scores[k] >= settings.quality_check_llm_min_score for k in score_keys)
-                        and scores["overall"] >= settings.quality_check_llm_min_overall_score
-                    )
-                    return passed, scores
-
-                except Exception as e:
-                    is_retryable = type(e).__name__ in _RETRYABLE_LLM_ERROR_NAMES
-                    if is_retryable and attempt < settings.quality_check_llm_judge_max_retries:
-                        logger.warning("llm_judge_retry", error_type=type(e).__name__, attempt=attempt)
-                        await asyncio.sleep(settings.quality_check_retry_backoff_base * (2 ** (attempt - 1)))
-                        continue
-                    logger.error("llm_judge_failed", error_type=type(e).__name__, exc_info=True)
-                    return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
+        # 코드가 직접 판정: 모든 항목 3점 이상 AND 평균 4점 이상
+        score_keys = ("accuracy", "tone", "personalization", "naturalness", "cta_clarity")
+        passed = (
+            all(scores[k] >= settings.quality_check_llm_min_score for k in score_keys)
+            and scores["overall"] >= settings.quality_check_llm_min_overall_score
+        )
+        return passed, scores
 

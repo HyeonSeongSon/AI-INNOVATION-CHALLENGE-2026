@@ -4,7 +4,8 @@ from langchain_core.messages import SystemMessage
 from ..prompts.generate_query_prompt import build_persona_structured_prompt, build_generate_query_prompt
 
 from app.core.logging import get_logger
-from app.core.llm_utils import ainvoke_with_timeout
+from app.core.llm_utils import ainvoke_with_retry
+from app.config.settings import settings
 
 logger = get_logger("generate_persona_and_query")
 
@@ -65,7 +66,14 @@ async def generate_structured_persona_info(messages: List, llm) -> Dict:
     structured_llm = llm.with_structured_output(PersonaData)
     prompt_messages = [SystemMessage(content=build_persona_structured_prompt()), *messages]
     try:
-        result = await ainvoke_with_timeout(structured_llm, prompt_messages)
+        result = await ainvoke_with_retry(
+            structured_llm, prompt_messages,
+            semaphore_key="persona_query",
+            max_concurrency=settings.persona_query_max_concurrency,
+            max_retries=settings.persona_query_max_retries,
+            backoff_base=settings.persona_query_backoff_base,
+            logger=logger, retry_event="persona_query_retry",
+        )
         persona = result.model_dump()
     except Exception as e:
         logger.error("generate_structured_persona_info_failed", error_type=type(e).__name__, exc_info=True)
@@ -97,7 +105,14 @@ async def generate_search_query(messages: List, llm) -> Dict:
     structured_llm = llm.with_structured_output(SearchQuery)
     prompt_messages = [SystemMessage(content=build_generate_query_prompt()), *messages]
     try:
-        result: SearchQuery = await ainvoke_with_timeout(structured_llm, prompt_messages)
+        result: SearchQuery = await ainvoke_with_retry(
+            structured_llm, prompt_messages,
+            semaphore_key="persona_query",
+            max_concurrency=settings.persona_query_max_concurrency,
+            max_retries=settings.persona_query_max_retries,
+            backoff_base=settings.persona_query_backoff_base,
+            logger=logger, retry_event="persona_query_retry",
+        )
         search_query = result.model_dump()
     except Exception as e:
         logger.error("generate_search_query_failed", error_type=type(e).__name__, exc_info=True)

@@ -12,7 +12,7 @@ from a2a.client import A2AClient
 from a2a.models import TaskStatus
 from a2a.serialization import deserialize_messages
 from ...core.llm_factory import get_llm
-from ...core.llm_utils import ainvoke_with_timeout
+from ...core.llm_utils import ainvoke_with_retry
 from ...core.logging import get_logger
 from ...config.settings import settings
 from .state import CRMMessageAgentState
@@ -33,6 +33,40 @@ from ..tools.search_tools import (
 _logger = get_logger("crm_message_agent")
 
 
+async def _generate_final_answer(llm, messages: list, summary: str):
+    return await ainvoke_with_retry(
+        llm, build_final_answer_prompt(messages, summary),
+        semaphore_key="supervisor_final_answer",
+        max_concurrency=settings.supervisor_final_answer_max_concurrency,
+        max_retries=settings.supervisor_final_answer_max_retries,
+        backoff_base=settings.supervisor_final_answer_backoff_base,
+        logger=_logger, retry_event="supervisor_final_answer_retry",
+    )
+
+
+def _build_fallback_answer(state: CRMMessageAgentState):
+    """최종 응답 LLM 호출이 재시도까지 실패해도, 이미 끝난 추천/생성 결과를 LLM 없이
+    템플릿으로 정리해 반환한다 — 실제 작업은 성공했는데 마지막 요약 한 줄 때문에
+    전체를 실패 처리하지 않는다."""
+    tasks = state.get("generated_tasks") or []
+    if tasks:
+        lines = [
+            f"- [{t['product_id']}] {t.get('brand', '')} {t.get('product_name', '')}: "
+            f"{t['message'].get('title', '')} — {t['message'].get('message', '')}"
+            for t in tasks
+        ]
+        content = "요청하신 CRM 메시지를 생성했습니다.\n" + "\n".join(lines)
+        return AIMessage(content=content, name="supervisor")
+
+    products = state.get("recommended_products") or []
+    if products:
+        lines = [f"- [{p.get('product_id', '')}] {p.get('brand', '')} {p.get('product_name', '')}" for p in products]
+        content = "요청하신 상품을 추천했습니다.\n" + "\n".join(lines)
+        return AIMessage(content=content, name="supervisor")
+
+    return None  # 대체할 결과 자체가 없으면 기존처럼 실패 처리
+
+
 async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     messages = state.get("messages", [])
     if len(messages) <= settings.conversation_summarize_threshold:
@@ -43,7 +77,14 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     existing_summary = state.get("summary", "")
 
     try:
-        response = await ainvoke_with_timeout(llm, build_summary_prompt(messages, existing_summary))
+        response = await ainvoke_with_retry(
+            llm, build_summary_prompt(messages, existing_summary),
+            semaphore_key="conversation_summarize",
+            max_concurrency=settings.conversation_summarize_max_concurrency,
+            max_retries=settings.conversation_summarize_max_retries,
+            backoff_base=settings.conversation_summarize_backoff_base,
+            logger=_logger, retry_event="conversation_summarize_retry",
+        )
     except Exception as e:
         _logger.warning("summarize_skipped", error_type=type(e).__name__)
         return {}
@@ -149,10 +190,13 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         if not remaining:
             _logger.info("supervisor_all_done", node_name="supervisor_agent")
             try:
-                final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
+                final_answer = await _generate_final_answer(llm, messages, summary)
             except Exception as e:
                 _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
-                return {"status": "failed", "error": "최종 응답 생성 실패"}
+                final_answer = _build_fallback_answer(state)
+                if final_answer is None:
+                    return {"status": "failed", "error": "최종 응답 생성 실패"}
+                _logger.warning("supervisor_final_answer_fallback_used", node_name="supervisor_agent")
             return {"messages": [final_answer], "task_plan": []}
 
         next_agent = remaining[0]
@@ -161,18 +205,26 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     # 첫 진입: LLM으로 전체 플랜 결정
     try:
-        decision = await ainvoke_with_timeout(
+        decision = await ainvoke_with_retry(
             llm.with_structured_output(RouteDecision),
-            build_supervisor_prompt(messages, summary, file_records=state.get("file_records"))
+            build_supervisor_prompt(messages, summary, file_records=state.get("file_records")),
+            semaphore_key="supervisor_routing",
+            max_concurrency=settings.supervisor_routing_max_concurrency,
+            max_retries=settings.supervisor_routing_max_retries,
+            backoff_base=settings.supervisor_routing_backoff_base,
+            logger=_logger, retry_event="supervisor_routing_retry",
         )
     except Exception as e:
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error_type=type(e).__name__, node_name="supervisor_agent")
         try:
-            final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
+            final_answer = await _generate_final_answer(llm, messages, summary)
         except Exception as e2:
             _logger.error("supervisor_final_answer_failed", error_type=type(e2).__name__, node_name="supervisor_agent")
-            return {"status": "failed", "error": "최종 응답 생성 실패"}
+            final_answer = _build_fallback_answer(state)
+            if final_answer is None:
+                return {"status": "failed", "error": "최종 응답 생성 실패"}
+            _logger.warning("supervisor_final_answer_fallback_used", node_name="supervisor_agent")
         return {"messages": [final_answer]}
 
     _logger.info("supervisor_plan_decided", node_name="supervisor_agent",
@@ -180,10 +232,13 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     if not decision.task_plan:
         try:
-            final_answer = await ainvoke_with_timeout(llm, build_final_answer_prompt(messages, summary))
+            final_answer = await _generate_final_answer(llm, messages, summary)
         except Exception as e:
             _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
-            return {"status": "failed", "error": "최종 응답 생성 실패"}
+            final_answer = _build_fallback_answer(state)
+            if final_answer is None:
+                return {"status": "failed", "error": "최종 응답 생성 실패"}
+            _logger.warning("supervisor_final_answer_fallback_used", node_name="supervisor_agent")
         return {"messages": [final_answer]}
 
     return Command(
