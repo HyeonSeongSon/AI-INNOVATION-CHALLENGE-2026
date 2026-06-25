@@ -210,6 +210,45 @@ class Settings(BaseSettings):
     quality_check_llm_judge_max_retries: int = 2
     quality_check_llm_judge_max_concurrency: int = 40
 
+    # CRM supervisor — 최종 응답 생성 LLM 호출 재시도/동시성 제한
+    supervisor_final_answer_max_retries: int = 2
+    supervisor_final_answer_max_concurrency: int = 40
+    supervisor_final_answer_backoff_base: float = 0.5
+
+    # 구조적 LLM 호출 보호 확대 — 38차 후속 점검에서 발견한 무방비 호출 6곳
+    # (재시도/동시성 제한 없음 + 100개 동시 세션이 수렴 가능한 위치)
+    supervisor_routing_max_retries: int = 2
+    supervisor_routing_max_concurrency: int = 40
+    supervisor_routing_backoff_base: float = 0.5
+
+    recommend_parser_max_retries: int = 2
+    recommend_parser_max_concurrency: int = 40
+    recommend_parser_backoff_base: float = 0.5
+
+    generate_message_router_max_retries: int = 2
+    generate_message_router_max_concurrency: int = 40
+    generate_message_router_backoff_base: float = 0.5
+
+    persona_query_max_retries: int = 2
+    persona_query_max_concurrency: int = 40
+    persona_query_backoff_base: float = 0.5
+
+    generate_crm_message_max_retries: int = 2
+    generate_crm_message_max_concurrency: int = 40
+    generate_crm_message_backoff_base: float = 0.5
+
+    apply_feedback_max_retries: int = 2
+    apply_feedback_max_concurrency: int = 40
+    apply_feedback_backoff_base: float = 0.5
+
+    conversation_summarize_max_retries: int = 2
+    conversation_summarize_max_concurrency: int = 40
+    conversation_summarize_backoff_base: float = 0.5
+
+    product_registration_llm_max_retries: int = 2
+    product_registration_llm_max_concurrency: int = 10
+    product_registration_llm_backoff_base: float = 0.5
+
     # HTTP streaming timeouts (SSE proxy)
     http_timeout_stream_connect: float = 10.0
     http_timeout_stream_pool: float = 5.0

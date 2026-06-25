@@ -5,7 +5,8 @@ from langchain_core.messages import AnyMessage, SystemMessage
 from ..prompts.parse_prompt import build_crm_parse_prompt, build_generate_message_router_prompt
 from ....core.logging import get_logger
 from ....core.data_loader import get_categories
-from ....core.llm_utils import ainvoke_with_timeout
+from ....core.llm_utils import ainvoke_with_retry
+from ....config.settings import settings
 logger = get_logger("parse_request")
 
 class RecommendProductRequest(BaseModel):
@@ -64,7 +65,14 @@ async def recommend_product_parser(messages: List[AnyMessage], llm: BaseChatMode
         *messages,
     ]
     try:
-        response = await ainvoke_with_timeout(parser, prompt_messages)
+        response = await ainvoke_with_retry(
+            parser, prompt_messages,
+            semaphore_key="recommend_parser",
+            max_concurrency=settings.recommend_parser_max_concurrency,
+            max_retries=settings.recommend_parser_max_retries,
+            backoff_base=settings.recommend_parser_backoff_base,
+            logger=logger, retry_event="recommend_parser_retry",
+        )
         return response.model_dump()
     except Exception as e:
         logger.error("llm_parse_failed", error_type=type(e).__name__, exc_info=True)
@@ -85,7 +93,14 @@ async def generate_message_router(
     parser = llm.with_structured_output(GenerateMessageRouterResult)
     prompt_messages = [SystemMessage(content=build_generate_message_router_prompt()), *messages]
     try:
-        return await ainvoke_with_timeout(parser, prompt_messages)
+        return await ainvoke_with_retry(
+            parser, prompt_messages,
+            semaphore_key="generate_message_router",
+            max_concurrency=settings.generate_message_router_max_concurrency,
+            max_retries=settings.generate_message_router_max_retries,
+            backoff_base=settings.generate_message_router_backoff_base,
+            logger=logger, retry_event="generate_message_router_retry",
+        )
     except Exception as e:
         logger.error("llm_parse_failed", error_type=type(e).__name__, exc_info=True)
         raise

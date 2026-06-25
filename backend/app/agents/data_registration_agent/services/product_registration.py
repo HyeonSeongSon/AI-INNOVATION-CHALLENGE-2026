@@ -13,7 +13,7 @@ from PIL import Image
 from langchain_core.messages import HumanMessage
 
 from ....core.llm_factory import get_llm
-from ....core.llm_utils import ainvoke_with_timeout
+from ....core.llm_utils import ainvoke_with_retry
 from ....config.settings import Settings, settings
 from ..prompts.multivector_document_prompts import (
     GROUP_REQUIRED_COUNTS,
@@ -149,7 +149,15 @@ async def _extract_text_from_chunks(
     })
 
     try:
-        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)], timeout=settings.llm_document_timeout)
+        response = await ainvoke_with_retry(
+            llm, [HumanMessage(content=image_content)],
+            timeout=settings.llm_document_timeout,
+            semaphore_key="product_registration_llm",
+            max_concurrency=settings.product_registration_llm_max_concurrency,
+            max_retries=settings.product_registration_llm_max_retries,
+            backoff_base=settings.product_registration_llm_backoff_base,
+            logger=logger, retry_event="product_registration_llm_retry",
+        )
     except Exception as e:
         logger.error("extract_text_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
@@ -197,7 +205,15 @@ async def _extract_and_classify_from_chunks(
     })
 
     try:
-        response = await ainvoke_with_timeout(llm, [HumanMessage(content=image_content)], timeout=settings.llm_document_timeout)
+        response = await ainvoke_with_retry(
+            llm, [HumanMessage(content=image_content)],
+            timeout=settings.llm_document_timeout,
+            semaphore_key="product_registration_llm",
+            max_concurrency=settings.product_registration_llm_max_concurrency,
+            max_retries=settings.product_registration_llm_max_retries,
+            backoff_base=settings.product_registration_llm_backoff_base,
+            logger=logger, retry_event="product_registration_llm_retry",
+        )
     except Exception as e:
         logger.error("extract_and_classify_from_chunks_failed", product_name=product_name, error_type=type(e).__name__, exc_info=True)
         raise
@@ -408,10 +424,15 @@ class ProductRegistrationService:
 
         prompt = builder(extra_category, product_document, category_list)
         try:
-            response = await ainvoke_with_timeout(
+            response = await ainvoke_with_retry(
                 self._document_llm,
                 [HumanMessage(content=prompt)],
                 timeout=settings.llm_document_timeout,
+                semaphore_key="product_registration_llm",
+                max_concurrency=settings.product_registration_llm_max_concurrency,
+                max_retries=settings.product_registration_llm_max_retries,
+                backoff_base=settings.product_registration_llm_backoff_base,
+                logger=logger, retry_event="product_registration_llm_retry",
             )
         except Exception as e:
             logger.error("build_structured_document_failed", main_category=main_category, error_type=type(e).__name__, exc_info=True)
@@ -451,7 +472,15 @@ class ProductRegistrationService:
 
         for attempt in range(2):
             try:
-                response = await ainvoke_with_timeout(self._document_llm, [HumanMessage(content=prompt)], timeout=settings.llm_document_timeout)
+                response = await ainvoke_with_retry(
+                    self._document_llm, [HumanMessage(content=prompt)],
+                    timeout=settings.llm_document_timeout,
+                    semaphore_key="product_registration_llm",
+                    max_concurrency=settings.product_registration_llm_max_concurrency,
+                    max_retries=settings.product_registration_llm_max_retries,
+                    backoff_base=settings.product_registration_llm_backoff_base,
+                    logger=logger, retry_event="product_registration_llm_retry",
+                )
             except Exception as e:
                 logger.error("generate_multivector_document_failed", main_category=main_category, group=group, attempt=attempt, error_type=type(e).__name__, exc_info=True)
                 raise

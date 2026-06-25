@@ -6,7 +6,7 @@ from ....core.logging import get_logger
 from ....core.langsmith_config import traced
 from ....core.data_loader import get_brand_tone
 from ....core.llm_factory import get_llm
-from ....core.llm_utils import ainvoke_with_timeout
+from ....core.llm_utils import ainvoke_with_retry
 from ....config.settings import settings
 from ...shared.product.product_client import ProductClient
 from ..prompts.apply_feedback_prompt import build_apply_feedback_prompt
@@ -177,7 +177,14 @@ class ApplyFeedback:
         structured_llm = _llm.with_structured_output(MessageOutput)
 
         try:
-            result: MessageOutput = await ainvoke_with_timeout(structured_llm, prompt_messages)
+            result: MessageOutput = await ainvoke_with_retry(
+                structured_llm, prompt_messages,
+                semaphore_key="apply_feedback",
+                max_concurrency=settings.apply_feedback_max_concurrency,
+                max_retries=settings.apply_feedback_max_retries,
+                backoff_base=settings.apply_feedback_backoff_base,
+                logger=logger, retry_event="apply_feedback_retry",
+            )
             improved = {"title": result.title, "message": result.message}
         except Exception as e:
             logger.error(
