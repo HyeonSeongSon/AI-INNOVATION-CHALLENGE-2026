@@ -153,6 +153,12 @@ class Settings(BaseSettings):
     http_timeout_default: float = 15.0
     http_timeout_long: float = 30.0
     http_timeout_upload: float = 60.0
+    http_keepalive_expiry: float = 30.0
+    http_client_close_every_n_requests: int = 75        # N번째 요청마다 커넥션 1개만 정상 은퇴
+    http_client_close_every_n_jitter: int = 20          # N ± 지터 (여러 인스턴스 동시 은퇴 방지)
+
+    # Database API client — RemoteProtocolError 재시도 (keep-alive 커넥션 레이스)
+    db_fetch_max_retries: int = 2
 
     # File upload background job
     upload_job_ttl_seconds: int = 3600

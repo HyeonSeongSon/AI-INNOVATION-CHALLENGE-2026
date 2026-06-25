@@ -132,7 +132,7 @@ Environment=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 Environment=POSTGRES_DB=$POSTGRES_DB
 Environment=POSTGRES_USER=$POSTGRES_USER
 Environment=POSTGRES_HOST=localhost
-ExecStart=/opt/db-api/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8020 --workers 2
+ExecStart=/opt/db-api/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8020 --workers 2 --timeout-keep-alive 75
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=120

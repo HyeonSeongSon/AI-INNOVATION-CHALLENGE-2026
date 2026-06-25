@@ -5,6 +5,7 @@ from ....config.settings import settings
 from ....core.http_client_registry import register
 import httpx
 import asyncio
+import random
 
 logger = get_logger("recommend_products")
 
@@ -18,12 +19,43 @@ def _get_opensearch_semaphore() -> asyncio.Semaphore:
     return _opensearch_semaphore
 
 
+# get_products_detail_from_db — keep-alive 커넥션 재사용 레이스로 인한 RemoteProtocolError
+# 재시도. 클라이언트(httpx)/서버(uvicorn) keep-alive 타이머가 우연히 같은 기본값(5s)이라
+# 부하 시 죽은 풀 커넥션을 재사용하다 발생한다(37차 부하테스트 idx 23). GET(멱등)이라
+# 백오프 없이 즉시 재시도해도 안전하다.
+_RETRYABLE_HTTP_ERROR_NAMES = frozenset({"RemoteProtocolError", "ConnectError", "ConnectTimeout"})
+
+
 class ProductClient:
     def __init__(self):
         self.db_api_url = settings.database_api_url
         self.vector_db_api_url = settings.opensearch_api_url
         self._http_client: Optional[httpx.AsyncClient] = None
+        self._request_count = 0
+        self._close_threshold = self._next_close_threshold()
         register(self)
+
+    @staticmethod
+    def _next_close_threshold() -> int:
+        base = settings.http_client_close_every_n_requests
+        jitter = settings.http_client_close_every_n_jitter
+        return base + random.randint(-jitter, jitter)
+
+    async def _maybe_mark_connection_close(self, request: httpx.Request) -> None:
+        """N번째 요청에만 Connection: close를 붙여 그 커넥션 하나만 정상 은퇴시킨다.
+
+        ProductClient는 app.state에 담겨 프로세스 생애주기 동안 재사용되는 싱글턴이라
+        커넥션 풀도 계속 재사용된다 — NLB(L4)는 커넥션 단위로 라우팅을 결정하므로,
+        풀을 안 건드리면 스케일아웃된 새 인스턴스가 트래픽을 받을 기회가 없다(37차
+        부하테스트 — opensearch-api 신규 인스턴스 CPU 4.4%/11.4%에 그침). 풀 전체를
+        교체하지 않고 요청 1건의 커넥션만 닫으므로 asyncio.gather로 동시에 진행 중인
+        다른 요청에는 영향이 없다.
+        """
+        self._request_count += 1
+        if self._request_count >= self._close_threshold:
+            request.headers["Connection"] = "close"
+            self._request_count = 0
+            self._close_threshold = self._next_close_threshold()
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -31,7 +63,9 @@ class ProductClient:
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(settings.http_timeout_long),
+                limits=httpx.Limits(keepalive_expiry=settings.http_keepalive_expiry),
                 headers={"X-Internal-Token": settings.internal_token},
+                event_hooks={"request": [self._maybe_mark_connection_close]},
             )
         return self._http_client
 
@@ -465,15 +499,20 @@ class ProductClient:
     ) -> List[Dict[str, Any]]:
         """정형 DB에서 product_id 리스트로 상품 상세 정보 병렬 조회 (가격, 할인율 등)"""
         async def _fetch_one(product_id: str) -> Optional[Dict[str, Any]]:
-            try:
-                response = await self.http_client.get(
-                    f"{self.db_api_url}/api/products/{product_id}",
-                )
-                response.raise_for_status()
-                return response.json()
-            except Exception as e:
-                logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__, exc_info=True)
-                return None
+            for attempt in range(1, settings.db_fetch_max_retries + 1):
+                try:
+                    response = await self.http_client.get(
+                        f"{self.db_api_url}/api/products/{product_id}",
+                    )
+                    response.raise_for_status()
+                    return response.json()
+                except Exception as e:
+                    is_retryable = type(e).__name__ in _RETRYABLE_HTTP_ERROR_NAMES
+                    if is_retryable and attempt < settings.db_fetch_max_retries:
+                        logger.warning("get_products_detail_from_db.retry", product_id=product_id, error_type=type(e).__name__, attempt=attempt)
+                        continue
+                    logger.error("get_products_detail_from_db.failed", product_id=product_id, error_type=type(e).__name__, exc_info=True)
+                    return None
 
         results = await asyncio.gather(*[_fetch_one(pid) for pid in product_ids])
         return [r for r in results if r is not None]

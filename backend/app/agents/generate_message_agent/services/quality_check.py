@@ -599,23 +599,27 @@ class QualityChecker:
             scores는 accuracy·tone·personalization·naturalness·safety·overall·feedback 키를 포함.
             LLM 호출 오류 시 ``(False, {"feedback": 오류 메시지})``.
         """
-        brand_tone = get_brand_tone(brand_name)
+        try:
+            brand_tone = get_brand_tone(brand_name)
 
-        system_prompt, human_prompt = build_quality_check_prompt(
-            brand_name=brand_name,
-            product_name=product_name,
-            product_info=product,
-            purpose=purpose,
-            brand_tone=brand_tone,
-            title=title,
-            message=message,
-            persona_info=persona_info,
-        )
-        prompt_messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt),
-        ]
-        judge = llm.with_structured_output(LLMJudgeOutput)
+            system_prompt, human_prompt = build_quality_check_prompt(
+                brand_name=brand_name,
+                product_name=product_name,
+                product_info=product,
+                purpose=purpose,
+                brand_tone=brand_tone,
+                title=title,
+                message=message,
+                persona_info=persona_info,
+            )
+            prompt_messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_prompt),
+            ]
+            judge = llm.with_structured_output(LLMJudgeOutput)
+        except Exception as e:
+            logger.error("llm_judge_failed", error_type=type(e).__name__, exc_info=True)
+            return False, {"feedback": "LLM 평가 중 오류가 발생했습니다."}
 
         async with _get_llm_judge_semaphore():
             for attempt in range(1, settings.quality_check_llm_judge_max_retries + 1):
