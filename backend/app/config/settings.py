@@ -245,6 +245,10 @@ class Settings(BaseSettings):
     conversation_summarize_max_concurrency: int = 40
     conversation_summarize_backoff_base: float = 0.5
 
+    product_registration_llm_max_retries: int = 2
+    product_registration_llm_max_concurrency: int = 10
+    product_registration_llm_backoff_base: float = 0.5
+
     # HTTP streaming timeouts (SSE proxy)
     http_timeout_stream_connect: float = 10.0
     http_timeout_stream_pool: float = 5.0
