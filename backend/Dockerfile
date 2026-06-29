@@ -15,6 +15,8 @@ WORKDIR /app
 # 앱 코드 — ECS는 볼륨 마운트가 없으므로 이미지에 포함되어야 함 (.dockerignore가 .env/캐시 제외)
 COPY backend/ /app/
 COPY data/category.json /data/category.json
+COPY data/brands.json /data/brands.json
+COPY data/purposes.json /data/purposes.json
 
 # 비루트 유저로 실행 (보안)
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app

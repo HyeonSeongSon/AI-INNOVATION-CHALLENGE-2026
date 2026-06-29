@@ -24,4 +24,6 @@ frontend/
 infra/
 data/
 !data/category.json
+!data/brands.json
+!data/purposes.json
 **/node_modules/

@@ -5,7 +5,7 @@ PostgreSQL 데이터베이스 API 엔드포인트
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
@@ -239,6 +239,42 @@ class PersonaGetRequest(BaseModel):
     persona_id: str = Field(..., description="페르소나 ID", examples=["PERSONA_001"])
 
 
+class PersonaFilterRequest(BaseModel):
+    """구조화된 조건으로 페르소나를 필터링하는 요청"""
+    gender: Optional[str] = None
+    age_min: Optional[int] = None
+    age_max: Optional[int] = None
+    skin_type: Optional[List[str]] = None
+    concerns: Optional[List[str]] = None
+    personal_color: Optional[str] = None
+    lifestyle_values: Optional[List[str]] = None
+    stress_level: Optional[str] = None
+    price_sensitivity: Optional[str] = None
+    preferred_ingredients: Optional[List[str]] = None
+    avoided_ingredients: Optional[List[str]] = None
+    occupation: Optional[str] = None
+    beauty_interests: Optional[List[str]] = None
+    shopping_style: Optional[List[str]] = None
+    preferred_brands: Optional[List[str]] = None
+    avoided_brands: Optional[List[str]] = None
+    preferred_scents: Optional[List[str]] = None
+    preferred_colors: Optional[List[str]] = None
+    preferred_texture: Optional[List[str]] = None
+    hair_type: Optional[List[str]] = None
+    skincare_routine: Optional[List[str]] = None
+    main_environment: Optional[List[str]] = None
+    purchase_decision_factors: Optional[List[str]] = None
+    pets: Optional[List[str]] = None
+    shade_number_min: Optional[int] = None
+    shade_number_max: Optional[int] = None
+    avg_sleep_hours_min: Optional[int] = None
+    avg_sleep_hours_max: Optional[int] = None
+    daily_screen_hours_min: Optional[int] = None
+    daily_screen_hours_max: Optional[int] = None
+    array_modes: Dict[str, str] = Field(default_factory=dict)
+    limit: int = Field(10, ge=1, le=20)
+
+
 # ============================================================
 # API Endpoints
 # ============================================================
@@ -451,6 +487,90 @@ async def delete_personas_bulk(
     db.commit()
 
     return {"deleted": deleted}
+
+
+@router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
+async def filter_personas(
+    request: PersonaFilterRequest,
+    db: Session = Depends(get_db),
+    x_user_id: str = Depends(get_request_user_id),
+) -> List[Any]:
+    from sqlalchemy import cast, or_
+    from sqlalchemy.dialects.postgresql import ARRAY
+    from sqlalchemy.types import Text
+
+    def array_filter(col, values: list, field_name: str):
+        op = '&&' if request.array_modes.get(field_name) == "any" else '@>'
+        return col.op(op)(cast(values, ARRAY(Text)))
+
+    query = db.query(Persona)
+
+    role = resolve_role(db, x_user_id)
+    if role != "admin":
+        query = query.filter(
+            or_(Persona.user_id == x_user_id, Persona.user_id.is_(None))
+        )
+
+    if request.gender is not None:
+        query = query.filter(Persona.gender == request.gender)
+    if request.age_min is not None:
+        query = query.filter(Persona.age >= request.age_min)
+    if request.age_max is not None:
+        query = query.filter(Persona.age <= request.age_max)
+    if request.personal_color is not None:
+        query = query.filter(Persona.personal_color == request.personal_color)
+    if request.stress_level is not None:
+        query = query.filter(Persona.stress_level == request.stress_level)
+    if request.price_sensitivity is not None:
+        query = query.filter(Persona.price_sensitivity == request.price_sensitivity)
+    if request.occupation is not None:
+        query = query.filter(Persona.occupation == request.occupation)
+    if request.shade_number_min is not None:
+        query = query.filter(Persona.shade_number >= request.shade_number_min)
+    if request.shade_number_max is not None:
+        query = query.filter(Persona.shade_number <= request.shade_number_max)
+    if request.avg_sleep_hours_min is not None:
+        query = query.filter(Persona.avg_sleep_hours >= request.avg_sleep_hours_min)
+    if request.avg_sleep_hours_max is not None:
+        query = query.filter(Persona.avg_sleep_hours <= request.avg_sleep_hours_max)
+    if request.daily_screen_hours_min is not None:
+        query = query.filter(Persona.daily_screen_hours >= request.daily_screen_hours_min)
+    if request.daily_screen_hours_max is not None:
+        query = query.filter(Persona.daily_screen_hours <= request.daily_screen_hours_max)
+
+    _ARRAY_FIELDS = [
+        ("skin_type", Persona.skin_type),
+        ("concerns", Persona.concerns),
+        ("lifestyle_values", Persona.lifestyle_values),
+        ("preferred_ingredients", Persona.preferred_ingredients),
+        ("avoided_ingredients", Persona.avoided_ingredients),
+        ("beauty_interests", Persona.beauty_interests),
+        ("shopping_style", Persona.shopping_style),
+        ("preferred_brands", Persona.preferred_brands),
+        ("avoided_brands", Persona.avoided_brands),
+        ("preferred_scents", Persona.preferred_scents),
+        ("preferred_colors", Persona.preferred_colors),
+        ("preferred_texture", Persona.preferred_texture),
+        ("hair_type", Persona.hair_type),
+        ("skincare_routine", Persona.skincare_routine),
+        ("main_environment", Persona.main_environment),
+        ("purchase_decision_factors", Persona.purchase_decision_factors),
+        ("pets", Persona.pets),
+    ]
+    for field_name, column in _ARRAY_FIELDS:
+        values = getattr(request, field_name)
+        if values:
+            query = query.filter(array_filter(column, values, field_name))
+
+    personas = query.limit(request.limit).all()
+    rows = []
+    for p in personas:
+        row = {c.name: getattr(p, c.name) for c in p.__table__.columns}
+        for k, v in row.items():
+            if hasattr(v, 'isoformat'):
+                row[k] = v.isoformat()
+        rows.append(row)
+    return rows
 
 
 @router.post("/product-search-queries", response_model=ProductSearchQueryResponse, summary="삼품 검색 쿼리 저장")

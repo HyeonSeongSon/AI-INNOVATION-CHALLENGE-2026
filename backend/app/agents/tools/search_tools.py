@@ -292,7 +292,14 @@ async def search_personas_by_filter(
     lifestyle_values=None, stress_level=None, price_sensitivity=None,
     preferred_ingredients=None, avoided_ingredients=None,
     occupation=None, beauty_interests=None, shopping_style=None,
-    preferred_brands=None, limit=10,
+    preferred_brands=None, avoided_brands=None,
+    preferred_scents=None, preferred_colors=None, preferred_texture=None,
+    hair_type=None, skincare_routine=None, main_environment=None,
+    purchase_decision_factors=None, pets=None,
+    shade_number_min=None, shade_number_max=None,
+    avg_sleep_hours_min=None, avg_sleep_hours_max=None,
+    daily_screen_hours_min=None, daily_screen_hours_max=None,
+    array_modes=None, limit=10,
     config: Annotated[RunnableConfig, InjectedToolArg] = None,
 ) -> str:
     """
@@ -311,13 +318,17 @@ async def search_personas_by_filter(
         avoided_ingredients=avoided_ingredients,
         occupation=occupation, beauty_interests=beauty_interests,
         shopping_style=shopping_style, preferred_brands=preferred_brands,
-        limit=limit,
+        avoided_brands=avoided_brands,
+        preferred_scents=preferred_scents, preferred_colors=preferred_colors,
+        preferred_texture=preferred_texture, hair_type=hair_type,
+        skincare_routine=skincare_routine, main_environment=main_environment,
+        purchase_decision_factors=purchase_decision_factors, pets=pets,
+        shade_number_min=shade_number_min, shade_number_max=shade_number_max,
+        avg_sleep_hours_min=avg_sleep_hours_min, avg_sleep_hours_max=avg_sleep_hours_max,
+        daily_screen_hours_min=daily_screen_hours_min, daily_screen_hours_max=daily_screen_hours_max,
+        array_modes=array_modes or {}, limit=limit,
     )
-    payload = {
-        **f.model_dump(),
-        "user_id": configurable.get("user_id"),
-        "role": configurable.get("role", "user"),
-    }
+    payload = f.model_dump()
     try:
         client = _get_http_client()
         assertion = _make_user_assertion(configurable.get("user_id"), configurable.get("role", "user"))
