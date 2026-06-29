@@ -18,6 +18,7 @@ from ...config.settings import settings
 from .state import CRMMessageAgentState
 from .prompts.supervisor_prompt import build_supervisor_prompt, build_final_answer_prompt
 from .prompts.summary_prompt import build_summary_prompt
+from .prompts.search_agent_prompt import SEARCH_AGENT_SYSTEM_PROMPT
 from ..tools.handoff_tools import create_handoff_messages
 from ..tools.search_tools import (
     get_all_personas,
@@ -163,7 +164,7 @@ _SEARCH_TOOLS = [
 @lru_cache(maxsize=4)
 def _get_search_agent(model_name: str):
     llm = get_llm(model_name, temperature=settings.llm_temperature_generator)
-    return create_agent(model=llm, tools=_SEARCH_TOOLS, system_prompt="")
+    return create_agent(model=llm, tools=_SEARCH_TOOLS, system_prompt=SEARCH_AGENT_SYSTEM_PROMPT)
 
 
 async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
