@@ -555,7 +555,7 @@ export default function Message() {
   const applySlashCommand = (cmd) => {
     setSlashMenu({ open: false, filter: '', index: 0 });
     setChatInput('');
-    setMessages(prev => [...prev, { id: Date.now(), role: 'ai', agentInfo: cmd }]);
+    setMessages(prev => [...prev, { id: Date.now(), role: 'ai', agentInfo: cmd.name }]);
   };
 
   const handleSendChat = async () => {
@@ -824,32 +824,36 @@ export default function Message() {
           <div><h2 style={{margin:0}}><Bot size={20} color="#6B4DFF"/> AI Merchandiser Agent</h2><div style={{fontSize:'12px', color:'#888', marginTop: 4}}>Powered by Amore GPT</div></div>
         </ChatHeader>
         <ChatScroll ref={scrollRef}>
-          {(messages || []).map((msg, idx) => (
+          {(messages || []).map((msg, idx) => {
+            const agentInfo = typeof msg.agentInfo === 'string'
+              ? SLASH_COMMANDS.find(c => c.name === msg.agentInfo)
+              : null;
+            return (
             <MessageBubble key={msg.id || idx} $isUser={msg.role === 'user'} $wide={msg.products && msg.products.length > 0}>
               <div className="sender">{msg.role === 'ai' ? <><Sparkles size={12}/> AI Agent</> : 'Me'}</div>
-              {msg.agentInfo ? (
+              {agentInfo ? (
                 <AgentInfoCard>
                   <AgentInfoTitle>
-                    <msg.agentInfo.icon size={20} />
-                    {msg.agentInfo.label} — {msg.agentInfo.description}
+                    <agentInfo.icon size={20} />
+                    {agentInfo.label} — {agentInfo.description}
                   </AgentInfoTitle>
-                  {msg.agentInfo.tools.length > 0 && (
+                  {agentInfo.tools.length > 0 && (
                     <AgentInfoSection>
                       <span className="section-label">사용 도구</span>
-                      <ul>{msg.agentInfo.tools.map(t => <li key={t}>{t}</li>)}</ul>
+                      <ul>{agentInfo.tools.map(t => <li key={t}>{t}</li>)}</ul>
                     </AgentInfoSection>
                   )}
-                  {msg.agentInfo.tasks.length > 0 && (
+                  {agentInfo.tasks.length > 0 && (
                     <AgentInfoSection>
                       <span className="section-label">가능한 작업</span>
-                      <ul>{msg.agentInfo.tasks.map(t => <li key={t}>{t}</li>)}</ul>
+                      <ul>{agentInfo.tasks.map(t => <li key={t}>{t}</li>)}</ul>
                     </AgentInfoSection>
                   )}
-                  {msg.agentInfo.examples.length > 0 && (
+                  {agentInfo.examples.length > 0 && (
                     <AgentInfoSection>
                       <span className="section-label">예시 문구</span>
                       <ExampleChips>
-                        {msg.agentInfo.examples.map(ex => (
+                        {agentInfo.examples.map(ex => (
                           <ExampleChip
                             key={ex}
                             onClick={() => {
@@ -955,7 +959,8 @@ export default function Message() {
                 </ProductGrid>
               )}
             </MessageBubble>
-          ))}
+            );
+          })}
         </ChatScroll>
         <InputArea>
           {slashMenu.open && filteredCommands.length > 0 && (
