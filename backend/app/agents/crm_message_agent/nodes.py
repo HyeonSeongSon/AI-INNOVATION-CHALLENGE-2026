@@ -68,6 +68,16 @@ def _build_fallback_answer(state: CRMMessageAgentState):
     return None  # 대체할 결과 자체가 없으면 기존처럼 실패 처리
 
 
+def _safe_trim_index(messages: list, keep: int) -> int:
+    """ToolMessage가 짝 잃은 채로 남지 않도록 절단 경계를 보정한다.
+    남길 구간의 첫 메시지가 ToolMessage면 그에 대응하는 AIMessage(tool_calls)까지
+    포함되도록 경계를 앞으로 당긴다."""
+    cut = max(len(messages) - keep, 0)
+    while cut > 0 and isinstance(messages[cut], ToolMessage):
+        cut -= 1
+    return cut
+
+
 async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
     messages = state.get("messages", [])
     if len(messages) <= settings.conversation_summarize_threshold:
@@ -90,13 +100,14 @@ async def maybe_summarize(state: CRMMessageAgentState, config: RunnableConfig):
         _logger.warning("summarize_skipped", error_type=type(e).__name__)
         return {}
 
-    messages_to_delete = messages[:-settings.conversation_keep_messages]
+    cut = _safe_trim_index(messages, settings.conversation_keep_messages)
+    messages_to_delete = messages[:cut]
     delete_ops = [RemoveMessage(id=m.id) for m in messages_to_delete]
 
     _logger.info(
         "conversation_summarized",
         deleted=len(messages_to_delete),
-        kept=settings.conversation_keep_messages,
+        kept=len(messages) - cut,
     )
     return {"summary": response.content, "messages": delete_ops}
 
