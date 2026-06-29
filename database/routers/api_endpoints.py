@@ -489,13 +489,29 @@ async def delete_personas_bulk(
     return {"deleted": deleted}
 
 
+# personas.gender 컬럼에 "남성"/"여성"/영문 "Female" 등 표기가 섞여 있어
+# 동의어 그룹 단위로 매칭한다 (대소문자 무시).
+_GENDER_ALIAS_GROUPS: List[set[str]] = [
+    {"남자", "남성", "male"},
+    {"여자", "여성", "female"},
+]
+
+
+def _gender_match_values(gender: str) -> set[str]:
+    lowered = gender.strip().lower()
+    for group in _GENDER_ALIAS_GROUPS:
+        if lowered in group:
+            return group
+    return {lowered}
+
+
 @router.post("/personas/filter", summary="구조화된 조건으로 페르소나 필터링")
 async def filter_personas(
     request: PersonaFilterRequest,
     db: Session = Depends(get_db),
     x_user_id: str = Depends(get_request_user_id),
 ) -> List[Any]:
-    from sqlalchemy import cast, or_
+    from sqlalchemy import cast, func, or_
     from sqlalchemy.dialects.postgresql import ARRAY
     from sqlalchemy.types import Text
 
@@ -512,7 +528,7 @@ async def filter_personas(
         )
 
     if request.gender is not None:
-        query = query.filter(Persona.gender == request.gender)
+        query = query.filter(func.lower(Persona.gender).in_(_gender_match_values(request.gender)))
     if request.age_min is not None:
         query = query.filter(Persona.age >= request.age_min)
     if request.age_max is not None:
