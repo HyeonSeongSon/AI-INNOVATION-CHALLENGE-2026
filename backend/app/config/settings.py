@@ -179,8 +179,7 @@ class Settings(BaseSettings):
     graph_execution_timeout: float = 600.0
 
     # Product recommendation tuning
-    rrf_k: int = 60
-    min_rrf_score_threshold: float = 0.01
+    rrf_k: int = 10  # RRF 상수 — 낮을수록 상위 순위 차별화 강화
     min_filtered_products: int = 3
 
     # OpenSearch index names
