@@ -190,6 +190,9 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     model = config.get("configurable", {}).get("model", settings.chatgpt_model_name)
     llm = get_llm(model, temperature=settings.llm_temperature_classifier)
+    final_answer_llm = get_llm(
+        model, temperature=settings.llm_temperature_classifier, reasoning_effort="low"
+    )
     messages = state.get("messages", [])
     task_plan = state.get("task_plan", [])
     summary = state.get("summary", "")
@@ -202,7 +205,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         if not remaining:
             _logger.info("supervisor_all_done", node_name="supervisor_agent")
             try:
-                final_answer = await _generate_final_answer(llm, messages, summary)
+                final_answer = await _generate_final_answer(final_answer_llm, messages, summary)
             except Exception as e:
                 _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
                 final_answer = _build_fallback_answer(state)
@@ -230,7 +233,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
         # LLM이 JSON 외 텍스트를 덧붙여 파싱 실패한 경우
         _logger.warning("supervisor_routing_parse_failed", error_type=type(e).__name__, node_name="supervisor_agent")
         try:
-            final_answer = await _generate_final_answer(llm, messages, summary)
+            final_answer = await _generate_final_answer(final_answer_llm, messages, summary)
         except Exception as e2:
             _logger.error("supervisor_final_answer_failed", error_type=type(e2).__name__, node_name="supervisor_agent")
             final_answer = _build_fallback_answer(state)
@@ -244,7 +247,7 @@ async def supervisor_agent(state: CRMMessageAgentState, config: RunnableConfig):
 
     if not decision.task_plan:
         try:
-            final_answer = await _generate_final_answer(llm, messages, summary)
+            final_answer = await _generate_final_answer(final_answer_llm, messages, summary)
         except Exception as e:
             _logger.error("supervisor_final_answer_failed", error_type=type(e).__name__, node_name="supervisor_agent")
             final_answer = _build_fallback_answer(state)

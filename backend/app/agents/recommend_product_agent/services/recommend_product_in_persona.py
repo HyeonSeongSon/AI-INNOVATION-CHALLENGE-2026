@@ -210,11 +210,13 @@ class ProductRecommender:
         dimension_results: Dict,
         product_tags: List[str],
         top_n: int,
-        k: int = 15,
+        k: int | None = None,
     ) -> List[tuple]:
         """카테고리별 독립 RRF 실행 후 병합.
         각 카테고리에서 ceil(top_n / len(tags))개씩 추출 후 중복 제거.
         """
+        if k is None:
+            k = settings.rrf_k
         import math
         per_cat = math.ceil(top_n / len(product_tags))
         seen: set = set()
@@ -237,7 +239,7 @@ class ProductRecommender:
     def _apply_rrf(
         dimension_results: Dict,
         weights: Optional[Dict[str, float]] = None,
-        k: int = 15,
+        k: int | None = None,
     ) -> List[tuple]:
         """
         Reciprocal Rank Fusion으로 3개 차원 결과 합산 (차원별 가중치 적용)
@@ -247,11 +249,13 @@ class ProductRecommender:
         Args:
             dimension_results: {"need": [...], "preference": [...], "persona": [...]}
             weights: 차원별 가중치. None이면 _DIMENSION_WEIGHTS(기본값) 사용
-            k: RRF 상수. 낮을수록 상위 순위 차별화 강화 (기본값 10, 표준 RRF는 60)
+            k: RRF 상수. 낮을수록 상위 순위 차별화 강화. None이면 settings.rrf_k(현재 10) 사용
 
         Returns:
             [(product_id, rrf_score), ...] 내림차순
         """
+        if k is None:
+            k = settings.rrf_k
         weights = weights or ProductRecommender._DIMENSION_WEIGHTS
         rrf_scores: Dict[str, float] = {}
         for dim_name, results in dimension_results.items():

@@ -1,0 +1,70 @@
+﻿{
+    "Versions": [
+        {
+            "ETag": "\"6191a25988456361d72d0c3eafd1d464\"",
+            "ChecksumAlgorithm": [
+                "CRC64NVME"
+            ],
+            "ChecksumType": "FULL_OBJECT",
+            "Size": 940162,
+            "StorageClass": "STANDARD",
+            "Key": "assets/index-0E7HqN83.js",
+            "VersionId": "null",
+            "IsLatest": true,
+            "LastModified": "2026-06-29T16:26:49+00:00",
+            "Owner": {
+                "ID": "34afe7307b025280b7d9b71fead215b1214025f8f4bab6a873b2b026b646ba9c"
+            }
+        },
+        {
+            "ETag": "\"dea30a5877030587be4823d9cf221f4a\"",
+            "ChecksumAlgorithm": [
+                "CRC64NVME"
+            ],
+            "ChecksumType": "FULL_OBJECT",
+            "Size": 1220,
+            "StorageClass": "STANDARD",
+            "Key": "assets/index-DQIBWvT6.css",
+            "VersionId": "null",
+            "IsLatest": true,
+            "LastModified": "2026-06-29T16:26:49+00:00",
+            "Owner": {
+                "ID": "34afe7307b025280b7d9b71fead215b1214025f8f4bab6a873b2b026b646ba9c"
+            }
+        },
+        {
+            "ETag": "\"261acc96a3ab0988a1f89d9bfd5b3167\"",
+            "ChecksumAlgorithm": [
+                "CRC64NVME"
+            ],
+            "ChecksumType": "FULL_OBJECT",
+            "Size": 461,
+            "StorageClass": "STANDARD",
+            "Key": "index.html",
+            "VersionId": "null",
+            "IsLatest": true,
+            "LastModified": "2026-06-29T16:26:52+00:00",
+            "Owner": {
+                "ID": "34afe7307b025280b7d9b71fead215b1214025f8f4bab6a873b2b026b646ba9c"
+            }
+        },
+        {
+            "ETag": "\"8e3a10e157f75ada21ab742c022d5430\"",
+            "ChecksumAlgorithm": [
+                "CRC64NVME"
+            ],
+            "ChecksumType": "FULL_OBJECT",
+            "Size": 1497,
+            "StorageClass": "STANDARD",
+            "Key": "vite.svg",
+            "VersionId": "null",
+            "IsLatest": true,
+            "LastModified": "2026-06-29T16:26:49+00:00",
+            "Owner": {
+                "ID": "34afe7307b025280b7d9b71fead215b1214025f8f4bab6a873b2b026b646ba9c"
+            }
+        }
+    ],
+    "RequestCharged": null,
+    "Prefix": ""
+}

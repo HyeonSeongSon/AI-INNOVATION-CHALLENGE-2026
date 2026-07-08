@@ -110,7 +110,7 @@ resource "aws_ebs_volume" "db_data" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -163,7 +163,7 @@ resource "aws_ebs_volume" "opensearch_data" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -217,7 +217,7 @@ resource "aws_ebs_volume" "opensearch_api_data" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 

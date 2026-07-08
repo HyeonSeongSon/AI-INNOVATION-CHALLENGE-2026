@@ -550,7 +550,7 @@ class QualityChecker:
         LLM-as-a-Judge로 메시지 품질을 평가합니다 (Stage 3).
 
         ``llm.with_structured_output(LLMJudgeOutput)``을 통해 5개 항목
-        (accuracy, tone, personalization, naturalness, safety)을 1–5점으로 채점합니다.
+        (accuracy, tone, personalization, naturalness, cta_clarity)을 1–5점으로 채점합니다.
 
         통과 기준:
             - 모든 개별 항목 ≥ 3점
@@ -567,7 +567,7 @@ class QualityChecker:
 
         Returns:
             ``(passed, scores)`` 튜플.
-            scores는 accuracy·tone·personalization·naturalness·safety·overall·feedback 키를 포함.
+            scores는 accuracy·tone·personalization·naturalness·cta_clarity·overall·feedback 키를 포함.
             LLM 호출 오류 시 ``(False, {"feedback": 오류 메시지})``.
         """
         try:
