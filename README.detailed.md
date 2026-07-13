@@ -674,6 +674,7 @@ ECS/EC2 → VPC Endpoints(sg_vpc_endpoints: 443)
 
 - **ALB**(`alb.tf`): `fastapi-backend`(8005)만 타깃 그룹으로 노출. `idle_timeout=660s` — LangGraph 에이전트 체인의 `graph_execution_timeout`(600s)보다 길게 설정해 SSE 스트리밍이 ALB에 먼저 끊기는 504 경쟁 조건을 방지.
 - **ECS Fargate**(`ecs.tf`): 5개 서비스(backend/crm/recommend/generate/data-registration) 각각 별도 태스크. `fastapi-backend`만 ALB 연결, 나머지 4개는 **AWS Cloud Map**(`crm.local` 네임스페이스) Service Discovery로 내부 통신(예: `http://crm-service.crm.local:8006`) — 로컬 환경의 `localhost:포트` 직접 호출과 다름.
+- **태스크 수(부하테스트 검증 구성)**: 동시 100명 시나리오를 완료율 100%로 통과한 부하테스트 기준 운영 구성은 **recommend 3 · generate 2 태스크**, 나머지 backend/crm/data-registration은 1 태스크입니다. recommend가 유일 병목이라 최우선 3대로, generate가 그다음 병목이라 2대로 수평 확장한 계층 순서는 부하테스트 실측으로 확정했습니다. CRM → recommend/generate A2A 호출은 Cloud Map DNS가 다중 태스크에 라운드로빈 분산합니다.
 - **시크릿 분리**: `POSTGRES_URL`/`INTERNAL_TOKEN`/`JWT_SECRET`/LLM API 키는 **Secrets Manager**에서 `valueFrom`으로 주입(`secrets.tf`) — task definition 평문(=`ecs:DescribeTaskDefinition`으로 조회 가능)에 노출되지 않음. 비민감 값만 `environment`에 평문 주입.
 - **Admin 시드**: 최초 배포 시 `admin_seed_email`/`admin_seed_password`를 Secrets Manager에 넣으면 ECS가 시딩 후 스스로 삭제(`secretsmanager:DeleteSecret` 권한, `recovery_window_in_days=0`로 즉시 삭제).
 
@@ -688,7 +689,7 @@ ECS/EC2 → VPC Endpoints(sg_vpc_endpoints: 443)
 | `opensearch_api` | 임베딩 추론(KURE-v1, OpenSearch API 8010) | c5.xlarge(4 vCPU) | OpenSearch 엔진과 별도 EC2로 분리 — 같은 인스턴스면 인코딩이 OpenSearch JVM 검색 스레드의 CPU를 빼앗는 현상 확인 |
 
 - 모든 EC2는 SSM Session Manager로 접근(SSH 불필요), IAM Role로 Secrets Manager 읽기 + S3 deploy 버킷 권한 보유.
-- **OpenSearch API ASG/NLB 컷오버**(`opensearch_api_asg.tf`, `opensearch_api_nlb.tf`): 단일 EC2 한계(반복 CPU 99% 포화)를 해소하기 위해 골든 AMI 기반 Auto Scaling Group(최소1/최대4, CPU 타깃 트래킹 62%)과 내부 NLB(8010)를 추가 구성. `opensearch_api_use_nlb` 플래그가 `false`(기본)면 ECS는 여전히 단일 EC2의 고정 private IP를 직접 호출하고, `true`로 전환해야 트래픽이 NLB→ASG로 넘어가는 **무중단 컷오버 방식**(현재 `deploy.yml`은 `true`로 운영).
+- **OpenSearch API ASG/NLB 컷오버**(`opensearch_api_asg.tf`, `opensearch_api_nlb.tf`): 단일 EC2 한계(반복 CPU 99% 포화)를 해소하기 위해 골든 AMI 기반 Auto Scaling Group(최소1/최대4, CPU 타깃 트래킹 62%)과 내부 NLB(8010)를 추가 구성. `opensearch_api_use_nlb` 플래그가 `false`(기본)면 ECS는 여전히 단일 EC2의 고정 private IP를 직접 호출하고, `true`로 전환해야 트래픽이 NLB→ASG로 넘어가는 **무중단 컷오버 방식**(현재 `deploy.yml`은 `true`로 운영). 동시 100명 부하테스트 검증 구성에서는 이 ASG가 **2대**로 스케일한 상태로 통과했으며(테스트 중엔 CPU 스케일인 알람이 인스턴스를 되돌리지 않도록 `Terminate` 프로세스를 일시중단해 2대로 고정), 인스턴스 타입은 c5.xlarge(4 vCPU)입니다.
 
 ### 11.6 백업
 
