@@ -40,7 +40,7 @@
 | 인증 | JWT (HttpOnly Cookie) + 서비스 간 `INTERNAL_TOKEN` + 단명 User Assertion JWT |
 | 프론트엔드 | React 19, Vite 7, React Router 7, styled-components, axios |
 | 관측성 | structlog (JSON 구조화 로그), LangSmith 트레이싱(선택) |
-| 인프라(프로덕션) | AWS — CloudFront+S3(프론트), ALB+ECS Fargate(앱 5종), EC2(DB/OpenSearch/OpenSearch API), Terraform(`infra/ec2/`), GitHub Actions OIDC 배포 |
+| 인프라(프로덕션) | AWS — CloudFront+S3(프론트), ALB+ECS Fargate(앱 5종), EC2(DB/OpenSearch 엔진), ASG+NLB(OpenSearch API), Terraform(`infra/ec2/`), GitHub Actions OIDC 배포 |
 | 인프라(로컬 개발) | Docker Compose (모듈별), Nginx(프론트 정적 서빙) |
 
 ---
@@ -167,7 +167,7 @@ backend/
 │   │   ├── cleanup.py            # 만료 토큰·오래된 체크포인트 정리
 │   │   └── data_loader.py        # forbidden_keyword·brand_tone 정적 설정 로드/검증
 │   └── agents/                   # LangGraph 에이전트
-│       ├── crm_message_agent/    # ★ Supervisor 오케스트레이터 (메인 그래프)
+│       ├── crm_message_agent/    # (메인) Supervisor 오케스트레이터 (메인 그래프)
 │       │   ├── crm_message_agent.py # chat() / chat_stream() — SSE 이벤트 생성
 │       │   ├── workflow.py       # StateGraph 빌드 (maybe_summarize→supervisor→서브에이전트)
 │       │   ├── nodes.py          # supervisor_agent, search_agent, A2A 노드 팩토리
@@ -194,7 +194,8 @@ backend/
 ```
 database/
 ├── api_server.py                 # Database API(8020) — InternalToken·바디제한 미들웨어 + 3개 라우터
-├── docker-compose.yml            # PostgreSQL + pgAdmin + DB API
+├── docker-compose.yml            # PostgreSQL + DB API
+├── docker-compose.dev.yml        # (오버레이) 5432 포트 개방 + pgAdmin 5050
 ├── alembic.ini                   # Alembic 마이그레이션 설정
 ├── requirements.txt
 ├── core/
@@ -249,7 +250,7 @@ frontend/
     ├── pages/
     │   ├── Login.jsx             # 로그인 페이지
     │   ├── Home.jsx              # 홈
-    │   ├── Message.jsx           # ★ 메인 채팅 화면 — SSE 파싱, 상품카드, 메시지 생성
+    │   ├── Message.jsx           # 메인 채팅 화면 — SSE 파싱, 상품카드, 메시지 생성
     │   ├── Persona.jsx           # 페르소나 등록/목록
     │   ├── Products.jsx          # 상품 등록/목록
     │   ├── GeneratedMessages.jsx # 생성된 메시지 보관함
@@ -273,7 +274,8 @@ opensearch/
 ├── run_indexing_pipeline.py      # v3 전체 카테고리 색인 파이프라인 (skincare 먼저 → 인덱스 생성)
 ├── index_products_v4_multivector.py # v4 멀티벡터(문장단위 5필드) 색인
 ├── index_products_*.py           # 카테고리별 색인 스크립트 (skincare/hair/color_tone/...)
-├── merge_product_data.py / export_product_ids.py / delete_index.py
+├── index_forbidden_sentences.py  # 금칙 문장 색인 (품질검사 stage2)
+├── create_snapshot.sh / restore_or_skip.sh  # S3 스냅샷 생성 / 재해 복구 전용 복원
 └── path_utils.py
 ```
 
@@ -641,7 +643,7 @@ RRF score = Σ_dim  w_dim / (k + rank_dim)
 
 ## 11. 프로덕션 인프라 아키텍처 (AWS)
 
-> 프로덕션은 `infra/ec2/`(Terraform)로 정의된 AWS 인프라에서 동작합니다. 구성요소는 ECS Fargate(앱 5종) + EC2(DB/OpenSearch/OpenSearch API) + ALB + CloudFront + S3로, 14장의 로컬 Docker Compose 토폴로지와 다릅니다.
+> 프로덕션은 `infra/ec2/`(Terraform)로 정의된 AWS 인프라에서 동작합니다. 구성요소는 ECS Fargate(앱 5종) + EC2(DB/OpenSearch 엔진) + ASG+NLB(OpenSearch API) + ALB + CloudFront + S3로, 14장의 로컬 Docker Compose 토폴로지와 다릅니다.
 
 ### 11.1 네트워크
 
@@ -768,6 +770,7 @@ ECS/EC2 → VPC Endpoints(sg_vpc_endpoints: 443)
 | `CRM_SERVICE_URL` (:8006) | Gateway | CRM 내부 주소 |
 | `RRF_K` / `MIN_RRF_SCORE_THRESHOLD` / `MIN_FILTERED_PRODUCTS` | 추천 | 추천 튜닝 |
 | `LANGGRAPH_RECURSION_LIMIT` (100) | 에이전트 | 그래프 재귀 한도 |
+| `CHAT_STREAM_MAX_CONCURRENT` (100) / `HTTP_TIMEOUT_SHORT` (120s) / `GRAPH_EXECUTION_TIMEOUT` (600s) / `A2A_TIMEOUT` (280s) | 동시성·타임아웃 | **부하 대응 핵심 튜닝값.** 진입 게이팅 슬롯 수와 타임아웃 계층(ALB 660s > graph 600s > a2a 280s)을 결정한다. 18~39차 부하테스트에서 완료율을 좌우한 값들 — 변경 시 [loadtest/README.md](loadtest/README.md) 참고 |
 | `LANGCHAIN_TRACING_V2` / `LANGCHAIN_API_KEY` / `LANGCHAIN_PROJECT` | langsmith_config | 트레이싱(선택) |
 | `LOG_LEVEL` / `ENVIRONMENT` | logging | 로깅·환경 |
 
@@ -782,7 +785,7 @@ ECS/EC2 → VPC Endpoints(sg_vpc_endpoints: 443)
 ### frontend (`frontend/.env.example`)
 `VITE_AUTH_API_URL`(:8005), `VITE_API_URL`(:8005/api), `VITE_SERVICE_API_KEY`.
 
-> ⚠️ `INTERNAL_TOKEN`은 backend / database / opensearch에서 **동일한 값**이어야 서비스 간 통신이 인증됩니다. `JWT_SECRET`과는 반드시 다른 값으로 생성하세요(`openssl rand -hex 32`).
+> **주의**: `INTERNAL_TOKEN`은 backend / database / opensearch에서 **동일한 값**이어야 서비스 간 통신이 인증됩니다. `JWT_SECRET`과는 반드시 다른 값으로 생성하세요(`openssl rand -hex 32`).
 
 ---
 
@@ -807,18 +810,21 @@ uvicorn servers.data_registration_server:app --port 8003 --reload
 ```bash
 cd database
 cp .env.example .env
-docker compose up -d          # PostgreSQL + pgAdmin + DB API(8020)
-# (선택) python scripts/setup_pipeline.py / insert_*.py 로 초기 데이터 적재
+# 기본 compose는 5432를 expose만 하므로, 호스트에서 스크립트를 돌리려면 dev 오버레이를 함께 올린다
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d   # +5432 개방, pgAdmin 5050
+python scripts/setup_pipeline.py   # 테이블 생성 + 초기 데이터 적재
 ```
 
 **OpenSearch**:
 ```bash
 cd opensearch
 cp .env.example .env
-docker compose up -d          # OpenSearch(9200) + 검색 API(8010)
-python setup_opensearch.py    # 인덱스/파이프라인 셋업
-python run_indexing_pipeline.py        # v3 상품 색인 (skincare가 인덱스 생성)
-python index_products_v4_multivector.py # v4 멀티벡터 색인
+docker compose up -d          # OpenSearch(9200, 내부) + Dashboards(5601) + 검색 API(8010, 내부)
+
+# 9200은 호스트에 노출되지 않으므로 컨테이너 안에서 실행한다
+docker compose exec fastapi-search python setup_opensearch.py               # 인덱스/파이프라인
+docker compose exec fastapi-search python run_indexing_pipeline.py          # v3 (skincare 선행)
+docker compose exec fastapi-search python index_products_v4_multivector.py  # v4 멀티벡터
 ```
 
 **Frontend**:

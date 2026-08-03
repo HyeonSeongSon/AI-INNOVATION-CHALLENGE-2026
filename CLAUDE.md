@@ -39,21 +39,38 @@ uvicorn servers.data_registration_server:app --port 8003 --reload
 
 ## Full Stack (Docker)
 
+셋업 스크립트는 **컨테이너가 뜬 뒤에** 실행한다 (클러스터·DB가 없으면 실패).
+
 ```bash
-cd opensearch && python setup_pipeline.py
-cd database   && python setup_pipeline.py
+docker network create msa-net                    # 최초 1회
+
 cd opensearch && docker compose up -d
-cd database   && docker compose up -d
-cd backend    && docker compose up
+python setup_opensearch.py                       # 인덱스/검색 파이프라인
+python run_indexing_pipeline.py                  # v3 카테고리 색인 (skincare 선행)
+python index_products_v4_multivector.py          # v4 멀티벡터 — 앱의 1차 인덱스
+
+cd ../database && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+python scripts/setup_pipeline.py                 # 테이블 생성 + 초기 데이터
+
+cd ../backend && docker compose up
 ```
 
-## LangGraph Studio
+> 호스트에서 위 python 스크립트를 실행하려면 포트가 열려 있어야 한다. database는 dev
+> 오버레이가 5432를 연다. opensearch는 기본 compose가 9200을 `expose`만 하므로,
+> 호스트 실행 대신 `docker compose exec fastapi-search python setup_opensearch.py` 형태로
+> 컨테이너 안에서 실행하는 편이 확실하다.
 
-```bash
-langgraph dev   # 루트에서 실행
-```
+## 에이전트 그래프
 
-그래프: `marketing_assistant` / `crm_message_agent` / `product_recommend_agent` / `generate_message_agent`
+| 그래프 | 위치 |
+|---|---|
+| `crm_message_agent` | `backend/app/agents/crm_message_agent/` |
+| `product_recommend_agent` | `backend/app/agents/recommend_product_agent/` |
+| `generate_message_agent` | `backend/app/agents/generate_message_agent/` |
+| `data_registration_agent` | `backend/app/agents/data_registration_agent/` |
+
+> `langgraph dev`(LangGraph Studio)는 루트에 `langgraph.json`이 없어 현재 실행할 수 없다.
+> 쓰려면 `langgraph.json`을 먼저 추가해야 한다.
 
 ---
 
