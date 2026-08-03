@@ -19,14 +19,15 @@
 
 ## 데모
 
-![CRM 메시지 생성 데모](docs/demo.gif)
+[![CRM 메시지 생성 시연 영상](https://img.youtube.com/vi/23KSwHrUyEM/maxresdefault.jpg)](https://www.youtube.com/watch?v=23KSwHrUyEM)
 
-*채팅 입력 → SSE로 노드 진행 상황 실시간 출력 → 페르소나 맞춤 상품 3개 추천 → CRM 메시지 생성 (중간 구간 배속)*
+**▶ 이미지를 클릭하면 시연 영상이 재생됩니다** — 채팅 입력 → SSE로 노드 진행 상황 실시간 출력
+→ 페르소나 맞춤 상품 3개 추천 → CRM 메시지 생성
 
-| 페르소나 관리 | 생성 메시지 이력 |
+| 페르소나 검색 쿼리 | 생성 메시지 + 품질 평가 |
 |---|---|
-| ![페르소나](docs/screenshot-persona.png) | ![생성 메시지](docs/screenshot-generated-messages.png) |
-| 텍스트·파일로 페르소나 등록, 업로드 진행률 SSE 스트리밍 | 품질 검사를 통과한 메시지와 점수 이력 |
+| ![페르소나 검색 쿼리](docs/screenshot-persona.png) | ![생성 메시지](docs/screenshot-generated-messages.png) |
+| 페르소나에서 파생한 4종 쿼리(니즈·선호·검색·페르소나)가 3차원 하이브리드 검색에 사용됩니다 | 품질 검사를 통과한 메시지와 LLM Judge 점수·평가 코멘트 |
 
 ---
 
