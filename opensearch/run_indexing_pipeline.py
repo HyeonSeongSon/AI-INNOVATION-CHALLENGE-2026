@@ -5,7 +5,7 @@
   1. skincare  — 인덱스 생성 (recreate_index=True)
   2. color_tone
   3. hair
-  4. nail
+  4. living_supplies
   5. fragrance_body
   6. inner_beauty
   7. beauty_tool

@@ -4,63 +4,88 @@
 
 ## 사전 요구사항
 
-### ⚠️ 중요: 벡터 데이터베이스 색인 필수
-
-**데이터베이스 설정 전에 반드시 벡터 데이터베이스에 상품 데이터를 먼저 색인해야 합니다!**
-
-1. **벡터 데이터베이스에 상품 데이터 색인**
+1. **PostgreSQL 실행**
    ```bash
-   # 벡터 인덱싱 스크립트 실행
-   # 이 과정에서 'data/product_data_for_db.jsonl' 파일이 생성됩니다
-   python [벡터_인덱싱_스크립트].py
+   cd database
+   docker compose up -d
    ```
 
-   ✅ 색인 완료 후 `data/product_data_for_db.jsonl` 파일이 생성되었는지 확인
+   > **주의**: 기본 `docker-compose.yml`은 PostgreSQL을 `expose`만 하므로 **호스트에서 5432에 접속할 수
+   > 없습니다.** 아래 스크립트를 호스트에서 실행하려면 dev 오버레이를 함께 올려야 합니다
+   > (5432 포트 개방 + pgAdmin 5050 제공).
+   >
+   > ```bash
+   > docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+   > ```
+   >
+   > 오버레이 없이 진행하려면 컨테이너 안에서 실행하세요:
+   > `docker compose exec api_server python scripts/setup_pipeline.py`
 
-2. **PostgreSQL 설치 및 실행**
-   - PostgreSQL 서버가 실행 중이어야 합니다
-   - 데이터베이스가 생성되어 있어야 합니다
-
-3. **환경변수 설정** (`.env` 파일)
+2. **환경변수 설정** (`.env` 파일 — `.env.example` 복사)
    ```bash
    POSTGRES_HOST=localhost
-   POSTGRES_PORT=5432
    POSTGRES_DB=ai_innovation_db
    POSTGRES_USER=postgres
    POSTGRES_PASSWORD=your_password
+   INTERNAL_TOKEN=<openssl rand -hex 32>
    ```
 
-4. **Python 패키지 설치**
+   > `POSTGRES_PORT`는 dev 오버레이를 쓸 때만 필요합니다(`.env.example`에 주석 처리되어 있음).
+
+3. **Python 패키지 설치** (호스트에서 실행할 경우)
    ```bash
    pip install -r requirements.txt
    ```
+
+> **상품 데이터**: `database/data/product_data_for_db.jsonl`이 저장소에 포함되어 있어
+> 별도의 사전 색인 없이 바로 적재할 수 있습니다. OpenSearch 색인은 이와 독립적으로
+> [../opensearch/README.md](../opensearch/README.md)의 절차를 따르면 됩니다.
 
 ## 프로젝트 구조
 
 ```
 database/
-├── api_server.py          ← FastAPI 진입점 (port 8020)
+├── api_server.py                      ← FastAPI 진입점 (port 8020)
+├── seed_products.py                   ← 상품 시드 (배포 환경에서 CI가 호출)
+├── setup_db.py                        ← DB 초기화 헬퍼
+├── alembic.ini                        ← Alembic 설정
 │
-├── core/                  ← DB 인프라
-│   ├── database.py        ← 연결 설정, get_db(), init_db()
-│   └── models.py          ← SQLAlchemy ORM 모델
+├── core/                              ← DB 인프라
+│   ├── database.py                    ← 연결 설정, get_db(), init_db()
+│   ├── models.py                      ← SQLAlchemy ORM 모델
+│   ├── pagination.py                  ← 페이지네이션 유틸
+│   └── logging.py                     ← structlog 설정
 │
-├── routers/               ← API 라우터
-│   ├── api_endpoints.py   ← CRUD 엔드포인트 (/api/*)
-│   └── pipeline_router.py ← 파이프라인 엔드포인트 (/api/pipeline/*)
+├── routers/                           ← API 라우터
+│   ├── api_endpoints.py               ← CRUD 엔드포인트 (/api/*)
+│   ├── conversations_router.py        ← 대화 이력
+│   ├── generated_messages_router.py   ← 생성 메시지
+│   └── auth_utils.py                  ← 내부 토큰 검증
 │
-├── services/              ← 비즈니스 로직
-│   └── persona_analyzer.py ← LLM 페르소나 요약 생성
-│
-├── scripts/               ← 데이터 삽입 / 유틸리티
-│   ├── setup_pipeline.py
+├── scripts/                           ← 데이터 삽입 / 유틸리티
+│   ├── setup_pipeline.py              ← 테이블 생성 → 데이터 삽입 → 검증
 │   ├── insert_personas.py
 │   ├── insert_products_from_jsonl.py
 │   └── jsonl_to_sql_new.py
 │
-└── init/                  ← PostgreSQL 초기화 SQL
-    └── 01-create-tables.sql
+├── migrations/                        ← Alembic 마이그레이션
+│
+├── init/                              ← PostgreSQL 초기화 SQL (01~07, 컨테이너 최초 기동 시 자동 적용)
+│   ├── 01-create-tables.sql           ← personas/analysis_results/search_queries/products/
+│   │                                     conversations/conversation_messages/generated_messages
+│   ├── 02-auth-tables.sql             ← users/refresh_tokens
+│   ├── 03-add-persona-user-id.sql
+│   ├── 04-add-updated-at-trigger.sql
+│   ├── 05-add-account-lockout.sql
+│   ├── 06-add-rate-limits.sql         ← rate_limits
+│   └── 07-add-persona-seq.sql
+│
+├── docker-compose.yml                 ← PostgreSQL + DB API
+└── docker-compose.dev.yml             ← (오버레이) 5432 포트 개방 + pgAdmin 5050
 ```
+
+> 페르소나 LLM 요약 생성(`persona_analyzer.py`)은 이 디렉터리가 아니라
+> `backend/app/services/persona_analyzer.py`에 있습니다.
 
 ## 사용 방법
 
@@ -71,10 +96,10 @@ python scripts/setup_pipeline.py
 ```
 
 이 명령은:
-- ✅ 데이터베이스 연결 확인
-- ✅ 테이블이 없으면 생성 (있으면 스킵)
-- ✅ 상품 데이터 삽입 (중복 제외)
-- ✅ 데이터 검증
+- 데이터베이스 연결 확인
+- 테이블이 없으면 생성 (있으면 스킵)
+- 상품 데이터 삽입 (중복 제외)
+- 데이터 검증
 
 ### 2. 전체 리셋 (기존 데이터 삭제 후 재생성)
 ```bash
@@ -82,7 +107,7 @@ cd database
 python scripts/setup_pipeline.py --reset
 ```
 
-⚠️ **경고**: 이 명령은 모든 기존 데이터를 삭제합니다!
+**경고**: 이 명령은 모든 기존 데이터를 삭제합니다!
 
 ## 파이프라인 단계
 
@@ -92,7 +117,10 @@ python scripts/setup_pipeline.py --reset
 
 ### Step 2: 테이블 생성
 
-생성되는 테이블 (4개):
+전체 **10개** 테이블이 생성됩니다. 아래에 상세 스키마를 적은 4개가 도메인 핵심 테이블이고,
+나머지 6개는 [인증·대화·운영 테이블](#인증대화운영-테이블-6개)에 정리했습니다.
+
+도메인 핵심 테이블 (4개):
 
 #### 1. `personas` - 페르소나 정보
 페르소나의 인구통계학적 정보, 피부 특성, 선호도 등을 저장
@@ -189,6 +217,38 @@ python scripts/setup_pipeline.py --reset
 - `idx_products_vectordb_id` ON vectordb_id (벡터DB 연동용)
 - `idx_products_brand` ON brand (브랜드별 검색 최적화)
 
+#### 인증·대화·운영 테이블 (6개)
+
+위 4개 외에 아래 6개가 함께 생성됩니다. 컬럼 정의는 각 SQL 파일을 참고하세요.
+
+| 테이블 | 정의 위치 | 용도 |
+|---|---|---|
+| `conversations` | `init/01-create-tables.sql` | 대화 세션 (thread_id 단위) |
+| `conversation_messages` | `init/01-create-tables.sql` | 대화 메시지 이력 |
+| `generated_messages` | `init/01-create-tables.sql` | 생성된 CRM 메시지 + 품질 점수 |
+| `users` | `init/02-auth-tables.sql` | 계정 (bcrypt 해시, role, 계정잠금 필드) |
+| `refresh_tokens` | `init/02-auth-tables.sql` | refresh 토큰 회전·폐기 관리 |
+| `rate_limits` | `init/06-add-rate-limits.sql` | PostgreSQL 기반 sliding-window Rate Limiter |
+
+#### 스키마 변경은 Alembic으로 관리합니다
+
+`init/*.sql`은 **컨테이너 최초 기동 시 빈 데이터 디렉터리에 한 번만** 적용됩니다
+(`/docker-entrypoint-initdb.d`). 이후의 스키마 변경은 Alembic이 담당합니다.
+
+```bash
+# DB API 컨테이너는 기동 시 자동으로 최신 리비전까지 적용한다
+#   command: sh -c "alembic upgrade head && uvicorn api_server:app ..."
+
+# 수동 적용 / 리비전 생성
+alembic upgrade head
+alembic revision --autogenerate -m "설명"
+alembic current          # 현재 리비전 확인
+```
+
+> 이미 데이터가 있는 볼륨에 `init/*.sql`은 재적용되지 않으므로, 운영 중 스키마를 바꿀 때는
+> 반드시 Alembic 리비전을 추가해야 합니다. `scripts/setup_pipeline.py`도 `alembic.ini`를
+> 참조합니다.
+
 ### Step 3: 상품 데이터 삽입
 - `data/product_data_for_db.jsonl` 파일에서 데이터 로드
 - PostgreSQL에 bulk insert
@@ -265,30 +325,25 @@ Sample products:
 
 ### 1. "Database connection failed"
 ```
-원인: PostgreSQL 서버가 실행되지 않았거나 연결 정보가 잘못됨
+원인: PostgreSQL 서버가 실행되지 않았거나 호스트에서 5432에 접근할 수 없음
 해결:
-  - PostgreSQL 서버 실행 확인
+  - docker compose ps 로 postgres 컨테이너 상태 확인
+  - 호스트에서 실행 중이라면 dev 오버레이가 올라와 있는지 확인
+      docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+    (기본 compose는 5432를 expose만 하므로 호스트에서 접근 불가)
   - .env 파일의 데이터베이스 정보 확인
-  - 방화벽 설정 확인
 ```
 
 ### 2. "상품 데이터 파일을 찾을 수 없습니다" (Product data file not found)
 ```
-원인: data/product_data_for_db.jsonl 파일이 없음
+원인: database/data/product_data_for_db.jsonl 을 찾지 못함
 해결:
-  ⚠️ 이 파일은 벡터 데이터베이스 색인 과정에서 자동 생성됩니다!
+  1. 파일 존재 확인 (저장소에 포함되어 있음)
+       ls -l database/data/product_data_for_db.jsonl
 
-  1. 먼저 벡터 데이터베이스에 상품 데이터를 색인하세요
-     → 벡터 인덱싱 스크립트를 실행
-     → 임베딩 생성 및 벡터DB 저장
+  2. 스크립트를 database/ 디렉터리에서 실행했는지 확인 (경로가 상대 기준)
 
-  2. 색인 완료 후 'data/product_data_for_db.jsonl' 파일이 생성됩니다
-
-  3. 파일이 생성되었는지 확인:
-     - 파일 위치: AI-INNOVATION-CHALLENGE-2026/data/product_data_for_db.jsonl
-     - 파일 크기가 0보다 커야 함
-
-  4. 파일이 확인되면 다시 데이터베이스 설정 스크립트 실행
+  3. 컨테이너 안에서 실행한다면 해당 경로가 이미지에 포함됐는지 확인
 ```
 
 ### 3. "Permission denied"

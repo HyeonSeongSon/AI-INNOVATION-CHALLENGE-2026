@@ -18,7 +18,6 @@ logger = get_logger("persona_analysis")
 def build_persona_info_analysis_prompt(persona_info: Dict[str, Any]) -> str:
     """
     페르소나 정보를 기반으로 다단계 × 다차원 분석 프롬프트 생성
-    (backend/app/agents/crm_agent/prompts/crm_recommend_products.py와 동일)
     """
     return f"""당신은 피부 과학, 화장품 성분, 뷰티 트렌드에 전문 지식을 가진 뷰티 분석 전문가입니다.
 
@@ -276,7 +275,6 @@ def build_persona_info_analysis_prompt(persona_info: Dict[str, Any]) -> str:
 def _map_to_persona_info(persona_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     페르소나 생성 데이터(영문 키) → CRM agent 표준 한국어 키 딕셔너리 변환
-    backend/app/agents/crm_agent/services/recommend_products.py의 get_persona_info()와 동일한 매핑
     """
     avg_sleep = persona_data.get("avg_sleep_hours")
     daily_screen = persona_data.get("daily_screen_hours")
