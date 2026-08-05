@@ -19,7 +19,7 @@
 
 ## 데모
 
-[![CRM 메시지 생성 시연 영상](https://img.youtube.com/vi/23KSwHrUyEM/maxresdefault.jpg)](https://www.youtube.com/watch?v=23KSwHrUyEM)
+[![CRM 메시지 생성 시연 영상](https://img.youtube.com/vi/WKnqT2n9VPw/maxresdefault.jpg)](https://youtu.be/WKnqT2n9VPw)
 
 **▶ 이미지를 클릭하면 시연 영상이 재생됩니다** — 채팅 입력 → SSE로 노드 진행 상황 실시간 출력
 → 페르소나 맞춤 상품 3개 추천 → CRM 메시지 생성
