@@ -1,0 +1,11 @@
+{
+  "_comment": [
+    "페르소나 product_tag -> 상품 서브태그 표기 정규화 맵.",
+    "human_annotated_eval_data_set.jsonl 의 product_tag 33종과",
+    "data/*.jsonl 의 서브태그를 대조해 불일치하는 항목만 등록한다.",
+    "여기 없는 태그는 양쪽 표기가 동일하다는 뜻이므로 그대로 비교한다."
+  ],
+  "persona_to_product": {
+    "수저/용기류": "수저"
+  }
+}
