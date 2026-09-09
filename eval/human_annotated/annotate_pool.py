@@ -165,6 +165,14 @@ def print_product(product):
     print()
 
 
+def print_rubric() -> None:
+    print("  [채점 기준]")
+    print("    2 = 적합    페르소나의 핵심 니즈(core_needs)를 상품이 직접 해결한다")
+    print("    1 = 보통    카테고리·맥락은 맞지만 핵심 니즈까지는 해결하지 못한다 (도움은 됨)")
+    print("    0 = 부적합  다른 고민/카테고리이거나, 페르소나가 명시한 회피 조건(avoid)을 위반한다")
+    print()
+
+
 def ask_rating(idx, total):
     while True:
         try:
@@ -234,6 +242,7 @@ def run_primary(args) -> None:
         print("  ※ Tier 1만으로는 컨피그 간 최종 비교를 신뢰할 수 없다 — "
               "이어서 --tier 2 를 전량 완료할 것.")
     print("=" * 70)
+    print_rubric()
 
     if not todo:
         print("  모두 완료되었습니다.")
@@ -414,6 +423,7 @@ def run_second_pass(args) -> None:
         f"(stratum={args.stratum}, seed={args.seed + 1})  |  남은 {len(todo)}건"
     )
     print("=" * 70)
+    print_rubric()
 
     if not todo:
         print("  표집분 모두 완료 — 자기일치도 리포트:")

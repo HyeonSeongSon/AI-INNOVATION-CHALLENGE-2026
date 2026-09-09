@@ -42,6 +42,7 @@ from weight_grid import (
     N_HARD_NEGATIVES,
     HARD_NEG_RANK_RANGE,
 )
+from seed_eval_personas import ensure_test_user
 
 BASE_DIR = Path(__file__).parent
 RESULT_DIR = BASE_DIR / "result"
@@ -78,9 +79,9 @@ def load_cache() -> dict:
 # ─────────────────────────────────────────────
 
 async def fetch_dimension_results(
-    persona_id: str, product_tag: str, recommender: ProductRecommender
+    persona_id: str, product_tag: str, recommender: ProductRecommender, user_id: str | None
 ) -> dict | None:
-    queries = await recommender.get_product_search_queries(persona_id, user_id=None)
+    queries = await recommender.get_product_search_queries(persona_id, user_id=user_id)
     if queries is None:
         return None
     retrieval_ids = await recommender.product_retriever(
@@ -101,12 +102,13 @@ async def fetch_one(
     semaphore: asyncio.Semaphore,
     done_ref: list,
     total: int,
+    user_id: str | None,
 ) -> tuple[str, dict | None]:
     persona_id = record["persona_id"]
     product_tag = record["product_tag"]
     async with semaphore:
         try:
-            result = await fetch_dimension_results(persona_id, product_tag, recommender)
+            result = await fetch_dimension_results(persona_id, product_tag, recommender, user_id)
             done_ref[0] += 1
             status = "ok" if result else "쿼리 캐시 없음"
             print(f"[{done_ref[0]}/{total}] {persona_id} ({product_tag}) — {status}")
@@ -205,11 +207,12 @@ async def main() -> None:
     print("─" * 70)
 
     if todo:
+        user_id = ensure_test_user()
         recommender = ProductRecommender()
         semaphore = asyncio.Semaphore(args.concurrency)
         done_ref = [0]
         results = await asyncio.gather(
-            *(fetch_one(r, recommender, semaphore, done_ref, len(todo)) for r in todo)
+            *(fetch_one(r, recommender, semaphore, done_ref, len(todo), user_id) for r in todo)
         )
         for persona_id, result in results:
             if result is not None:
