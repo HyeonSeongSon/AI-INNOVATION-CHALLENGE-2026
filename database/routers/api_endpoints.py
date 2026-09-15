@@ -900,7 +900,7 @@ async def filter_products(request: ProductFilterRequest, db: Session = Depends(g
         query = query.filter(Product.brand.in_(request.brands))
 
     if request.product_categories:
-        query = query.filter(Product.sub_tag.in_(request.product_categories))
+        query = query.filter(Product.tag.in_(request.product_categories))
 
     if request.exclusive_target:
         query = query.filter(Product.exclusive_product == request.exclusive_target)

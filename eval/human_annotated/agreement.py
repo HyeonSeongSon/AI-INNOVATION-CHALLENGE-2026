@@ -13,6 +13,10 @@ from collections import Counter
 
 RATINGS = [0, 1, 2]
 
+# annotate_pool.py(신규 풀 채점)는 0~3 4단계를 쓴다 — RATINGS는 과거 top5/judge_v4·v5
+# 분석(compare_v4.py 등, 영구히 0~2 고정 데이터)용으로 그대로 둔다.
+POOL_RATINGS = [0, 1, 2, 3]
+
 
 # ── 로드 ──────────────────────────────────────────────────────────────────────
 

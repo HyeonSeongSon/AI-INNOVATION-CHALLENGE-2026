@@ -47,6 +47,7 @@ from seed_eval_personas import ensure_test_user
 BASE_DIR = Path(__file__).parent
 RESULT_DIR = BASE_DIR / "result"
 PERSONA_FILE = BASE_DIR / "human_annotated_eval_data_set.jsonl"
+TAG_MAP_FILE = BASE_DIR / "tag_normalize.json"
 CACHE_FILE = RESULT_DIR / "dimension_results_cache.json"
 POOL_FILE = RESULT_DIR / "pool.jsonl"
 
@@ -74,12 +75,24 @@ def load_cache() -> dict:
     return {}
 
 
+def load_tag_normalizer():
+    """페르소나 product_tag를 실제 상품 tag 표기로 정규화 (judge_v4.py와 동일 파일/패턴)."""
+    with open(TAG_MAP_FILE, encoding="utf-8") as f:
+        mapping = json.load(f)["persona_to_product"]
+
+    def normalize(tag: str | None) -> str:
+        t = (tag or "").strip()
+        return mapping.get(t, t)
+
+    return normalize
+
+
 # ─────────────────────────────────────────────
 # Step 1 — 페르소나당 1회 fetch
 # ─────────────────────────────────────────────
 
 async def fetch_dimension_results(
-    persona_id: str, product_tag: str, recommender: ProductRecommender, user_id: str | None
+    persona_id: str, product_tag: str, recommender: ProductRecommender, user_id: str | None, normalize
 ) -> dict | None:
     queries = await recommender.get_product_search_queries(persona_id, user_id=user_id)
     if queries is None:
@@ -87,7 +100,7 @@ async def fetch_dimension_results(
     retrieval_ids = await recommender.product_retriever(
         retrieval_query=queries["retrieval"],
         brands=None,
-        sub_tags=[product_tag],
+        sub_tags=[normalize(product_tag)],
         retrieval_vector=None,
     )
     dimension_results = await recommender.get_product_documents(
@@ -103,12 +116,13 @@ async def fetch_one(
     done_ref: list,
     total: int,
     user_id: str | None,
+    normalize,
 ) -> tuple[str, dict | None]:
     persona_id = record["persona_id"]
     product_tag = record["product_tag"]
     async with semaphore:
         try:
-            result = await fetch_dimension_results(persona_id, product_tag, recommender, user_id)
+            result = await fetch_dimension_results(persona_id, product_tag, recommender, user_id, normalize)
             done_ref[0] += 1
             status = "ok" if result else "쿼리 캐시 없음"
             print(f"[{done_ref[0]}/{total}] {persona_id} ({product_tag}) — {status}")
@@ -208,11 +222,12 @@ async def main() -> None:
 
     if todo:
         user_id = ensure_test_user()
+        normalize = load_tag_normalizer()
         recommender = ProductRecommender()
         semaphore = asyncio.Semaphore(args.concurrency)
         done_ref = [0]
         results = await asyncio.gather(
-            *(fetch_one(r, recommender, semaphore, done_ref, len(todo), user_id) for r in todo)
+            *(fetch_one(r, recommender, semaphore, done_ref, len(todo), user_id, normalize) for r in todo)
         )
         for persona_id, result in results:
             if result is not None:

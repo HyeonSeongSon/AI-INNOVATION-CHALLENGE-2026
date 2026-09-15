@@ -130,7 +130,7 @@ def score_config(
                 unjudged_count += 1
                 r = 0
             selected_rels.append(r)
-            if r == 2 and first_rel2_rank is None:
+            if r >= 2 and first_rel2_rank is None:  # 2 또는 3 = 핵심 니즈 충족
                 first_rel2_rank = rank
 
         ideal_rels = sorted(persona_ratings.get(persona_id, []), reverse=True)[:top_n]

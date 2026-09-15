@@ -109,6 +109,8 @@ def build_autofill_map() -> dict[tuple, int]:
     autofill: dict[tuple, int] = {}
     for path in REFERENCE_FILES:
         for r in load_jsonl(path):
+            if r["rating"] == 2:
+                continue  # 구 3단계의 '2'는 신규 2/3 중 어느 쪽인지 알 수 없어 자동채움 제외
             key = (r["persona_id"], r["product_id"])
             if key not in autofill:
                 autofill[key] = r["rating"]
@@ -167,21 +169,22 @@ def print_product(product):
 
 def print_rubric() -> None:
     print("  [채점 기준]")
-    print("    2 = 적합    페르소나의 핵심 니즈(core_needs)를 상품이 직접 해결한다")
-    print("    1 = 보통    카테고리·맥락은 맞지만 핵심 니즈까지는 해결하지 못한다 (도움은 됨)")
-    print("    0 = 부적합  다른 고민/카테고리이거나, 페르소나가 명시한 회피 조건(avoid)을 위반한다")
+    print("    3 = 매우 적합  핵심 니즈를 해결하고, 선호 또는 조건 중 하나 이상과도 일치한다")
+    print("    2 = 적합      핵심 니즈(core_needs)를 상품이 직접 해결한다 (선호/조건은 불일치 또는 정보 없음)")
+    print("    1 = 보통      카테고리·맥락은 맞지만 핵심 니즈까지는 해결하지 못한다 (도움은 됨)")
+    print("    0 = 부적합    다른 고민/카테고리이거나, 페르소나가 명시한 회피 조건(avoid)을 위반한다")
     print()
 
 
 def ask_rating(idx, total):
     while True:
         try:
-            raw = input(f"  평점 입력 [{idx}/{total}] (0=부적합 / 1=보통 / 2=적합)  → ").strip()
+            raw = input(f"  평점 입력 [{idx}/{total}] (0=부적합 / 1=보통 / 2=적합 / 3=매우적합)  → ").strip()
         except EOFError:
             return None
-        if raw in ("0", "1", "2"):
+        if raw in ("0", "1", "2", "3"):
             return int(raw)
-        print("  ⚠  0, 1, 2 중 하나를 입력하세요.")
+        print("  ⚠  0, 1, 2, 3 중 하나를 입력하세요.")
 
 
 def save_record(path: Path, record: dict) -> None:
@@ -213,6 +216,27 @@ def build_tier_queue(pool: list[dict], tier: str) -> list[dict]:
     return list(pool)  # "all"
 
 
+def group_by_persona_shuffled(queue: list[dict], rng: random.Random) -> list[dict]:
+    """페르소나별로 묶어서 제시한다 — PersonaSpec을 매번 다시 읽는 부담을 줄이기 위함.
+    페르소나 등장 순서와 각 페르소나 내부 상품 순서는 둘 다 랜덤이다(상품 순서가
+    곧 추천 순위라는 힌트가 새지 않게). 같은 페르소나 상품을 연달아 보면 상대비교
+    편향이 생길 수 있다는 트레이드오프를 감수한 것 — 전역 플랫 셔플보다 빠르지만
+    페르소나 내부 상대비교 편향 위험은 더 크다."""
+    by_persona: dict[str, list[dict]] = defaultdict(list)
+    for r in queue:
+        by_persona[r["persona_id"]].append(r)
+
+    persona_ids = list(by_persona.keys())
+    rng.shuffle(persona_ids)
+
+    grouped: list[dict] = []
+    for pid in persona_ids:
+        items = by_persona[pid]
+        rng.shuffle(items)
+        grouped.extend(items)
+    return grouped
+
+
 def run_primary(args) -> None:
     _CURRENT_OUTPUT_FILE[0] = OUTPUT_FILE
     show_spec = not args.no_spec
@@ -225,7 +249,7 @@ def run_primary(args) -> None:
 
     queue = build_tier_queue(pool, args.tier)
     rng = random.Random(args.seed)
-    rng.shuffle(queue)  # 전역 플랫 셔플 — 페르소나 내부만 셔플하는 게 아님
+    queue = group_by_persona_shuffled(queue, rng)  # 페르소나별로 묶고, 내부는 랜덤 순서
 
     done = load_done_keys(OUTPUT_FILE)
     todo = [r for r in queue if key_of(r) not in done]
@@ -237,7 +261,7 @@ def run_primary(args) -> None:
     print("=" * 70)
     print(f"  풀 채점  |  tier={args.tier}  |  대상 {len(queue)}건 "
           f"(하드네거티브 {n_hard} / 싱글턴 {n_single} / multi-hit {n_multi})")
-    print(f"  남은 {len(todo)}건  |  PersonaSpec {'표시' if show_spec else '미표시'}")
+    print(f"  남은 {len(todo)}건  |  PersonaSpec {'표시' if show_spec else '미표시'}  |  제시 순서: 페르소나별 묶음(내부 랜덤)")
     if args.tier == "1":
         print("  ※ Tier 1만으로는 컨피그 간 최종 비교를 신뢰할 수 없다 — "
               "이어서 --tier 2 를 전량 완료할 것.")
@@ -314,7 +338,7 @@ def stratum_of(key: tuple, pool_by_key: dict) -> str | None:
 
 
 def print_second_pass_report(pool_by_key: dict) -> None:
-    from agreement import cohen_kappa, gwet_ac1, kappa_interpretation
+    from agreement import cohen_kappa, gwet_ac1, kappa_interpretation, POOL_RATINGS
 
     primary = {
         key_of(r): r["rating"] for r in load_jsonl(OUTPUT_FILE) if not r.get("auto_filled")
@@ -347,7 +371,7 @@ def print_second_pass_report(pool_by_key: dict) -> None:
         ra = [p[0] for p in pairs]
         rb = [p[1] for p in pairs]
         k = cohen_kappa(ra, rb)
-        ac1 = gwet_ac1(ra, rb)
+        ac1 = gwet_ac1(ra, rb, categories=POOL_RATINGS)
         print(f"  {stratum:<14}  {len(pairs):>4}  {k:>8.4f}  {ac1:>8.4f}  {kappa_interpretation(k)}")
         if stratum == "hard_negative":
             same_zero = sum(1 for a, b in pairs if a == 0 and b == 0)
