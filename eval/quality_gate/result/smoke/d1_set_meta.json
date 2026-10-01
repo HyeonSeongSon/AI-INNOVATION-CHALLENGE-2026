@@ -1,0 +1,32 @@
+{
+  "seed": 20260929,
+  "phrases_file": "result\\smoke\\d1_phrases_smoke.csv",
+  "n_phrases": 9,
+  "n_primary": 6,
+  "n_in_message": 2,
+  "excluded": [
+    {
+      "phrase_id": "S07",
+      "reason": "기능성 효능 유형은 D1 에서 제외(DB 에 인증 필드 없음)"
+    },
+    {
+      "phrase_id": "S08",
+      "reason": "헷지 층인데 hedge_basis(외부 근거) 없음"
+    },
+    {
+      "phrase_id": "S09",
+      "reason": "스모크 제외 규칙 확인"
+    }
+  ],
+  "template_type_freq": {
+    "주어 없음": 9,
+    "상품명 주어": 1,
+    "앞 절": 5
+  },
+  "rules": {
+    "non_hedge": "{} 효과가 있습니다.",
+    "hedge": "{}에 도움을 줍니다."
+  },
+  "cosmetic_source": "category(스모크 전용)",
+  "phrases_sha": "a3a6342b134ef273a9888bb4192a58b287f128d8446ec0182bdae7cc2b5f526d"
+}

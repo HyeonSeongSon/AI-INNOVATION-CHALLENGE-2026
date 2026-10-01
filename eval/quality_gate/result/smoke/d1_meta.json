@@ -1,0 +1,8 @@
+{
+  "run_at": "2026-09-29T09:52:49.811123+00:00",
+  "threshold": 0.85,
+  "ann_top_k": 3,
+  "exact_top_k": 100,
+  "n_items": 8,
+  "n_unique_sentences": 15
+}

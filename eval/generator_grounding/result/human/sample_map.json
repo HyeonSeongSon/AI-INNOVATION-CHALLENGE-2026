@@ -1,0 +1,248 @@
+{
+  "K001": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H049",
+    "stratum": "음성"
+  },
+  "K002": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H045",
+    "stratum": "양성"
+  },
+  "K003": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H014",
+    "stratum": "음성"
+  },
+  "K004": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H052",
+    "stratum": "양성"
+  },
+  "K005": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H029",
+    "stratum": "음성"
+  },
+  "K006": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H049",
+    "stratum": "음성"
+  },
+  "K007": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H062",
+    "stratum": "양성"
+  },
+  "K008": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H038",
+    "stratum": "음성"
+  },
+  "K009": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H024",
+    "stratum": "양성"
+  },
+  "K010": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H035",
+    "stratum": "음성"
+  },
+  "K011": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H016",
+    "stratum": "양성"
+  },
+  "K012": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H059",
+    "stratum": "양성"
+  },
+  "K013": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H037",
+    "stratum": "음성"
+  },
+  "K014": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H022",
+    "stratum": "음성"
+  },
+  "K015": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H043",
+    "stratum": "양성"
+  },
+  "K016": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H050",
+    "stratum": "음성"
+  },
+  "K017": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H034",
+    "stratum": "재검토"
+  },
+  "K018": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H057",
+    "stratum": "양성"
+  },
+  "K019": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H028",
+    "stratum": "음성"
+  },
+  "K020": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H026",
+    "stratum": "음성"
+  },
+  "K021": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H006",
+    "stratum": "양성"
+  },
+  "K022": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H010",
+    "stratum": "양성"
+  },
+  "K023": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H008",
+    "stratum": "양성"
+  },
+  "K024": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H004",
+    "stratum": "음성"
+  },
+  "K025": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H067",
+    "stratum": "재검토"
+  },
+  "K026": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H019",
+    "stratum": "음성"
+  },
+  "K027": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H063",
+    "stratum": "양성"
+  },
+  "K028": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H041",
+    "stratum": "음성"
+  },
+  "K029": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H053",
+    "stratum": "음성"
+  },
+  "K030": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H030",
+    "stratum": "양성"
+  },
+  "K031": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H033",
+    "stratum": "음성"
+  },
+  "K032": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H023",
+    "stratum": "양성"
+  },
+  "K033": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H052",
+    "stratum": "음성"
+  },
+  "K034": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H022",
+    "stratum": "음성"
+  },
+  "K035": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H051",
+    "stratum": "양성"
+  },
+  "K036": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H065",
+    "stratum": "양성"
+  },
+  "K037": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H020",
+    "stratum": "음성"
+  },
+  "K038": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H012",
+    "stratum": "양성"
+  },
+  "K039": {
+    "set": "holdout",
+    "tag": "before",
+    "item_id": "H020",
+    "stratum": "양성"
+  },
+  "K040": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H013",
+    "stratum": "음성"
+  },
+  "K041": {
+    "set": "holdout",
+    "tag": "after",
+    "item_id": "H054",
+    "stratum": "양성"
+  }
+}

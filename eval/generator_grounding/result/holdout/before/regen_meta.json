@@ -1,0 +1,20 @@
+{
+  "set": "holdout",
+  "tag": "before",
+  "generated_from": "2026-10-01T05:27:00.009509+00:00",
+  "generated_to": "2026-10-01T05:27:38.991227+00:00",
+  "n_inputs": 70,
+  "n_generated": 70,
+  "missing": [],
+  "failed_this_run": [],
+  "purpose_prompt": "ee98dca5006fe815f35899318b0a01e60bdddee1f404a49999082241df11ee9d",
+  "product_fields": "a1f5747718ff8d3f107fdaf754737128fdb108163ae0d9be8eaa3ecfb4c6f705",
+  "gate_files": {
+    "backend/app/agents/generate_message_agent/services/quality_check.py": "ba8ef5fb2725946bcd1753ed6ef941184611281a6cfaacd732011617e1a810c7",
+    "backend/app/agents/generate_message_agent/prompts/quality_check_prompt.py": "808d5629ade48d2050353fdf265d1dbc236c5a14d968498f56d0023bd81f075a",
+    "backend/app/agents/generate_message_agent/prompts/apply_feedback_prompt.py": "48f9c45d666b9982e6b68a87b6aa340ed84e36d9748960261256e284531b145d",
+    "backend/app/agents/generate_message_agent/nodes.py": "9650c9dfd18eb7c7bc004c9b396cd7b416bb9ca1d09ff232846882bb3ac8528d"
+  },
+  "model": "gpt-5-mini",
+  "temperature_setting": 0.7
+}

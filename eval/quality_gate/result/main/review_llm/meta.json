@@ -1,0 +1,16 @@
+{
+  "model_requested": "gpt-5.5-2026-04-23",
+  "models_returned": [
+    "gpt-5.5-2026-04-23"
+  ],
+  "reasoning_effort": "high",
+  "n_originals": 70,
+  "n_phrases": 126,
+  "n_unsupported_classified": 53,
+  "missing_after_retries": [],
+  "tokens": {
+    "prompt": 607500,
+    "completion": 450856
+  },
+  "updated_at": "2026-09-30T09:27:16.513969+00:00"
+}

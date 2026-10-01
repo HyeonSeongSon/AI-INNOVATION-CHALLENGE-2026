@@ -1,0 +1,145 @@
+{
+  "created_at": "2026-09-30T09:18:54.592765+00:00",
+  "seed": 20260930,
+  "rate": 0.2,
+  "originals": {
+    "O001": [
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O002": [
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O003": [
+      "LLM X: review_ok",
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O004": [
+      "LLM X: persona_product_fit",
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O005": [
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O006": [
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O007": [
+      "확신 낮음: persona_product_fit",
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O008": [
+      "LLM X: is_cosmetic",
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O009": [
+      "이미 사람이 채움(눈가림 비교 표본)"
+    ],
+    "O011": [
+      "확신 낮음: persona_product_fit"
+    ],
+    "O012": [
+      "LLM X: is_cosmetic"
+    ],
+    "O016": [
+      "LLM X: review_ok"
+    ],
+    "O018": [
+      "LLM X: is_cosmetic"
+    ],
+    "O019": [
+      "LLM X: persona_product_fit"
+    ],
+    "O020": [
+      "LLM X: persona_product_fit"
+    ],
+    "O022": [
+      "LLM X: is_cosmetic",
+      "확신 낮음: persona_product_fit"
+    ],
+    "O024": [
+      "LLM X: persona_product_fit"
+    ],
+    "O026": [
+      "확신 낮음: persona_product_fit"
+    ],
+    "O030": [
+      "LLM X: is_cosmetic"
+    ],
+    "O034": [
+      "LLM X: review_ok"
+    ],
+    "O035": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O037": [
+      "LLM X: persona_product_fit"
+    ],
+    "O039": [
+      "LLM X: is_cosmetic"
+    ],
+    "O041": [
+      "LLM X: is_cosmetic"
+    ],
+    "O042": [
+      "LLM X: is_cosmetic"
+    ],
+    "O044": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O045": [
+      "LLM X: review_ok",
+      "확신 낮음: persona_product_fit"
+    ],
+    "O046": [
+      "LLM X: persona_product_fit"
+    ],
+    "O052": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O053": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O056": [
+      "LLM X: persona_product_fit"
+    ],
+    "O057": [
+      "LLM X: persona_product_fit"
+    ],
+    "O058": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O059": [
+      "LLM X: review_ok"
+    ],
+    "O061": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O062": [
+      "LLM X: is_cosmetic"
+    ],
+    "O063": [
+      "무작위 20%(LLM O · 확신 높음)"
+    ],
+    "O064": [
+      "LLM X: is_cosmetic"
+    ],
+    "O065": [
+      "LLM X: persona_product_fit",
+      "확신 낮음: persona_product_fit"
+    ],
+    "O066": [
+      "LLM X: review_ok"
+    ]
+  },
+  "phrases": {
+    "P039": [
+      "LLM X"
+    ],
+    "P107": [
+      "LLM X"
+    ],
+    "P126": [
+      "LLM X"
+    ]
+  }
+}
