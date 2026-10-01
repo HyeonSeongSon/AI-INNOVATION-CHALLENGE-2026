@@ -1,0 +1,23 @@
+{
+  "locked_at": "2026-10-01T14:43:05.657647+00:00",
+  "purpose_prompt_v1": "a0ca00503b8ff6a5c901002886df64d19e816c3bc4f34c6e2790c23bfb3de000",
+  "persona_fit": "30b922722f763f8d1d6193427a7c7b42369735a14b1e7e321def0698c7e1c530",
+  "product_fields": "ee1011c9c92e04e4155a45f9bfab45e7e1244b05cf7a5f969aa6ed6f3f5518d8",
+  "fit_settings": {
+    "model": "gpt-5-mini",
+    "reasoning_effort": "minimal"
+  },
+  "gate": {
+    "backend/app/agents/generate_message_agent/services/quality_check.py": "ba8ef5fb2725946bcd1753ed6ef941184611281a6cfaacd732011617e1a810c7",
+    "backend/app/agents/generate_message_agent/prompts/quality_check_prompt.py": "808d5629ade48d2050353fdf265d1dbc236c5a14d968498f56d0023bd81f075a",
+    "backend/app/agents/generate_message_agent/prompts/apply_feedback_prompt.py": "48f9c45d666b9982e6b68a87b6aa340ed84e36d9748960261256e284531b145d",
+    "backend/app/agents/generate_message_agent/nodes.py": "9650c9dfd18eb7c7bc004c9b396cd7b416bb9ca1d09ff232846882bb3ac8528d"
+  },
+  "prereg_v2": {
+    "eval/generator_grounding_v2/grounding_def_v2.py": "d1b09858ae9220ff3e0a315b953f86ea7e00fea8eed75dd177e2ce6564e948e3",
+    "eval/generator_grounding_v2/measure_v2.py": "0a9dad90d1fe8f52f0ab537fe75afe069e3d4665bf2c4f0c84307adf0cd4fad7",
+    "eval/generator_grounding_v2/report_v2.py": "0a0d9e0e9d4f5787142b715bb9c0b3cd7d32e21e36e48ec707185254c078f9d0",
+    "eval/generator_grounding_v2/PREREG_v2.md": "eac02df678d9d317ed523e357d95096d35555facc7490a4f1b8080744a10fbcb"
+  },
+  "verifier_effort": "medium"
+}

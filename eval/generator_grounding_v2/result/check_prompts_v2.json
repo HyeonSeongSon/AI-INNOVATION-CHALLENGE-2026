@@ -1,0 +1,21 @@
+{
+  "checked_at": "2026-10-01T14:48:21.884638+00:00",
+  "passed": true,
+  "purpose_prompt": "e1aa2375baf4655f600a012a418a5a9910daa88bcbfcbe17e9d544db1ed30961",
+  "n_prompts": 980,
+  "v1_selfcheck": {
+    "ok": true,
+    "hits": {
+      "(반드시 반영)": true,
+      "메시지 전체에 자연스럽게 반영": true,
+      "이 한 가지가 달랐던 이유": true,
+      "검증된 베스트셀러 제품을 추천": true,
+      "바로 내 고민을 위한 것": true,
+      "해당 타입의 일반적 고민에서 출발": true,
+      "지금 제품 자세히 보기 — 사용법과 성분 확인": true,
+      "라벨과 제품 특징으로 시작)": true
+    }
+  },
+  "n_fail": 0,
+  "fails": []
+}

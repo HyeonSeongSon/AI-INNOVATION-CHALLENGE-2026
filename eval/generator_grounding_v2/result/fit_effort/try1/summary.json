@@ -1,0 +1,24 @@
+{
+  "minimal": {
+    "n_ok": 20,
+    "errors": 0,
+    "latency_median_s": 6.97,
+    "batch10_wall_s": 8.89,
+    "connectable_raw": 200,
+    "connectable_demoted": 6,
+    "fabricated_rate": 0.03,
+    "risky_pairs": 20
+  },
+  "low": {
+    "n_ok": 20,
+    "errors": 0,
+    "latency_median_s": 11.93,
+    "batch10_wall_s": 14.67,
+    "connectable_raw": 103,
+    "connectable_demoted": 4,
+    "fabricated_rate": 0.039,
+    "risky_pairs": 20
+  },
+  "choice": "지연 상한 초과 — 프롬프트 축소 후 재시험 필요",
+  "latency_cap_s": 3.0
+}

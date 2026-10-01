@@ -1,0 +1,8 @@
+{
+  "n": 70,
+  "risky": 70,
+  "fallback": 0,
+  "rerun_n": 40,
+  "risky_agreement": 1.0,
+  "connectable_need_jaccard_mean": 0.334
+}

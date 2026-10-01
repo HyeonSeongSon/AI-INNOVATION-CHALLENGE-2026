@@ -1,0 +1,280 @@
+{"item_id": "N004", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.8, 4.1]}
+{"item_id": "N002", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.41, 4.85]}
+{"item_id": "N002", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.02, 4.73]}
+{"item_id": "N003", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.13, 5.59]}
+{"item_id": "N001", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.28, 5.81]}
+{"item_id": "N001", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.51, 5.23]}
+{"item_id": "N003", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.47, 6.7]}
+{"item_id": "N004", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.57, 4.18]}
+{"item_id": "N005", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.23, 5.62]}
+{"item_id": "N006", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.95, 4.56]}
+{"item_id": "N007", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.41, 4.36]}
+{"item_id": "N008", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.54, 4.27]}
+{"item_id": "N005", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.25, 7.67]}
+{"item_id": "N008", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.55, 4.87]}
+{"item_id": "N007", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.75, 6.53]}
+{"item_id": "N006", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [12.3, 4.32]}
+{"item_id": "N009", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.58, 6.93]}
+{"item_id": "N009", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.34, 5.74]}
+{"item_id": "N010", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.46, 6.19]}
+{"item_id": "N011", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.49, 4.86]}
+{"item_id": "N012", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.73, 6.5]}
+{"item_id": "N010", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.44, 4.19]}
+{"item_id": "N011", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.46, 11.67]}
+{"item_id": "N012", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.61, 7.34]}
+{"item_id": "N013", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.73, 4.29]}
+{"item_id": "N013", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.37, 5.21]}
+{"item_id": "N015", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.97, 4.24]}
+{"item_id": "N015", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.13, 4.41]}
+{"item_id": "N014", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [7.58, 4.37]}
+{"item_id": "N014", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.2, 10.66]}
+{"item_id": "N018", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.98, 4.01]}
+{"item_id": "N018", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.35, 4.33]}
+{"item_id": "N017", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.07, 7.14]}
+{"item_id": "N017", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.99, 4.88]}
+{"item_id": "N019", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.24, 6.35]}
+{"item_id": "N016", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [12.04, 4.58]}
+{"item_id": "N019", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.17, 4.16]}
+{"item_id": "N020", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.22, 5.12]}
+{"item_id": "N020", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.16, 4.43]}
+{"item_id": "N021", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [7.33, 3.98]}
+{"item_id": "N021", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.43, 4.81]}
+{"item_id": "N022", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.39, 5.16]}
+{"item_id": "N016", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [14.71, 11.65]}
+{"item_id": "N022", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.3, 9.99]}
+{"item_id": "N024", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.55, 4.31]}
+{"item_id": "N023", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [7.19, 4.44]}
+{"item_id": "N025", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.42, 4.78]}
+{"item_id": "N023", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.77, 8.5]}
+{"item_id": "N026", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.59, 4.65]}
+{"item_id": "N024", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.24, 7.9]}
+{"item_id": "N027", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.78, 3.89]}
+{"item_id": "N027", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.53, 4.66]}
+{"item_id": "N028", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.56, 5.54]}
+{"item_id": "N029", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.25, 4.67]}
+{"item_id": "N025", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [13.88, 6.46]}
+{"item_id": "N030", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.03, 4.05]}
+{"item_id": "N030", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.99, 4.19]}
+{"item_id": "N029", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.56, 9.01]}
+{"item_id": "N031", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.41, 4.1]}
+{"item_id": "N026", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [18.0, 3.92]}
+{"item_id": "N032", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.51, 4.42]}
+{"item_id": "N032", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.4, 4.62]}
+{"item_id": "N033", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.23, 4.62]}
+{"item_id": "N033", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.61, 4.85]}
+{"item_id": "N034", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.06, 4.2]}
+{"item_id": "N034", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 5.92]}
+{"item_id": "N035", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.11, 4.05]}
+{"item_id": "N031", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [16.21, 4.52]}
+{"item_id": "N035", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.44, 6.38]}
+{"item_id": "N028", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.15, 27.67]}
+{"item_id": "N036", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.06, 4.65]}
+{"item_id": "N036", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.42, 4.81]}
+{"item_id": "N037", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.94, 4.64]}
+{"item_id": "N037", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.37, 4.56]}
+{"item_id": "N038", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.75, 4.57]}
+{"item_id": "N040", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.71, 4.09]}
+{"item_id": "N041", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.7, 4.12]}
+{"item_id": "N039", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 10.1]}
+{"item_id": "N042", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.33, 4.19]}
+{"item_id": "N040", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.46, 10.27]}
+{"item_id": "N041", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.49, 7.6]}
+{"item_id": "N038", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.02, 17.12]}
+{"item_id": "N042", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.6, 3.96]}
+{"item_id": "N043", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.22, 4.32]}
+{"item_id": "N044", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.73, 4.71]}
+{"item_id": "N044", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.54, 4.31]}
+{"item_id": "N045", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.41, 5.56]}
+{"item_id": "N045", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [7.53, 4.02]}
+{"item_id": "N046", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.57, 5.75]}
+{"item_id": "N043", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.07, 14.18]}
+{"item_id": "N039", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [19.39, 14.84]}
+{"item_id": "N047", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.73, 5.27]}
+{"item_id": "N047", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.53, 4.51]}
+{"item_id": "N046", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.79, 6.51]}
+{"item_id": "N048", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.27, 5.31]}
+{"item_id": "N049", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.16, 5.88]}
+{"item_id": "N051", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.33, 4.12]}
+{"item_id": "N050", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.96, 4.77]}
+{"item_id": "N049", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.46, 6.77]}
+{"item_id": "N051", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.81, 5.28]}
+{"item_id": "N052", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.81, 4.89]}
+{"item_id": "N050", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.22, 7.85]}
+{"item_id": "N053", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.69, 4.81]}
+{"item_id": "N054", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.38, 4.0]}
+{"item_id": "N052", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.42, 9.27]}
+{"item_id": "N055", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.98, 4.89]}
+{"item_id": "N048", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.99, 19.24]}
+{"item_id": "N054", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.04, 7.35]}
+{"item_id": "N055", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.79, 7.1]}
+{"item_id": "N053", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.67, 7.17]}
+{"item_id": "N056", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.61, 3.78]}
+{"item_id": "N057", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.19, 4.62]}
+{"item_id": "N058", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.67, 4.71]}
+{"item_id": "N058", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.76, 4.29]}
+{"item_id": "N059", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.02, 4.73]}
+{"item_id": "N059", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.26, 4.2]}
+{"item_id": "N060", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.35, 4.12]}
+{"item_id": "N061", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 4.58]}
+{"item_id": "N061", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.47, 5.5]}
+{"item_id": "N062", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.35, 4.07]}
+{"item_id": "N060", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.03, 10.55]}
+{"item_id": "N062", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 4.15]}
+{"item_id": "N057", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.88, 25.92]}
+{"item_id": "N063", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [7.62, 4.42]}
+{"item_id": "N064", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.17, 4.58]}
+{"item_id": "N056", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [28.77, 4.39]}
+{"item_id": "N064", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.62, 4.68]}
+{"item_id": "N063", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [11.37, 4.3]}
+{"item_id": "N065", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.35, 4.09]}
+{"item_id": "N066", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.3, 4.15]}
+{"item_id": "N065", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.34, 11.71]}
+{"item_id": "N067", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.56, 4.8]}
+{"item_id": "N067", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.13, 7.1]}
+{"item_id": "N066", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.32, 6.38]}
+{"item_id": "N068", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [8.84, 6.5]}
+{"item_id": "N069", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.87, 4.64]}
+{"item_id": "N070", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.76, 4.17]}
+{"item_id": "N069", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [5.97, 5.32]}
+{"item_id": "N070", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.37, 4.48]}
+{"item_id": "N068", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [6.55, 8.71]}
+{"item_id": "N001", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.35]}
+{"item_id": "N002", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.38]}
+{"item_id": "N002", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.66]}
+{"item_id": "N001", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.98]}
+{"item_id": "N004", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 4, "overall": 4.0}, "attempts": 1, "latency_s": [5.18]}
+{"item_id": "N003", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 4, "overall": 4.0}, "attempts": 1, "latency_s": [5.54]}
+{"item_id": "N004", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 4, "overall": 4.0}, "attempts": 1, "latency_s": [6.0]}
+{"item_id": "N003", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [6.37]}
+{"item_id": "N005", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.26]}
+{"item_id": "N005", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.87]}
+{"item_id": "N006", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.73]}
+{"item_id": "N007", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.56]}
+{"item_id": "N006", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.08]}
+{"item_id": "N007", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.56]}
+{"item_id": "N008", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.67]}
+{"item_id": "N008", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.44]}
+{"item_id": "N009", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.63]}
+{"item_id": "N010", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.67]}
+{"item_id": "N009", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [3.91]}
+{"item_id": "N010", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.13]}
+{"item_id": "N011", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.18]}
+{"item_id": "N011", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.31]}
+{"item_id": "N012", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.84]}
+{"item_id": "N012", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.96]}
+{"item_id": "N013", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 4, "overall": 4.0}, "attempts": 1, "latency_s": [4.67]}
+{"item_id": "N014", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.31]}
+{"item_id": "N014", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.06]}
+{"item_id": "N013", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.9]}
+{"item_id": "N015", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.46]}
+{"item_id": "N015", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.62]}
+{"item_id": "N016", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.8}, "attempts": 1, "latency_s": [4.6]}
+{"item_id": "N016", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.49]}
+{"item_id": "N017", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 4, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 3, "overall": 3.6}, "attempts": 1, "latency_s": [3.95]}
+{"item_id": "N017", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.35]}
+{"item_id": "N018", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.26]}
+{"item_id": "N019", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [3.46]}
+{"item_id": "N018", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.38]}
+{"item_id": "N019", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [3.42]}
+{"item_id": "N020", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.77]}
+{"item_id": "N020", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.28]}
+{"item_id": "N021", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.95]}
+{"item_id": "N021", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.13]}
+{"item_id": "N022", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.6]}
+{"item_id": "N023", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 4, "personalization": 2, "naturalness": 4, "cta_clarity": 5, "overall": 4.0}, "attempts": 1, "latency_s": [4.66]}
+{"item_id": "N022", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 3, "naturalness": 5, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [5.3]}
+{"item_id": "N024", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.72]}
+{"item_id": "N024", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.09]}
+{"item_id": "N023", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 4, "personalization": 2, "naturalness": 4, "cta_clarity": 5, "overall": 4.0}, "attempts": 1, "latency_s": [6.21]}
+{"item_id": "N025", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.05]}
+{"item_id": "N025", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.79]}
+{"item_id": "N026", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.96]}
+{"item_id": "N027", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [2.99]}
+{"item_id": "N027", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.12]}
+{"item_id": "N026", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.08]}
+{"item_id": "N028", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.35]}
+{"item_id": "N028", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 3, "overall": 3.8}, "attempts": 1, "latency_s": [5.72]}
+{"item_id": "N030", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.77]}
+{"item_id": "N029", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [5.21]}
+{"item_id": "N030", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 3, "overall": 3.8}, "attempts": 1, "latency_s": [4.82]}
+{"item_id": "N031", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.97]}
+{"item_id": "N031", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.06]}
+{"item_id": "N029", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.55]}
+{"item_id": "N033", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.56]}
+{"item_id": "N033", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.8}, "attempts": 1, "latency_s": [4.43]}
+{"item_id": "N032", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [5.68]}
+{"item_id": "N034", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [4.86]}
+{"item_id": "N034", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [5.15]}
+{"item_id": "N032", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 2, "personalization": 3, "naturalness": 4, "cta_clarity": 4, "overall": 3.6}, "attempts": 1, "latency_s": [6.08]}
+{"item_id": "N035", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.95]}
+{"item_id": "N035", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.24]}
+{"item_id": "N036", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.41]}
+{"item_id": "N036", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.94]}
+{"item_id": "N038", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.05]}
+{"item_id": "N037", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.37]}
+{"item_id": "N039", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.09]}
+{"item_id": "N039", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.69]}
+{"item_id": "N038", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.62]}
+{"item_id": "N037", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.87]}
+{"item_id": "N041", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.37]}
+{"item_id": "N040", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.46]}
+{"item_id": "N040", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 5, "cta_clarity": 3, "overall": 4.0}, "attempts": 1, "latency_s": [4.43]}
+{"item_id": "N043", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [3.56]}
+{"item_id": "N042", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.07]}
+{"item_id": "N042", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.09]}
+{"item_id": "N041", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.69]}
+{"item_id": "N043", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.1]}
+{"item_id": "N044", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.78]}
+{"item_id": "N045", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.51]}
+{"item_id": "N044", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.0]}
+{"item_id": "N045", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.69]}
+{"item_id": "N046", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.71]}
+{"item_id": "N046", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.88]}
+{"item_id": "N047", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.95]}
+{"item_id": "N047", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.59]}
+{"item_id": "N048", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.93]}
+{"item_id": "N049", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.99]}
+{"item_id": "N049", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.48]}
+{"item_id": "N048", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 4, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 4, "overall": 3.8}, "attempts": 1, "latency_s": [5.96]}
+{"item_id": "N050", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [4.45]}
+{"item_id": "N050", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.22]}
+{"item_id": "N051", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.11]}
+{"item_id": "N051", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [5.08]}
+{"item_id": "N054", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [3.07]}
+{"item_id": "N054", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.51]}
+{"item_id": "N055", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.99]}
+{"item_id": "N052", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 2, "tone": 2, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 3.2}, "attempts": 1, "latency_s": [5.88]}
+{"item_id": "N055", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.78]}
+{"item_id": "N052", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 4, "tone": 3, "personalization": 3, "naturalness": 4, "cta_clarity": 4, "overall": 3.6}, "attempts": 1, "latency_s": [6.28]}
+{"item_id": "N053", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [6.42]}
+{"item_id": "N053", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [7.19]}
+{"item_id": "N056", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 4, "tone": 2, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.78]}
+{"item_id": "N056", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 4, "tone": 2, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.35]}
+{"item_id": "N057", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.95]}
+{"item_id": "N057", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.55]}
+{"item_id": "N059", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.9]}
+{"item_id": "N058", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [4.72]}
+{"item_id": "N059", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.16]}
+{"item_id": "N058", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [6.13]}
+{"item_id": "N060", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 3, "overall": 3.8}, "attempts": 1, "latency_s": [4.19]}
+{"item_id": "N061", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.88]}
+{"item_id": "N061", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.21]}
+{"item_id": "N062", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.15]}
+{"item_id": "N060", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 3, "overall": 3.8}, "attempts": 1, "latency_s": [6.86]}
+{"item_id": "N064", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [2.87]}
+{"item_id": "N064", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.59]}
+{"item_id": "N062", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.86]}
+{"item_id": "N063", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 5, "personalization": 2, "naturalness": 5, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [5.44]}
+{"item_id": "N063", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 5, "personalization": 2, "naturalness": 5, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [5.48]}
+{"item_id": "N065", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.72]}
+{"item_id": "N065", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.17]}
+{"item_id": "N066", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.71]}
+{"item_id": "N067", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [3.52]}
+{"item_id": "N066", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.8]}
+{"item_id": "N067", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.44]}
+{"item_id": "N068", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.1]}
+{"item_id": "N068", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.26]}
+{"item_id": "N069", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.23]}
+{"item_id": "N069", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 3, "personalization": 3, "naturalness": 4, "cta_clarity": 4, "overall": 3.8}, "attempts": 1, "latency_s": [5.4]}
+{"item_id": "N070", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 3, "overall": 4.2}, "attempts": 1, "latency_s": [5.19]}
+{"item_id": "N070", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 3, "overall": 4.2}, "attempts": 1, "latency_s": [5.59]}

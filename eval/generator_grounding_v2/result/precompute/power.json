@@ -1,0 +1,27 @@
+{
+  "n": 70,
+  "llm_primary_rate": 0.214,
+  "calibration": {
+    "human_O": 2,
+    "of_llm_positive": 7,
+    "precision_95": [
+      0.082,
+      0.641
+    ]
+  },
+  "note": "1라운드 사람 판정은 v1 정의(8개 유형) 기준이라 새 유형(고민연결)의 정밀도를 낮게 잡는다 — 최악 가정이 보수적",
+  "scenarios": {
+    "worst": {
+      "precision": 0.082,
+      "true_rate": 0.018,
+      "min_relative_reduction": null
+    },
+    "best": {
+      "precision": 0.641,
+      "true_rate": 0.137,
+      "min_relative_reduction": null
+    }
+  },
+  "downgrade": true,
+  "rule": "최악 정밀도 가정의 최소 상대 감소가 50%보다 크면(또는 100%로도 80%에 못 미치면) 방향성 확인 라운드로 격하"
+}

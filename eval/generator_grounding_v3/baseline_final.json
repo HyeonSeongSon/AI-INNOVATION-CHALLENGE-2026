@@ -1,0 +1,30 @@
+{
+  "locked_at": "2026-10-01T17:02:07.219350+00:00",
+  "tools": {
+    "eval/generator_grounding_v2/grounding_def_v2.py": "d1b09858ae9220ff3e0a315b953f86ea7e00fea8eed75dd177e2ce6564e948e3",
+    "eval/generator_grounding_v2/measure_v2.py": "0a9dad90d1fe8f52f0ab537fe75afe069e3d4665bf2c4f0c84307adf0cd4fad7",
+    "eval/generator_grounding_v3/v3_common.py": "468406aa62af2ff1e9e8d942e7f968af9f98fb823e1d602e0c64e46facbfb08b",
+    "eval/generator_grounding_v3/final_main.py": "a3489e0e1e9f7e9a47ef9b0737b59bfa288d63e12473a7ad86d46116e942609c",
+    "eval/generator_grounding_v3/human_final.py": "f8dd5c0a535238e8b58c4a4b089ff5a7ca9be7b8bc4a084ad075c2062e4d8a28",
+    "eval/generator_grounding_v3/check_tool_final.py": "178dc3eb49ccbd8fe09beb53f313f1903347ffcb70c44ad045743ddbe89c6dfa",
+    "eval/generator_grounding_v3/check_tool_final_ui.html": "12f52afc840ca0c9cc0b08e220fc2b004803b4d9e98b9aa0165e328324e3c7a5",
+    "eval/generator_grounding_v3/PREREG_final.md": "4cab05977a0b8d52f959a7a14f617ac6955b3b1b5dff5fbadcdcb7351e4851a4"
+  },
+  "verifier": {
+    "model": "gpt-5.5-2026-04-23",
+    "effort": "medium"
+  },
+  "judge": {
+    "model": "gpt-5-mini",
+    "runs": 2
+  },
+  "v0": {
+    "commit": "e967b13",
+    "purpose_prompt_sha": "ee98dca5006fe815f35899318b0a01e60bdddee1f404a49999082241df11ee9d"
+  },
+  "sample": {
+    "seed": 20261011,
+    "n": 70,
+    "min_n": 60
+  }
+}
