@@ -57,3 +57,8 @@ eval/generator_grounding/result/*.log
 eval/generator_grounding/result/human/human_backup/
 eval/generator_grounding/result/pilot/inject_template.blank.csv
 eval/quality_gate/result/main/review_backup/2*_*.csv
+eval/generator_grounding_v2/result/**/*.log
+eval/generator_grounding_v2/result/fit_effort/backup/
+eval/generator_grounding_v2/result/main/latency_invalid_credit_exhausted.json
+eval/generator_grounding_v3/result/**/*.log
+eval/generator_grounding_v3/result/**/backup/
