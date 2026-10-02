@@ -31,9 +31,10 @@ async def lifespan(app: FastAPI):
     from app.agents.generate_message_agent.services.generate_crm_message import CrmMessageGenerator
     from app.agents.generate_message_agent.services.quality_check import QualityChecker
     from app.agents.generate_message_agent.services.apply_feedback import ApplyFeedback
+    from app.agents.generate_message_agent.prompts.persona_fit import PersonaFitter
 
     app.state.services = GenerateMessageServices(
-        generator=CrmMessageGenerator(),
+        generator=CrmMessageGenerator(persona_fitter=PersonaFitter()),  # 페르소나-상품 연결(fit) 주입 — 최종 측정 구성과 같게
         checker=QualityChecker(),
         applier=ApplyFeedback(),
     )

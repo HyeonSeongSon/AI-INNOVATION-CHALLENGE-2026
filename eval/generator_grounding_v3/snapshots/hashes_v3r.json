@@ -1,0 +1,7 @@
+{
+  "source": "AMENDMENTS id 17 (v3 개발 기록(v3r))",
+  "purpose_prompt.py": "07c07d2a88a4ea4ac24df836e9ef2d7059a91a7a043dff48e04f28043002f521",
+  "persona_fit.py": "e73ca08c4cbf3ceec395bb09dbd4ef6d1523dd1e265c57f9976077c6d5520826",
+  "product_fields.py": "ee1011c9c92e04e4155a45f9bfab45e7e1244b05cf7a5f969aa6ed6f3f5518d8",
+  "generate_crm_message.py": "e97758d2afe22665e2473cfd48e47000136469dda4892b140b5a6c1718a0f594"
+}

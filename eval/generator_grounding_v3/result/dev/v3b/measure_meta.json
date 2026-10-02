@@ -1,0 +1,20 @@
+{
+  "measured_at": "2026-10-01T18:14:25.780387+00:00",
+  "n": 70,
+  "verifier_model": "gpt-5.5-2026-04-23",
+  "verifier_effort": "medium",
+  "verifier_system_sha": "e5ebed364e86399c",
+  "judge_runs": 0,
+  "usage": {
+    "prompt": 314759,
+    "completion": 181303,
+    "reasoning": 158976
+  },
+  "prereg_v2": {
+    "eval/generator_grounding_v2/grounding_def_v2.py": "기준과 같음",
+    "eval/generator_grounding_v2/measure_v2.py": "기준과 같음",
+    "eval/generator_grounding_v2/report_v2.py": "기준과 같음",
+    "eval/generator_grounding_v2/PREREG_v2.md": "기준과 같음"
+  },
+  "verifier_missing": []
+}

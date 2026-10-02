@@ -1,0 +1,16 @@
+{
+  "added_median_10_s": 3.92,
+  "throughput_ratio_40": 1.35,
+  "generation_median_s": 17.23,
+  "raw": {
+    "10": {
+      "without": 0.0005396999995355145,
+      "with": 3.9194337999997515
+    },
+    "40": {
+      "without": 0.0024002999998629093,
+      "with": 5.954717300000084
+    }
+  },
+  "note": "get_crm_prompt 지연은 main_v2 와 같은 방식(현재 persona_fit 프롬프트로 실측)."
+}
