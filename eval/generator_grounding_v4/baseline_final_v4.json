@@ -1,0 +1,50 @@
+{
+  "locked_at": "2026-10-06T06:40:03.173001+00:00",
+  "tools": {
+    "eval/generator_grounding_v2/grounding_def_v2.py": "d1b09858ae9220ff3e0a315b953f86ea7e00fea8eed75dd177e2ce6564e948e3",
+    "eval/generator_grounding_v2/measure_v2.py": "0a9dad90d1fe8f52f0ab537fe75afe069e3d4665bf2c4f0c84307adf0cd4fad7",
+    "eval/generator_grounding_v3/v3_common.py": "468406aa62af2ff1e9e8d942e7f968af9f98fb823e1d602e0c64e46facbfb08b",
+    "eval/generator_grounding_v4/v4_common.py": "0b5fb17f3b7056d5decb1a8a885a74a8fd94b6d596c9bcc10ba844cf6ef734f1",
+    "eval/generator_grounding_v4/final_v4.py": "bf7f3ee021ef2e6c04a7e31e800f0975611e7893c896512d95a4b85f91c14242",
+    "eval/generator_grounding_v4/v0_generator.py": "f34c8d777a28970d24547bfa3c81f216c9ecb83dd18b6497e650eec1c3fa5cb5",
+    "eval/generator_grounding_v4/metrics_v4.py": "89489a1285fee3e6b5217a673f2118cc9c3dbe934e205ac2b39c5230aec5d911",
+    "eval/generator_grounding_v4/human_tool_v4.py": "e0b4e8816fcff12c4bf222f2ed58ac7b7355d9ad45d84537b99d926581596249",
+    "eval/generator_grounding_v4/HUMAN_RUBRIC.md": "341aec825c4c1923121a465e9403adbd674edf65ba83f1d8f2fbcb5e9ba8103f",
+    "eval/generator_grounding_v4/PREREG_final_v4.md": "e719d2125857afe23c3801187162b56fd4b9280599144141ce43b92a10850486",
+    "eval/generator_grounding_v3/snapshots/generate_crm_message_v3r.py": "e97758d2afe22665e2473cfd48e47000136469dda4892b140b5a6c1718a0f594",
+    "eval/generator_grounding_v3/snapshots/hashes_v3r.json": "67df47deb01e7970eb13438df2400923d4e25ec2f37e6dfc8c6e30ee75ceb470"
+  },
+  "final_version": {
+    "version": "v4",
+    "hashes": {
+      "backend/app/agents/generate_message_agent/prompts/persona_fit.py": "667ae8536cb9b9f20023ba4f25d43c2b65160fd0aee60a423fea41f5f561a56c",
+      "backend/app/agents/generate_message_agent/prompts/product_fields.py": "ee1011c9c92e04e4155a45f9bfab45e7e1244b05cf7a5f969aa6ed6f3f5518d8",
+      "backend/app/agents/generate_message_agent/prompts/purpose_prompt.py": "ab2a9da1f6cd8a0fc88a8c28da1c19969346b39ed2ab4381db3b5763641786ee",
+      "backend/app/agents/generate_message_agent/services/claim_check.py": "e9eeacba3b342f5be8511db42c56e5acb5666318ef5f5a46fc8ec3b414a66eff",
+      "backend/app/agents/generate_message_agent/services/generate_crm_message.py": "606d0959d67cc286485e830a5eb7315dac7d45b401041651f537673d8efced6e"
+    },
+    "entry": 33
+  },
+  "verifier": {
+    "model": "gpt-5.5-2026-04-23",
+    "effort": "medium"
+  },
+  "judge": {
+    "model": "gpt-5-mini",
+    "runs": 2
+  },
+  "persona_fit": {
+    "model": "gpt-5-mini",
+    "effort": "minimal"
+  },
+  "v0": {
+    "commit": "e967b13",
+    "purpose_prompt_sha": "ee98dca5006fe815f35899318b0a01e60bdddee1f404a49999082241df11ee9d"
+  },
+  "sample": {
+    "seed": 20261021,
+    "n": 85,
+    "min_n": 70,
+    "neg_per_cond": 12
+  }
+}

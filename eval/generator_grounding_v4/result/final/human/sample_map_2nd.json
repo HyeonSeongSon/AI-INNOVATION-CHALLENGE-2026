@@ -1,0 +1,170 @@
+{
+ "1": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R053",
+  "row_1st": "45"
+ },
+ "2": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R077",
+  "row_1st": "59"
+ },
+ "3": {
+  "cond": "v4",
+  "stratum": "양성",
+  "item_id": "R026",
+  "row_1st": "39"
+ },
+ "4": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R074",
+  "row_1st": "20"
+ },
+ "5": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R078",
+  "row_1st": "35"
+ },
+ "6": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R055",
+  "row_1st": "58"
+ },
+ "7": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R003",
+  "row_1st": "41"
+ },
+ "8": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R083",
+  "row_1st": "5"
+ },
+ "9": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R030",
+  "row_1st": "7"
+ },
+ "10": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R060",
+  "row_1st": "57"
+ },
+ "11": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R059",
+  "row_1st": "76"
+ },
+ "12": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R001",
+  "row_1st": "38"
+ },
+ "13": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R062",
+  "row_1st": "34"
+ },
+ "14": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R014",
+  "row_1st": "30"
+ },
+ "15": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R047",
+  "row_1st": "46"
+ },
+ "16": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R081",
+  "row_1st": "48"
+ },
+ "17": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R016",
+  "row_1st": "16"
+ },
+ "18": {
+  "cond": "v4",
+  "stratum": "양성",
+  "item_id": "R040",
+  "row_1st": "12"
+ },
+ "19": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R007",
+  "row_1st": "9"
+ },
+ "20": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R001",
+  "row_1st": "51"
+ },
+ "21": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R012",
+  "row_1st": "2"
+ },
+ "22": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R078",
+  "row_1st": "61"
+ },
+ "23": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R042",
+  "row_1st": "62"
+ },
+ "24": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R039",
+  "row_1st": "17"
+ },
+ "25": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R027",
+  "row_1st": "4"
+ },
+ "26": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R008",
+  "row_1st": "10"
+ },
+ "27": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R034",
+  "row_1st": "29"
+ },
+ "28": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R018",
+  "row_1st": "54"
+ }
+}

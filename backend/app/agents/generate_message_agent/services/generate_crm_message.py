@@ -1,4 +1,5 @@
 import asyncio
+from langchain_core.messages import AIMessage, HumanMessage
 from ....core.data_loader import get_brand_tone
 from ....core.llm_utils import ainvoke_with_retry
 from ....config.settings import settings
@@ -6,7 +7,8 @@ from ...shared.product.product_client import ProductClient
 from ...shared.persona.persona_client import PersonaClient
 from typing import Dict, List, Optional
 from ..prompts.purpose_prompt import PurPosePrompts
-from ..prompts.persona_fit import FIT_DISABLED, PersonaFitter, build_fit_section
+from ..prompts.persona_fit import FIT_DISABLED, PersonaFitter, build_fit_section, build_persona_view
+from . import claim_check
 from ....core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -115,22 +117,64 @@ class CrmMessageGenerator:
         """
         logger.info("get_crm_prompt.start", task_count=len(tasks))
 
+        # 생성 프롬프트의 페르소나는 거른다(이름 · 나이 · 성별 · 직업, 목적 7 만 라이프스타일까지 — V4).
+        # 원문 전체는 fit 입력으로만 쓴다.
         if self._persona_fitter is None or not persona_info:
             return [
-                {**item, "fit_status": FIT_DISABLED,
-                 "prompt": self._purpose_prompt_map[item["purpose"]](item["product_info"], item["brand_tone"], persona_info=persona_info)}
+                {**item, "fit_status": FIT_DISABLED, "fit": None,
+                 "prompt": self._purpose_prompt_map[item["purpose"]](
+                     item["product_info"], item["brand_tone"],
+                     persona_info=build_persona_view(persona_info, item["purpose"]))}
                 for item in tasks
             ]
 
-        # 페르소나-상품 연결을 태스크마다 병렬로 계산한다. 태스크에는 fit_status 만 남긴다(니즈 문구는 state 에 두지 않음).
+        # 페르소나-상품 연결을 태스크마다 병렬로 계산한다. fit 결과는 이 노드 안의 태스크에만 두고 생성 뒤 점검에 쓴다
+        # (state 에는 nodes.py 가 고른 필드만 들어가므로 니즈 문구가 남지 않는다).
         fits = await asyncio.gather(*(self._persona_fitter.fit(persona_info, item["product_info"]) for item in tasks))
         return [
-            {**item, "fit_status": fit.status,
+            {**item, "fit_status": fit.status, "fit": fit,
              "prompt": self._purpose_prompt_map[item["purpose"]](
-                 item["product_info"], item["brand_tone"], persona_info=persona_info,
+                 item["product_info"], item["brand_tone"],
+                 persona_info=build_persona_view(persona_info, item["purpose"]),
                  fit_section=build_fit_section(fit) if fit.status == "ok" else None)}
             for item, fit in zip(tasks, fits)
         ]
+
+    async def _invoke(self, llm, prompt):
+        return await ainvoke_with_retry(
+            llm, prompt,
+            semaphore_key="generate_crm_message",
+            max_concurrency=settings.generate_crm_message_max_concurrency,
+            max_retries=settings.generate_crm_message_max_retries,
+            backoff_base=settings.generate_crm_message_backoff_base,
+            logger=logger, retry_event="generate_crm_message_retry",
+        )
+
+    async def _generate_one(self, item: Dict, llm) -> Dict:
+        """한 태스크 생성 + 생성 뒤 점검(켜진 범주가 있을 때만) + 걸리면 1회 재생성.
+        점검 · 재생성이 실패하면 첫 결과를 쓰고 claim_check="error" 로 남긴다(생성 결과는 버리지 않는다)."""
+        first = await self._invoke(llm, item["prompt"])
+        if not claim_check.ENABLED_CATEGORIES:
+            return {**item, "message": first, "claim_check": "off", "claim_hits": []}
+        try:
+            parsed = claim_check.parse_message(first)
+            hits = claim_check.detect(parsed["title"], parsed["message"], item["product_info"], item.get("fit"),
+                                      categories=claim_check.ENABLED_CATEGORIES)
+            if not hits:
+                return {**item, "message": first, "claim_check": "none", "claim_hits": []}
+            content = first.content if hasattr(first, "content") else str(first)
+            retry_prompt = list(item["prompt"]) + [AIMessage(content=content),
+                                                   HumanMessage(content=claim_check.regenerate_note(hits))]
+            second = await self._invoke(llm, retry_prompt)
+            p2 = claim_check.parse_message(second)
+            hits2 = claim_check.detect(p2["title"], p2["message"], item["product_info"], item.get("fit"),
+                                       categories=claim_check.ENABLED_CATEGORIES)
+            logger.info("claim_check.regenerated", categories=sorted({h["cat"] for h in hits}), still_hit=bool(hits2))
+            return {**item, "message": second, "claim_check": "still_hit" if hits2 else "regenerated",
+                    "claim_hits": hits, "claim_hits_after": hits2}
+        except Exception as e:  # noqa: BLE001 — 점검이 깨져도 첫 결과는 살린다
+            logger.warning("claim_check.error", error_type=type(e).__name__)
+            return {**item, "message": first, "claim_check": "error", "claim_hits": []}
 
     async def generate_crm_message(self, tasks: List[Dict], llm) -> List[Dict]:
         """각 태스크의 프롬프트로 LLM을 병렬 호출하여 CRM 메시지를 생성.
@@ -144,23 +188,11 @@ class CrmMessageGenerator:
         """
         logger.info("generate_crm_message.start", task_count=len(tasks))
 
-        fetch_tasks = [
-            ainvoke_with_retry(
-                llm, item["prompt"],
-                semaphore_key="generate_crm_message",
-                max_concurrency=settings.generate_crm_message_max_concurrency,
-                max_retries=settings.generate_crm_message_max_retries,
-                backoff_base=settings.generate_crm_message_backoff_base,
-                logger=logger, retry_event="generate_crm_message_retry",
-            )
-            for item in tasks
-        ]
-        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        results = await asyncio.gather(*(self._generate_one(item, llm) for item in tasks), return_exceptions=True)
 
         messages = [
-            {**item, "message": message}
-            for item, message in zip(tasks, results)
-            if not isinstance(message, Exception) and message
+            res for res in results
+            if not isinstance(res, Exception) and res.get("message")
         ]
 
         skipped = sum(1 for r in results if isinstance(r, Exception))

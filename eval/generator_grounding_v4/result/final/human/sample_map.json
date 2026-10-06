@@ -1,0 +1,382 @@
+{
+ "1": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R023"
+ },
+ "2": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R012"
+ },
+ "3": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R052"
+ },
+ "4": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R027"
+ },
+ "5": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R083"
+ },
+ "6": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R048"
+ },
+ "7": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R030"
+ },
+ "8": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R073"
+ },
+ "9": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R007"
+ },
+ "10": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R008"
+ },
+ "11": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R061"
+ },
+ "12": {
+  "cond": "v4",
+  "stratum": "양성",
+  "item_id": "R040"
+ },
+ "13": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R085"
+ },
+ "14": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R082"
+ },
+ "15": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R007"
+ },
+ "16": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R016"
+ },
+ "17": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R039"
+ },
+ "18": {
+  "cond": "v0",
+  "stratum": "재검토",
+  "item_id": "R067"
+ },
+ "19": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R068"
+ },
+ "20": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R074"
+ },
+ "21": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R041"
+ },
+ "22": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R021"
+ },
+ "23": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R046"
+ },
+ "24": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R006"
+ },
+ "25": {
+  "cond": "v0",
+  "stratum": "재검토",
+  "item_id": "R076"
+ },
+ "26": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R016"
+ },
+ "27": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R055"
+ },
+ "28": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R066"
+ },
+ "29": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R034"
+ },
+ "30": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R014"
+ },
+ "31": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R084"
+ },
+ "32": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R070"
+ },
+ "33": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R037"
+ },
+ "34": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R062"
+ },
+ "35": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R078"
+ },
+ "36": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R028"
+ },
+ "37": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R008"
+ },
+ "38": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R001"
+ },
+ "39": {
+  "cond": "v4",
+  "stratum": "양성",
+  "item_id": "R026"
+ },
+ "40": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R063"
+ },
+ "41": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R003"
+ },
+ "42": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R019"
+ },
+ "43": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R002"
+ },
+ "44": {
+  "cond": "v0",
+  "stratum": "재검토",
+  "item_id": "R072"
+ },
+ "45": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R053"
+ },
+ "46": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R047"
+ },
+ "47": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R044"
+ },
+ "48": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R081"
+ },
+ "49": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R079"
+ },
+ "50": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R045"
+ },
+ "51": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R001"
+ },
+ "52": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R024"
+ },
+ "53": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R065"
+ },
+ "54": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R018"
+ },
+ "55": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R009"
+ },
+ "56": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R051"
+ },
+ "57": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R060"
+ },
+ "58": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R055"
+ },
+ "59": {
+  "cond": "v0",
+  "stratum": "음성",
+  "item_id": "R077"
+ },
+ "60": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R017"
+ },
+ "61": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R078"
+ },
+ "62": {
+  "cond": "v4",
+  "stratum": "음성",
+  "item_id": "R042"
+ },
+ "63": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R030"
+ },
+ "64": {
+  "cond": "v0",
+  "stratum": "재검토",
+  "item_id": "R062"
+ },
+ "65": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R003"
+ },
+ "66": {
+  "cond": "v0",
+  "stratum": "재검토",
+  "item_id": "R032"
+ },
+ "67": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R038"
+ },
+ "68": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R058"
+ },
+ "69": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R010"
+ },
+ "70": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R025"
+ },
+ "71": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R013"
+ },
+ "72": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R026"
+ },
+ "73": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R033"
+ },
+ "74": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R031"
+ },
+ "75": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R040"
+ },
+ "76": {
+  "cond": "v0",
+  "stratum": "양성",
+  "item_id": "R059"
+ }
+}

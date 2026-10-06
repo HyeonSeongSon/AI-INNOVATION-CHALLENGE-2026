@@ -1,0 +1,162 @@
+{
+ "1": {
+  "item_id": "N050",
+  "need_type": "concern"
+ },
+ "2": {
+  "item_id": "F002",
+  "need_type": "concern"
+ },
+ "3": {
+  "item_id": "N016",
+  "need_type": "preference"
+ },
+ "4": {
+  "item_id": "N060",
+  "need_type": "criterion"
+ },
+ "5": {
+  "item_id": "F053",
+  "need_type": "concern"
+ },
+ "6": {
+  "item_id": "F057",
+  "need_type": "preference"
+ },
+ "7": {
+  "item_id": "F043",
+  "need_type": "preference"
+ },
+ "8": {
+  "item_id": "N020",
+  "need_type": "preference"
+ },
+ "9": {
+  "item_id": "N058",
+  "need_type": "concern"
+ },
+ "10": {
+  "item_id": "N026",
+  "need_type": "preference"
+ },
+ "11": {
+  "item_id": "F031",
+  "need_type": "concern"
+ },
+ "12": {
+  "item_id": "F041",
+  "need_type": "preference"
+ },
+ "13": {
+  "item_id": "N020",
+  "need_type": "criterion"
+ },
+ "14": {
+  "item_id": "N020",
+  "need_type": "criterion"
+ },
+ "15": {
+  "item_id": "F027",
+  "need_type": "concern"
+ },
+ "16": {
+  "item_id": "N002",
+  "need_type": "concern"
+ },
+ "17": {
+  "item_id": "F059",
+  "need_type": "concern"
+ },
+ "18": {
+  "item_id": "N042",
+  "need_type": "preference"
+ },
+ "19": {
+  "item_id": "N024",
+  "need_type": "criterion"
+ },
+ "20": {
+  "item_id": "F038",
+  "need_type": "preference"
+ },
+ "21": {
+  "item_id": "N036",
+  "need_type": "concern"
+ },
+ "22": {
+  "item_id": "N039",
+  "need_type": "concern"
+ },
+ "23": {
+  "item_id": "N021",
+  "need_type": "preference"
+ },
+ "24": {
+  "item_id": "N065",
+  "need_type": "preference"
+ },
+ "25": {
+  "item_id": "N043",
+  "need_type": "preference"
+ },
+ "26": {
+  "item_id": "F003",
+  "need_type": "preference"
+ },
+ "27": {
+  "item_id": "F050",
+  "need_type": "preference"
+ },
+ "28": {
+  "item_id": "F028",
+  "need_type": "preference"
+ },
+ "29": {
+  "item_id": "N051",
+  "need_type": "criterion"
+ },
+ "30": {
+  "item_id": "N001",
+  "need_type": "preference"
+ },
+ "31": {
+  "item_id": "N068",
+  "need_type": "criterion"
+ },
+ "32": {
+  "item_id": "N056",
+  "need_type": "preference"
+ },
+ "33": {
+  "item_id": "F040",
+  "need_type": "concern"
+ },
+ "34": {
+  "item_id": "F065",
+  "need_type": "concern"
+ },
+ "35": {
+  "item_id": "N009",
+  "need_type": "concern"
+ },
+ "36": {
+  "item_id": "N046",
+  "need_type": "concern"
+ },
+ "37": {
+  "item_id": "F040",
+  "need_type": "concern"
+ },
+ "38": {
+  "item_id": "N011",
+  "need_type": "preference"
+ },
+ "39": {
+  "item_id": "N009",
+  "need_type": "concern"
+ },
+ "40": {
+  "item_id": "N017",
+  "need_type": "preference"
+ }
+}

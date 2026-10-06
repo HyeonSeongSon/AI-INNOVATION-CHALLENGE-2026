@@ -1,0 +1,200 @@
+{
+ "1": {
+  "group": "final",
+  "item_id": "F062",
+  "prev": "X",
+  "span": "들뜸 없이"
+ },
+ "2": {
+  "group": "dev",
+  "item_id": "N038",
+  "prev": "O",
+  "span": "잡티 커버에 도움"
+ },
+ "3": {
+  "group": "dev",
+  "item_id": "N035",
+  "prev": "O",
+  "span": "소량을 덜어"
+ },
+ "4": {
+  "group": "dev",
+  "item_id": "N035",
+  "prev": "O",
+  "span": "드라이 마무리 단계"
+ },
+ "5": {
+  "group": "final",
+  "item_id": "F047",
+  "prev": "X",
+  "span": "다르게 케어"
+ },
+ "6": {
+  "group": "dev",
+  "item_id": "N028",
+  "prev": "O",
+  "span": "땀으로 지워질까 걱정될 때 간편하게 바르세요"
+ },
+ "7": {
+  "group": "dev",
+  "item_id": "N057",
+  "prev": "O",
+  "span": "식사 후 더부룩하고 신경 쓰일 때?"
+ },
+ "8": {
+  "group": "filler",
+  "item_id": "F031",
+  "prev": "",
+  "span": "임상 수치"
+ },
+ "9": {
+  "group": "final",
+  "item_id": "F038",
+  "prev": "X",
+  "span": "케라틴·실크아미노산·세라마이드가 엉킴과 갈라짐을 완화"
+ },
+ "10": {
+  "group": "dev",
+  "item_id": "N035",
+  "prev": "O",
+  "span": "드라이 마무리"
+ },
+ "11": {
+  "group": "filler",
+  "item_id": "F014",
+  "prev": "",
+  "span": "메이크업 시간을 단축해줍니다"
+ },
+ "12": {
+  "group": "final",
+  "item_id": "F049",
+  "prev": "X",
+  "span": "민감하고"
+ },
+ "13": {
+  "group": "final",
+  "item_id": "F062",
+  "prev": "X",
+  "span": "파운데이션 들뜸으로 깔끔한 마무리가 고민이라면"
+ },
+ "14": {
+  "group": "filler",
+  "item_id": "N036",
+  "prev": "",
+  "span": "엉킴 38% 개선"
+ },
+ "15": {
+  "group": "final",
+  "item_id": "F049",
+  "prev": "X",
+  "span": "민감한 피부"
+ },
+ "16": {
+  "group": "final",
+  "item_id": "F026",
+  "prev": "X",
+  "span": "메이크업 전"
+ },
+ "17": {
+  "group": "dev",
+  "item_id": "N014",
+  "prev": "X",
+  "span": "드라이 전 젖은 모발"
+ },
+ "18": {
+  "group": "filler",
+  "item_id": "F046",
+  "prev": "",
+  "span": "잔여 오일과 초미세먼지를 부드럽게 흡착·세정"
+ },
+ "19": {
+  "group": "dev",
+  "item_id": "N048",
+  "prev": "O",
+  "span": "답답함을 느낄 때 산뜻한 보습을 원하신다면 워터 타입의 가벼운 사용감이 도움이 됩니다"
+ },
+ "20": {
+  "group": "final",
+  "item_id": "F028",
+  "prev": "X",
+  "span": "하루 종일 산뜻함 유지?"
+ },
+ "21": {
+  "group": "final",
+  "item_id": "F058",
+  "prev": "X",
+  "span": "한 스푼"
+ },
+ "22": {
+  "group": "filler",
+  "item_id": "N045",
+  "prev": "",
+  "span": "세안 직후 당김, 촉촉하게 틔우는 토너"
+ },
+ "23": {
+  "group": "filler",
+  "item_id": "N012",
+  "prev": "",
+  "span": "레드 시카™(TECA)는 열 오른 피부를 차분하게 진정시키고"
+ },
+ "24": {
+  "group": "filler",
+  "item_id": "N030",
+  "prev": "",
+  "span": "세안 후 당김 걱정은 그만"
+ },
+ "25": {
+  "group": "dev",
+  "item_id": "N057",
+  "prev": "O",
+  "span": "부담을 줄였습니다"
+ },
+ "26": {
+  "group": "final",
+  "item_id": "F038",
+  "prev": "X",
+  "span": "샴푸 한 번의 변화?"
+ },
+ "27": {
+  "group": "dev",
+  "item_id": "N047",
+  "prev": "O",
+  "span": "잔여감 걱정을 덜어주며"
+ },
+ "28": {
+  "group": "dev",
+  "item_id": "N029",
+  "prev": "O",
+  "span": "피부가 답답하고 세안이 걱정될 때"
+ },
+ "29": {
+  "group": "dev",
+  "item_id": "N014",
+  "prev": "O",
+  "span": "젖은 머리에"
+ },
+ "30": {
+  "group": "dev",
+  "item_id": "N001",
+  "prev": "O",
+  "span": "내장 블렌딩 솔이 눈가 자극을 최소화"
+ },
+ "31": {
+  "group": "filler",
+  "item_id": "F008",
+  "prev": "",
+  "span": "단백질 성분으로 모발에 즉각적인 볼륨을 부여하고 시간이 지나도 가라앉지 않도록 유지력을 높여주는"
+ },
+ "32": {
+  "group": "filler",
+  "item_id": "F006",
+  "prev": "",
+  "span": "목 넘김이 쉬워"
+ },
+ "33": {
+  "group": "filler",
+  "item_id": "F067",
+  "prev": "",
+  "span": "10% 할인 · 49500원(정가 55000원)"
+ }
+}

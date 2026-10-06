@@ -1,0 +1,59 @@
+{
+  "tag": "v4",
+  "passed": false,
+  "gates": {
+    "primary": true,
+    "all9": true,
+    "personalization": false,
+    "cta_clarity": true,
+    "tone": true,
+    "pass_rate": true,
+    "purpose": true,
+    "regen": false,
+    "format": false
+  },
+  "primary": {
+    "v3r": 12,
+    "v4": 2
+  },
+  "all9": {
+    "v3r": 18,
+    "v4": 5
+  },
+  "improved": {
+    "primary_positive": 11,
+    "llm_positive": 17
+  },
+  "worsened": {
+    "primary_positive": 1,
+    "llm_positive": 4
+  },
+  "quality": {
+    "personalization": {
+      "mean": -0.14285714285714285,
+      "lower": -0.21428571428571427
+    },
+    "cta_clarity": {
+      "mean": -0.02142857142857143,
+      "lower": -0.07142857142857142
+    },
+    "tone": {
+      "mean": -0.007142857142857143,
+      "lower": -0.05714285714285714
+    },
+    "pass_rate": {
+      "mean": -0.05714285714285714,
+      "lower": -0.08928571428571429
+    },
+    "purpose": {
+      "mean": 0.0,
+      "lower": -0.02142857142857143
+    }
+  },
+  "regen_rate": 0.10714285714285714,
+  "format_violations": 1,
+  "grounded_personalization": {
+    "v3r": 126,
+    "v4": 138
+  }
+}
