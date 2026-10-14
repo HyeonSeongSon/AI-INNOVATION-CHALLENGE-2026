@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>근거 확인</title>
+<style>
+  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1d1d1b; --mute:#6b6b66; --line:#e2e1dc; --accent:#2f5d9e;
+          --o:#b4372f; --x:#2e7d4f; --hl:#fff1b8; --chip:#eef1f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1b1b1a; --panel:#242423; --ink:#ecebe6; --mute:#a3a29c; --line:#3a3a37; --accent:#8db3ec;
+            --o:#ec8a82; --x:#7fcf9f; --hl:#5b4c12; --chip:#2f3440; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui, "Malgun Gothic", sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--panel); border-bottom:1px solid var(--line);
+           display:flex; gap:12px; align-items:center; padding:8px 16px; flex-wrap:wrap; }
+  header b { font-size:16px; }
+  button { font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:6px;
+           padding:4px 12px; cursor:pointer; }
+  button.on-O { background:var(--o); color:#fff; border-color:var(--o); }
+  button.on-X { background:var(--x); color:#fff; border-color:var(--x); }
+  .wrap { display:grid; grid-template-columns:150px 1fr; gap:16px; padding:16px; max-width:1400px; margin:0 auto; }
+  nav { position:sticky; top:60px; align-self:start; max-height:calc(100vh - 80px); overflow:auto; }
+  nav a { display:flex; justify-content:space-between; padding:3px 8px; border-radius:5px; color:var(--ink);
+          text-decoration:none; font-size:13px; }
+  nav a.cur { background:var(--chip); font-weight:600; }
+  nav .dot { width:8px; height:8px; border-radius:50%; margin-top:7px; background:var(--line); }
+  nav .dot.done { background:var(--accent); }
+  section.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+  h3 { margin:0 0 6px; font-size:14px; color:var(--mute); font-weight:600; }
+  .msg-title { font-weight:700; font-size:16px; }
+  .judge { display:grid; grid-template-columns:auto 1fr; gap:8px 12px; align-items:center; }
+  .judge input[type=text] { font:inherit; padding:4px 8px; border:1px solid var(--line); border-radius:6px;
+                             background:var(--panel); color:var(--ink); width:100%; }
+  .saved { color:var(--mute); font-size:12px; }
+  .err { color:var(--o); font-weight:600; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  td, th { border-top:1px solid var(--line); padding:6px; vertical-align:top; text-align:left; }
+  th { color:var(--mute); font-weight:600; }
+  .num { font-weight:700; color:var(--accent); white-space:nowrap; }
+  .chip { display:inline-block; background:var(--chip); border-radius:4px; padding:0 5px; margin:1px 2px; font-size:12px; }
+  .warn { color:var(--o); }
+  mark { background:var(--hl); color:inherit; }
+  pre { white-space:pre-wrap; font-size:12px; margin:0; }
+  details summary { cursor:pointer; color:var(--accent); }
+  .def { font-size:13px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width: 800px) { .wrap { grid-template-columns:1fr; } nav { position:static; max-height:none; }
+                              .grid2 { grid-template-columns:1fr; } }
+  kbd { border:1px solid var(--line); border-radius:3px; padding:0 4px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <b>근거 확인</b>
+  <span id="prog"></span>
+  <button id="prev">◀ 이전 <kbd>k</kbd></button>
+  <button id="next">다음 <kbd>j</kbd> ▶</button>
+  <button id="nextBlank">다음 빈칸</button>
+  <span class="saved" id="saved"></span>
+</header>
+<div class="wrap">
+  <nav id="nav"></nav>
+  <main id="main">불러오는 중…</main>
+</div>
+<script>
+let D = null, V = {}, cur = 0;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const done = c => (V[c]?.["unsupported_claim(O/X)"] || "") !== "" && (V[c]?.["purpose_conveyed(O/X)"] || "") !== "";
+
+async function load() {
+  D = await (await fetch("/api/data")).json();
+  V = D.values;
+  const first = D.items.findIndex(it => !done(it.code));
+  cur = first < 0 ? 0 : first;
+  render();
+}
+
+async function save(code, col, value) {
+  const r = await (await fetch("/api/save", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({code, col, value})})).json();
+  const el = document.getElementById("saved");
+  if (r.ok) { V[code][col] = value; el.className = "saved"; el.textContent = `${code} 저장 ${r.saved_at}`; }
+  else { el.className = "err"; el.textContent = r.error; }
+  renderNav(); renderProg();
+}
+
+function highlight(text, words) {
+  let t = esc(text);
+  for (const w of words || []) if (w) t = t.split(esc(w)).join(`<mark>${esc(w)}</mark>`);
+  return t;
+}
+
+function renderProg() {
+  const n = D.items.filter(it => done(it.code)).length;
+  document.getElementById("prog").textContent = `${n} / ${D.items.length} 완료 · ${cur + 1}번째`;
+}
+
+function renderNav() {
+  document.getElementById("nav").innerHTML = D.items.map((it, i) =>
+    `<a href="#" data-i="${i}" class="${i === cur ? "cur" : ""}">${it.code}<span class="dot ${done(it.code) ? "done" : ""}"></span></a>`).join("");
+  document.querySelectorAll("nav a").forEach(a => a.onclick = e => { e.preventDefault(); cur = +a.dataset.i; render(); });
+}
+
+function oxButtons(code, col) {
+  const v = V[code][col] || "";
+  return ["O", "X"].map(x => `<button data-col="${col}" data-v="${x}" class="${v === x ? "on-" + x : ""}">${x}</button>`).join(" ")
+    + ` <button data-col="${col}" data-v="">지우기</button>`;
+}
+
+function render() {
+  const it = D.items[cur], v = V[it.code];
+  const sentRows = it.sentences.map(s => {
+    const nums = s.numbers.map(n => `<span class="chip ${n.fields.length ? "" : "warn"}">${esc(n.n)} → ${n.fields.length ? esc(n.fields.join(", ")) : "상품정보에 없음"}${n.brand ? " · 브랜드 프로필에 있음" : ""}</span>`).join("");
+    const m = s.matches.map(m => `<div><span class="chip">${esc(m.field)}</span> ${highlight(m.text, m.hit)}</div>`).join("") || `<span class="warn">겹치는 상품정보 없음</span>`;
+    const brand = s.brand_overlap.length ? `<div class="chip">브랜드 프로필과 겹침: ${esc(s.brand_overlap.join(", "))}</div>` : "";
+    return `<tr><td class="num">${s.idx + 1}</td><td>${esc(s.text)}${nums ? "<div>" + nums + "</div>" : ""}</td><td>${m}${brand}</td></tr>`;
+  }).join("");
+  const product = it.product.map(p => `<div><span class="chip">${esc(p.field)}</span> ${esc(p.text)}</div>`).join("");
+  const boundary = D.boundary.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("");
+  document.getElementById("main").innerHTML = `
+    <section class="card">
+      <h3>${esc(it.code)} · 발송 목적: ${esc(it.purpose)} · 브랜드: ${esc(it.brand)}</h3>
+      <div class="msg-title">${esc(it.title)}</div>
+      <div>${esc(it.message)}</div>
+    </section>
+    <section class="card judge">
+      <span>근거 없는 상품 사실 주장이 <b>있다</b>(O) / 없다(X) <kbd>o</kbd><kbd>x</kbd></span><span>${oxButtons(it.code, "unsupported_claim(O/X)")}</span>
+      <span>해당 문장 번호 (예: 2, 4)</span><input type="text" id="sent" value="${esc(v.sentences)}">
+      <span>발송 목적이 전달된다(O) / 아니다(X)</span><span>${oxButtons(it.code, "purpose_conveyed(O/X)")}</span>
+      <span>메모</span><input type="text" id="memo" value="${esc(v.memo)}">
+    </section>
+    <section class="card">
+      <h3>문장별 상품정보 대응 (명사가 겹치는 필드 · 숫자 위치 — 자동 힌트이며 판정이 아님)</h3>
+      <table><tr><th>#</th><th>문장</th><th>겹치는 상품정보</th></tr>${sentRows}</table>
+    </section>
+    <div class="grid2">
+      <section class="card"><h3>페르소나</h3><pre>${esc(it.persona)}</pre></section>
+      <section class="card"><h3>상품 요약</h3>${product}</section>
+    </div>
+    <section class="card">
+      <details open><summary>판정 정의 (LLM 검증과 같은 문장)</summary>
+        <p class="def">${esc(D.definition)}</p>
+        <table class="def"><tr><th>표현</th><th>판정</th></tr>${boundary}</table>
+      </details>
+      <details><summary>상품정보 전체 (스냅숏)</summary><pre>${esc(JSON.stringify(it.snapshot, null, 2))}</pre></details>
+      <details><summary>브랜드 프로필 (LLM 생성 · 여기에만 있는 사실은 근거 없음)</summary><pre>${esc(it.brand_profile || "(없음)")}</pre></details>
+    </section>`;
+  document.querySelectorAll(".judge button").forEach(b => b.onclick = () => save(it.code, b.dataset.col, b.dataset.v).then(render));
+  for (const [id, col] of [["sent", "sentences"], ["memo", "memo"]]) {
+    const el = document.getElementById(id);
+    el.onchange = () => save(it.code, col, el.value);
+  }
+  renderNav(); renderProg();
+  window.scrollTo(0, 0);
+}
+
+function go(d) { cur = Math.max(0, Math.min(D.items.length - 1, cur + d)); render(); }
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+document.getElementById("nextBlank").onclick = () => {
+  const n = D.items.length;
+  for (let k = 1; k <= n; k++) { const i = (cur + k) % n; if (!done(D.items[i].code)) { cur = i; render(); return; } }
+};
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const code = D?.items[cur]?.code;
+  if (!code) return;
+  if (e.key === "j") go(1);
+  else if (e.key === "k") go(-1);
+  else if (e.key === "o" || e.key === "x") save(code, "unsupported_claim(O/X)", e.key.toUpperCase()).then(render);
+});
+load();
+</script>
+</body>
+</html>

@@ -196,7 +196,7 @@ class DatabaseSetupPipeline:
                             vectordb_id=data.get('vectordb_id'),
                             product_name=data.get('상품명', ''),
                             brand=data.get('브랜드'),
-                            product_tag=data.get('태그'),
+                            tag=data.get('태그'),
                             rating=data.get('별점'),
                             review_count=data.get('리뷰_갯수', 0),
                             original_price=data.get('원가'),

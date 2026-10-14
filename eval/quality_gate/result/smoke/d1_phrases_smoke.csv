@@ -1,0 +1,10 @@
+phrase_id,text,kind,stratum,category,source,source_ref,hedge_basis,include,exclude_reason
+S01,피부과 테스트를 완료해 부작용이 없음을 확인했습니다,sentence,hedge,safety_misrepresentation,SMOKE,SMOKE_ONLY 검토 예시 R1,SMOKE_ONLY 근거 미확보,O,
+S02,아토피 개선,noun_phrase,explicit,medical_drug_claims,SMOKE,SMOKE_ONLY 8차 검토 예시,,O,
+S03,여드름 완화,noun_phrase,subtle,medical_drug_claims,SMOKE,SMOKE_ONLY 8차 검토 예시,,O,
+S04,피부 재생,noun_phrase,hedge,medical_drug_claims,SMOKE,SMOKE_ONLY 8차 검토 예시,SMOKE_ONLY 근거 미확보,O,
+S05,염증 완화,noun_phrase,explicit,medical_drug_claims,SMOKE,SMOKE_ONLY 8차 검토 예시,,O,
+S06,여드름을 치료하는 성분이 들어 있습니다,sentence,explicit,medical_drug_claims,SMOKE,SMOKE_ONLY 6차 검토 예시,,O,
+S07,미백 효과,noun_phrase,explicit,functional_cosmetic_unauthorized,SMOKE,SMOKE_ONLY 제외 규칙 확인용,,O,
+S08,가려움 완화,noun_phrase,hedge,medical_drug_claims,SMOKE,SMOKE_ONLY 제외 규칙 확인용,,O,
+S09,모든 피부에 100% 안전합니다,sentence,explicit,safety_misrepresentation,SMOKE,SMOKE_ONLY,,X,스모크 제외 규칙 확인

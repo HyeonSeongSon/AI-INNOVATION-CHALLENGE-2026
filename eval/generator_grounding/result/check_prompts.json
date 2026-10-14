@@ -1,0 +1,9 @@
+{
+  "checked_at": "2026-10-01T05:32:50.456915+00:00",
+  "passed": true,
+  "purpose_prompt": "a0ca00503b8ff6a5c901002886df64d19e816c3bc4f34c6e2790c23bfb3de000",
+  "product_fields": "a1f5747718ff8d3f107fdaf754737128fdb108163ae0d9be8eaa3ecfb4c6f705",
+  "n_prompts": 490,
+  "n_fail": 0,
+  "fails": []
+}

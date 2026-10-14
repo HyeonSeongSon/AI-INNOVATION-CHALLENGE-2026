@@ -1,0 +1,19 @@
+{"item_id": "C1:O015", "sentence": "재구매율 1위로 많은 분들이 다시 찾는 샴푸입니다.", "type": "판매인기", "expected": "근거 없음"}
+{"item_id": "C1:O015", "sentence": "묵직한 오일 제형이라 헹군 뒤에도 촉촉한 코팅감이 오래 남습니다.", "type": "특성어긋남", "expected": "근거 없음"}
+{"item_id": "C1:O015", "sentence": "미국 비건액션 비건 인증을 받은 제품입니다.", "type": "음성대조", "expected": "근거 있음"}
+{"item_id": "C2:O027", "sentence": "안과 테스트를 완료한 팔레트예요.", "type": "시험인증", "expected": "근거 없음"}
+{"item_id": "C2:O027", "sentence": "2026년 10월 15일까지만 한정 판매되는 에디션이에요.", "type": "날짜", "expected": "근거 없음"}
+{"item_id": "C2:O027", "sentence": "민감성 피부와 예민한 눈가에도 적합해요.", "type": "적합대상", "expected": "근거 없음"}
+{"item_id": "C3:O051", "sentence": "한 번 바르면 보습이 12시간 지속됩니다.", "type": "수치", "expected": "근거 없음"}
+{"item_id": "C3:O051", "sentence": "기존 제품보다 발림성이 한층 부드러워지도록 리뉴얼됐어요.", "type": "변화차별", "expected": "근거 없음"}
+{"item_id": "C3:O051", "sentence": "2024 상반기 올리브영 어워즈 남성 메이크업 부문 1위를 차지한 립밤입니다.", "type": "음성대조", "expected": "근거 있음"}
+{"item_id": "C4:O069", "sentence": "전문가에게 검증된 처방으로 만들었어요.", "type": "검증주장", "expected": "근거 없음"}
+{"item_id": "C4:O069", "sentence": "곱슬모와 지성 두피에도 잘 맞아요.", "type": "적합대상", "expected": "근거 없음"}
+{"item_id": "C4:O069", "sentence": "시험 결과 끝 갈라짐이 55% 감소했어요.", "type": "음성대조", "expected": "근거 있음"}
+{"item_id": "C5:O017", "sentence": "2026년 9월 29일 새롭게 출시됐어요.", "type": "날짜", "expected": "근거 없음"}
+{"item_id": "C5:O017", "sentence": "더마테스트 엑설런트 등급을 받은 쿠션이에요.", "type": "시험인증", "expected": "근거 없음"}
+{"item_id": "C5:O017", "sentence": "퍼프 한 번이면 커버력이 12시간 유지돼요.", "type": "수치", "expected": "근거 없음"}
+{"item_id": "C3:O051", "sentence": "입술 착색이 고민인 분께 딱 맞는 립밤이에요.", "type": "근거없는고민연결", "expected": "근거 없음"}
+{"item_id": "C3:O051", "sentence": "입술 건조함이 고민인 분께 잘 맞는 립밤이에요.", "type": "음성대조", "expected": "근거 있음"}
+{"item_id": "C4:O069", "sentence": "사용 2일 만에 모발강화율 132%를 확인했어요.", "type": "수치", "expected": "근거 없음"}
+{"item_id": "C2:O027", "sentence": "리뷰 1,783건이 검증한 팔레트예요.", "type": "검증주장", "expected": "근거 없음"}

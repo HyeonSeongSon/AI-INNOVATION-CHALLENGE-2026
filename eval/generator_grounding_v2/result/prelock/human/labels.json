@@ -1,0 +1,77 @@
+{
+  "K007": {
+    "tag": "after",
+    "item_id": "H062",
+    "human": "O"
+  },
+  "K035": {
+    "tag": "after",
+    "item_id": "H051",
+    "human": "O"
+  },
+  "K030": {
+    "tag": "before",
+    "item_id": "H030",
+    "human": "O"
+  },
+  "K032": {
+    "tag": "before",
+    "item_id": "H023",
+    "human": "O"
+  },
+  "K036": {
+    "tag": "before",
+    "item_id": "H065",
+    "human": "O"
+  },
+  "K002": {
+    "tag": "before",
+    "item_id": "H045",
+    "human": "X"
+  },
+  "K011": {
+    "tag": "after",
+    "item_id": "H016",
+    "human": "X"
+  },
+  "K012": {
+    "tag": "after",
+    "item_id": "H059",
+    "human": "X"
+  },
+  "K015": {
+    "tag": "before",
+    "item_id": "H043",
+    "human": "X"
+  },
+  "K021": {
+    "tag": "before",
+    "item_id": "H006",
+    "human": "X"
+  },
+  "K025": {
+    "tag": "after",
+    "item_id": "H067",
+    "human": "X"
+  },
+  "K027": {
+    "tag": "after",
+    "item_id": "H063",
+    "human": "X"
+  },
+  "K039": {
+    "tag": "before",
+    "item_id": "H020",
+    "human": "X"
+  },
+  "K041": {
+    "tag": "after",
+    "item_id": "H054",
+    "human": "X"
+  },
+  "K038": {
+    "tag": "before",
+    "item_id": "H012",
+    "human": "X"
+  }
+}

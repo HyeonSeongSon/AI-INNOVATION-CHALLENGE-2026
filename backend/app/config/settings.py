@@ -240,6 +240,13 @@ class Settings(BaseSettings):
     apply_feedback_max_concurrency: int = 40
     apply_feedback_backoff_base: float = 0.5
 
+    # 페르소나-상품 연결 계산(persona_fit) — 생성 앞에 직렬로 붙는 호출이라 추론 강도를 낮게 둔다
+    persona_fit_model_name: str = ""  # 비우면 chatgpt_model_name
+    persona_fit_reasoning_effort: str = "minimal"
+    persona_fit_max_retries: int = 2
+    persona_fit_max_concurrency: int = 40
+    persona_fit_backoff_base: float = 0.5
+
     conversation_summarize_max_retries: int = 2
     conversation_summarize_max_concurrency: int = 40
     conversation_summarize_backoff_base: float = 0.5

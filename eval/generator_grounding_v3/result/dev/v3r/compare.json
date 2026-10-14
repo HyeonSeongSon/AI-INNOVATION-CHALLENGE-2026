@@ -1,0 +1,52 @@
+{
+  "tag": "v3r",
+  "passed": true,
+  "gates": {
+    "primary": true,
+    "all9": true,
+    "cta_clarity": true,
+    "personalization": true,
+    "pass_rate": true,
+    "tone": true,
+    "purpose": true
+  },
+  "primary": {
+    "v1": 15,
+    "v2": 7,
+    "v3r": 9
+  },
+  "all9": {
+    "v1": 22,
+    "v2": 11,
+    "v3r": 11
+  },
+  "quality": {
+    "cta_clarity": {
+      "mean": 0.18571428571428572,
+      "lower": 0.10714285714285714
+    },
+    "personalization": {
+      "mean": 0.014285714285714285,
+      "lower": -0.07142857142857142
+    },
+    "pass_rate": {
+      "mean": 0.03571428571428571,
+      "lower": 0.0
+    },
+    "tone": {
+      "mean": 0.0,
+      "lower": -0.07857142857142857
+    },
+    "purpose": {
+      "mean": 0.0,
+      "lower": -0.02857142857142857
+    }
+  },
+  "judge_fail": {
+    "v1": 6,
+    "v2": 10,
+    "v3r": 5
+  },
+  "zero_concern": 12,
+  "date_from_created_at": 0
+}

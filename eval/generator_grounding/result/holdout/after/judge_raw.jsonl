@@ -1,0 +1,280 @@
+{"item_id": "H002", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.69, 4.19]}
+{"item_id": "H004", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.13, 4.04]}
+{"item_id": "H002", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.2, 4.21]}
+{"item_id": "H001", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.39, 4.03]}
+{"item_id": "H004", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.12, 4.31]}
+{"item_id": "H003", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.28, 4.32]}
+{"item_id": "H003", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.17, 4.47]}
+{"item_id": "H001", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.19, 5.12]}
+{"item_id": "H005", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.31, 4.0]}
+{"item_id": "H006", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.11, 3.96]}
+{"item_id": "H007", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.04, 4.0]}
+{"item_id": "H007", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 4.09]}
+{"item_id": "H006", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.25, 4.14]}
+{"item_id": "H005", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.06, 4.75]}
+{"item_id": "H008", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.79, 4.01]}
+{"item_id": "H008", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.65, 3.93]}
+{"item_id": "H009", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.89, 4.31]}
+{"item_id": "H011", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.69, 4.24]}
+{"item_id": "H010", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.04, 4.24]}
+{"item_id": "H009", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.13, 4.74]}
+{"item_id": "H011", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 4.19]}
+{"item_id": "H012", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.09, 4.16]}
+{"item_id": "H010", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.81, 4.18]}
+{"item_id": "H012", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.11, 4.42]}
+{"item_id": "H013", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.87, 4.06]}
+{"item_id": "H014", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.07, 3.96]}
+{"item_id": "H013", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.45, 4.07]}
+{"item_id": "H014", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.16, 4.28]}
+{"item_id": "H016", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.91, 3.95]}
+{"item_id": "H015", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.19, 4.45]}
+{"item_id": "H016", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.27, 4.31]}
+{"item_id": "H015", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.3, 4.66]}
+{"item_id": "H017", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.25, 4.15]}
+{"item_id": "H017", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.95, 4.02]}
+{"item_id": "H018", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.32, 3.87]}
+{"item_id": "H019", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.68, 4.31]}
+{"item_id": "H018", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.11, 4.32]}
+{"item_id": "H020", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.87, 4.29]}
+{"item_id": "H019", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.03, 4.27]}
+{"item_id": "H020", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.31, 4.27]}
+{"item_id": "H021", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.15, 4.33]}
+{"item_id": "H021", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.11, 4.34]}
+{"item_id": "H022", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.44, 4.1]}
+{"item_id": "H022", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 4.39]}
+{"item_id": "H023", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.49, 3.96]}
+{"item_id": "H023", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.15, 3.88]}
+{"item_id": "H024", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.34, 3.91]}
+{"item_id": "H024", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.13, 4.53]}
+{"item_id": "H025", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 4.31]}
+{"item_id": "H025", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 4.43]}
+{"item_id": "H026", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.85, 4.46]}
+{"item_id": "H027", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.0, 4.25]}
+{"item_id": "H026", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.36, 4.23]}
+{"item_id": "H027", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.09, 4.14]}
+{"item_id": "H028", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.38, 4.01]}
+{"item_id": "H028", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.2, 4.54]}
+{"item_id": "H029", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.87, 3.69]}
+{"item_id": "H029", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.0, 4.14]}
+{"item_id": "H030", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.93, 4.08]}
+{"item_id": "H031", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.95, 4.23]}
+{"item_id": "H031", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.1, 4.16]}
+{"item_id": "H030", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.1, 4.26]}
+{"item_id": "H032", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.43, 4.24]}
+{"item_id": "H032", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.06, 4.17]}
+{"item_id": "H033", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.03, 4.28]}
+{"item_id": "H034", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.77, 3.97]}
+{"item_id": "H035", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.23, 3.8]}
+{"item_id": "H035", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.97, 4.34]}
+{"item_id": "H033", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.38, 4.48]}
+{"item_id": "H034", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.87, 5.04]}
+{"item_id": "H036", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.28, 4.11]}
+{"item_id": "H036", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.15, 4.15]}
+{"item_id": "H037", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.94, 4.32]}
+{"item_id": "H037", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.42, 4.25]}
+{"item_id": "H039", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.87, 4.27]}
+{"item_id": "H038", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.43, 4.04]}
+{"item_id": "H038", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.19, 4.25]}
+{"item_id": "H039", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.45, 4.1]}
+{"item_id": "H040", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 3.99]}
+{"item_id": "H040", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.66, 4.09]}
+{"item_id": "H041", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.06, 4.49]}
+{"item_id": "H041", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.04, 4.25]}
+{"item_id": "H042", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.84, 4.28]}
+{"item_id": "H042", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.22, 4.27]}
+{"item_id": "H043", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.57, 4.01]}
+{"item_id": "H043", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.16, 4.17]}
+{"item_id": "H044", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.58, 4.36]}
+{"item_id": "H044", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.94, 4.56]}
+{"item_id": "H045", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.04, 4.45]}
+{"item_id": "H045", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.35, 4.47]}
+{"item_id": "H046", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.2, 4.07]}
+{"item_id": "H046", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.46, 4.34]}
+{"item_id": "H047", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.24, 4.01]}
+{"item_id": "H047", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.4, 4.62]}
+{"item_id": "H048", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.5, 3.96]}
+{"item_id": "H048", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.37, 4.54]}
+{"item_id": "H049", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.22, 4.47]}
+{"item_id": "H049", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.83, 4.11]}
+{"item_id": "H050", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.01, 3.85]}
+{"item_id": "H051", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.92, 3.96]}
+{"item_id": "H050", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.15, 4.03]}
+{"item_id": "H051", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.98, 4.15]}
+{"item_id": "H052", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.93, 4.55]}
+{"item_id": "H052", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.25, 4.19]}
+{"item_id": "H054", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.89, 4.12]}
+{"item_id": "H053", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.4, 4.06]}
+{"item_id": "H053", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.29, 4.36]}
+{"item_id": "H055", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.18, 4.11]}
+{"item_id": "H054", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.48, 4.07]}
+{"item_id": "H055", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.19, 4.33]}
+{"item_id": "H056", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.88, 4.45]}
+{"item_id": "H056", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.68, 4.16]}
+{"item_id": "H057", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.09, 4.12]}
+{"item_id": "H058", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.26, 3.93]}
+{"item_id": "H058", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.02, 4.01]}
+{"item_id": "H059", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.93, 4.2]}
+{"item_id": "H057", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.86, 4.29]}
+{"item_id": "H059", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.48, 4.44]}
+{"item_id": "H060", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.0, 4.05]}
+{"item_id": "H060", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.68, 4.49]}
+{"item_id": "H061", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.89, 4.1]}
+{"item_id": "H061", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.62, 4.16]}
+{"item_id": "H062", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.12, 4.21]}
+{"item_id": "H062", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.15, 4.59]}
+{"item_id": "H063", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.08, 4.35]}
+{"item_id": "H063", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.75, 4.08]}
+{"item_id": "H064", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.16, 4.47]}
+{"item_id": "H064", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.02, 4.53]}
+{"item_id": "H065", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.92, 4.23]}
+{"item_id": "H065", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.2, 4.05]}
+{"item_id": "H066", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.1, 3.87]}
+{"item_id": "H067", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.02, 4.56]}
+{"item_id": "H066", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.71, 4.64]}
+{"item_id": "H067", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.3, 4.49]}
+{"item_id": "H068", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.61, 4.23]}
+{"item_id": "H068", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.7, 4.16]}
+{"item_id": "H069", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.83, 4.31]}
+{"item_id": "H069", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.99, 4.51]}
+{"item_id": "H070", "run": 1, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [3.88, 4.73]}
+{"item_id": "H070", "run": 2, "missing": true, "passed": null, "scores": null, "attempts": 2, "latency_s": [4.12, 4.32]}
+{"item_id": "H002", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.88]}
+{"item_id": "H002", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.0]}
+{"item_id": "H004", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.05]}
+{"item_id": "H001", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.24]}
+{"item_id": "H003", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.42]}
+{"item_id": "H003", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.77]}
+{"item_id": "H004", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.38]}
+{"item_id": "H001", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [5.5]}
+{"item_id": "H005", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 2, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [3.59]}
+{"item_id": "H007", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.06]}
+{"item_id": "H006", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.58]}
+{"item_id": "H007", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.36]}
+{"item_id": "H005", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.18]}
+{"item_id": "H006", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.92]}
+{"item_id": "H008", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.16]}
+{"item_id": "H008", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.13]}
+{"item_id": "H010", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.77]}
+{"item_id": "H011", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 5, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.43]}
+{"item_id": "H009", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.55]}
+{"item_id": "H010", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.31]}
+{"item_id": "H012", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.31]}
+{"item_id": "H009", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [6.81]}
+{"item_id": "H011", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.51]}
+{"item_id": "H012", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [6.08]}
+{"item_id": "H013", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.34]}
+{"item_id": "H013", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.32]}
+{"item_id": "H015", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.71]}
+{"item_id": "H014", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.69]}
+{"item_id": "H015", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.03]}
+{"item_id": "H016", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.37]}
+{"item_id": "H014", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.81]}
+{"item_id": "H017", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 3, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.67]}
+{"item_id": "H017", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.84]}
+{"item_id": "H016", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [6.17]}
+{"item_id": "H018", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [5.37]}
+{"item_id": "H019", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.92]}
+{"item_id": "H018", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 3, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.78]}
+{"item_id": "H019", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 3, "overall": 4.2}, "attempts": 1, "latency_s": [6.05]}
+{"item_id": "H020", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.97]}
+{"item_id": "H021", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 4, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [5.0]}
+{"item_id": "H020", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.67]}
+{"item_id": "H021", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.8}, "attempts": 1, "latency_s": [4.94]}
+{"item_id": "H022", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.34]}
+{"item_id": "H022", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.8}, "attempts": 1, "latency_s": [4.23]}
+{"item_id": "H023", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.46]}
+{"item_id": "H023", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.26]}
+{"item_id": "H024", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.12]}
+{"item_id": "H026", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.88]}
+{"item_id": "H025", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.52]}
+{"item_id": "H024", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.0}, "attempts": 1, "latency_s": [5.6]}
+{"item_id": "H025", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [5.14]}
+{"item_id": "H026", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.34]}
+{"item_id": "H027", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.77]}
+{"item_id": "H028", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.88]}
+{"item_id": "H027", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [5.08]}
+{"item_id": "H029", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.63]}
+{"item_id": "H029", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.0]}
+{"item_id": "H030", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [5.11]}
+{"item_id": "H031", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.96]}
+{"item_id": "H030", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.75]}
+{"item_id": "H028", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [5.26]}
+{"item_id": "H031", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [5.38]}
+{"item_id": "H032", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.61]}
+{"item_id": "H033", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.71]}
+{"item_id": "H032", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 4, "personalization": 2, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [4.57]}
+{"item_id": "H034", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.49]}
+{"item_id": "H035", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.73]}
+{"item_id": "H034", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.87]}
+{"item_id": "H033", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.88]}
+{"item_id": "H035", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.15]}
+{"item_id": "H036", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.91]}
+{"item_id": "H036", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.78]}
+{"item_id": "H037", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.04]}
+{"item_id": "H037", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.7]}
+{"item_id": "H039", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [3.98]}
+{"item_id": "H038", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 3, "personalization": 2, "naturalness": 4, "cta_clarity": 4, "overall": 3.6}, "attempts": 1, "latency_s": [5.95]}
+{"item_id": "H038", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [6.01]}
+{"item_id": "H039", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [5.18]}
+{"item_id": "H040", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.31]}
+{"item_id": "H041", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.13]}
+{"item_id": "H040", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [5.62]}
+{"item_id": "H041", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.43]}
+{"item_id": "H042", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.1]}
+{"item_id": "H042", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.67]}
+{"item_id": "H044", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [2.9]}
+{"item_id": "H043", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.26]}
+{"item_id": "H044", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.3]}
+{"item_id": "H043", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.55]}
+{"item_id": "H045", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.87]}
+{"item_id": "H045", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.3]}
+{"item_id": "H048", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [2.62]}
+{"item_id": "H047", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [4.64]}
+{"item_id": "H046", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 3, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.0}, "attempts": 1, "latency_s": [5.83]}
+{"item_id": "H046", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 3, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [5.87]}
+{"item_id": "H047", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.09]}
+{"item_id": "H049", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.66]}
+{"item_id": "H048", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [6.1]}
+{"item_id": "H050", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.08]}
+{"item_id": "H050", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.25]}
+{"item_id": "H051", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.92]}
+{"item_id": "H052", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 5, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.36]}
+{"item_id": "H051", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.62]}
+{"item_id": "H049", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [7.52]}
+{"item_id": "H052", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.9]}
+{"item_id": "H054", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.49]}
+{"item_id": "H054", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [5.32]}
+{"item_id": "H053", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.2}, "attempts": 1, "latency_s": [6.61]}
+{"item_id": "H055", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [4.58]}
+{"item_id": "H055", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [5.47]}
+{"item_id": "H053", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [7.48]}
+{"item_id": "H056", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [6.33]}
+{"item_id": "H057", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.6}, "attempts": 1, "latency_s": [3.95]}
+{"item_id": "H057", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [4.2]}
+{"item_id": "H056", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [6.79]}
+{"item_id": "H058", "run": 2, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 4, "cta_clarity": 3, "overall": 3.8}, "attempts": 1, "latency_s": [5.9]}
+{"item_id": "H059", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [4.9]}
+{"item_id": "H058", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 5, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [7.43]}
+{"item_id": "H061", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.43]}
+{"item_id": "H059", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 4, "overall": 4.4}, "attempts": 1, "latency_s": [6.67]}
+{"item_id": "H060", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [6.12]}
+{"item_id": "H061", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.51]}
+{"item_id": "H060", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.8]}
+{"item_id": "H062", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.47]}
+{"item_id": "H064", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.05]}
+{"item_id": "H063", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.52]}
+{"item_id": "H062", "run": 1, "missing": false, "passed": false, "scores": {"accuracy": 5, "tone": 2, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.2}, "attempts": 1, "latency_s": [6.8]}
+{"item_id": "H063", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 4, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [5.53]}
+{"item_id": "H064", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.55]}
+{"item_id": "H066", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [3.14]}
+{"item_id": "H065", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.19]}
+{"item_id": "H065", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.6}, "attempts": 1, "latency_s": [5.56]}
+{"item_id": "H067", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 3, "naturalness": 5, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.96]}
+{"item_id": "H069", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.13]}
+{"item_id": "H066", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 4, "tone": 3, "personalization": 4, "naturalness": 4, "cta_clarity": 5, "overall": 4.0}, "attempts": 1, "latency_s": [5.7]}
+{"item_id": "H069", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 5, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 5.0}, "attempts": 1, "latency_s": [3.57]}
+{"item_id": "H067", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [4.72]}
+{"item_id": "H068", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.58]}
+{"item_id": "H068", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 3, "personalization": 5, "naturalness": 4, "cta_clarity": 5, "overall": 4.4}, "attempts": 1, "latency_s": [4.9]}
+{"item_id": "H070", "run": 1, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [5.08]}
+{"item_id": "H070", "run": 2, "missing": false, "passed": true, "scores": {"accuracy": 5, "tone": 4, "personalization": 5, "naturalness": 5, "cta_clarity": 5, "overall": 4.8}, "attempts": 1, "latency_s": [3.85]}

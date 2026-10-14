@@ -1,0 +1,41 @@
+{
+  "seed_records": 1034,
+  "seed_structured_keys": 178,
+  "snapshot_keys": 165,
+  "table_columns_in_snapshot": [
+    "avoided_ingredients",
+    "band_type",
+    "brand",
+    "concerns",
+    "deodorant_type",
+    "discount_rate",
+    "exclusive_product",
+    "humidity_resistance",
+    "lifestyle_values",
+    "original_price",
+    "personal_color",
+    "preferred_colors",
+    "preferred_ingredients",
+    "preferred_scents",
+    "product_comment",
+    "product_created_at",
+    "product_id",
+    "product_name",
+    "rating",
+    "reusable",
+    "review_count",
+    "sale_price",
+    "skin_shades",
+    "skin_type",
+    "sub_tag",
+    "tag",
+    "vectordb_id"
+  ],
+  "missing_from_field_class": [],
+  "missing_with_counts": {},
+  "class_counts": {
+    "evidence": 141,
+    "style": 47,
+    "meta": 17
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "run_at": "2026-09-29T07:10:22.702213+00:00",
+  "git": {
+    "commit": "70793a30e43ed255cfad22d471941ab74d08e83f",
+    "tracked_changes": []
+  },
+  "model": "gpt-5-mini",
+  "temperature_setting": 0.0,
+  "sent_params": {
+    "medium": {
+      "model": "gpt-5-mini",
+      "stream": false,
+      "reasoning_effort": "medium"
+    },
+    "low": {
+      "model": "gpt-5-mini",
+      "stream": false,
+      "reasoning_effort": "low"
+    },
+    "minimal": {
+      "model": "gpt-5-mini",
+      "stream": false,
+      "reasoning_effort": "minimal"
+    }
+  },
+  "prompt": {
+    "system_prompt_sha256": "f527f3984108cd9c3d475f257854eb710d5a66aa862d421a82762eea00865391",
+    "judge_schema_sha256": "3bd80e6715584dc181343c8642926ea2b5c762a82af6f0f632426b0318ba8a52"
+  },
+  "gate_settings": {
+    "semantic_threshold": 0.85,
+    "semantic_top_k": 3,
+    "llm_min_score": 3,
+    "llm_min_overall_score": 4,
+    "body_len": [
+      20,
+      350
+    ],
+    "title_max": 40
+  },
+  "stage2_path": "OpenSearch ANN k=3 (forbidden_sentences, replicas=0) + 문장별 전수 top1(top_k=100) 병기",
+  "stage2_deterministic_probe": true,
+  "efforts": [
+    "medium",
+    "low",
+    "minimal"
+  ],
+  "runs": 2,
+  "concurrency": 8,
+  "n_cases": 35,
+  "n_judge_jobs": 210,
+  "judge_wall_s": 206.0,
+  "judge_missing": 0,
+  "judge_attempts_total": 210
+}

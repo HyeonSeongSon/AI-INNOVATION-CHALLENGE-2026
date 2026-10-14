@@ -139,7 +139,7 @@ def step_index_forbidden_sentences(client) -> bool:
     return run_indexing(client=client)
 
 
-def step_index_v4() -> bool:
+def step_index_v4(client) -> bool:
     from index_products_v4_multivector import run_indexing, FIELD_NAMES, INDEX_PREFIX
     logger.info("product_v4_* 색인 시작 (5개 필드 인덱스)...")
     try:

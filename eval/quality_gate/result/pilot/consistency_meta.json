@@ -1,0 +1,10 @@
+{
+  "effort": "low",
+  "repeats": 5,
+  "seed": 20260929,
+  "n_boundary": 23,
+  "n_nonboundary": 5,
+  "n_nonboundary_pool": 12,
+  "n_calls": 140,
+  "missing": 0
+}

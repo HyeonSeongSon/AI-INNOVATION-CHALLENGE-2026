@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>게이트 실험 검수</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #dfe3ea;
+  --accent: #2f5bd3; --accent-soft: #e7eeff; --ok: #1f8a4c; --ok-soft: #e3f4ea; --no: #c0392b; --no-soft: #fbe7e4;
+  --warn: #9a6200; --warn-soft: #fff3d6; --mark: #ffe58a; --inv: #7b5ea7; --inv-soft: #efe8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171d; --panel: #1c2028; --ink: #e6e9ef; --muted: #9aa3b2; --line: #2d333f;
+    --accent: #7ea2ff; --accent-soft: #23304f; --ok: #5cc98a; --ok-soft: #1d3527; --no: #f08a7e; --no-soft: #3d2320;
+    --warn: #f0c060; --warn-soft: #3a2f16; --mark: #6b5a12; --inv: #b9a2e0; --inv-soft: #2e2640;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+header strong { font-size: 15px; }
+.tabs { display: flex; gap: 6px; }
+.tab { border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 5px 12px; border-radius: 999px;
+  cursor: pointer; font: inherit; }
+.tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+#save { margin-left: auto; color: var(--muted); font-size: 13px; }
+#save.err { color: var(--no); font-weight: 600; }
+.layout { display: grid; grid-template-columns: 270px 1fr; min-height: calc(100vh - 52px); }
+aside { border-right: 1px solid var(--line); background: var(--panel); position: sticky; top: 52px;
+  height: calc(100vh - 52px); display: flex; flex-direction: column; }
+aside .tools { padding: 10px; border-bottom: 1px solid var(--line); display: flex; gap: 6px; }
+aside select, aside input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; width: 100%; }
+#list { overflow-y: auto; flex: 1; }
+.li { padding: 7px 12px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: 8px; align-items: flex-start; }
+.li:hover { background: var(--accent-soft); }
+.li.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.li .t { font-weight: 600; }
+.li .s { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--line); }
+.dot.part { background: var(--warn); } .dot.done { background: var(--ok); }
+main { padding: 16px 20px 90px; max-width: 1100px; }
+.head h2 { margin: 0 0 2px; font-size: 20px; }
+.head .meta { color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+.card h3 { margin: 0 0 10px; font-size: 15px; }
+.card h4 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+pre { white-space: pre-wrap; margin: 0; font: inherit; background: var(--bg); padding: 10px; border-radius: 8px; }
+dl { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; margin: 0; }
+dt { color: var(--muted); font-size: 12px; padding-top: 2px; }
+dd { margin: 0; }
+.badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--muted); margin-right: 4px; white-space: nowrap; }
+.badge.vis { color: var(--ok); border-color: var(--ok); }
+.badge.inv { color: var(--inv); border-color: var(--inv); background: var(--inv-soft); }
+.badge.in { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+.badge.out { color: var(--no); border-color: var(--no); background: var(--no-soft); }
+.chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 6px; background: var(--warn-soft);
+  color: var(--warn); margin: 2px 4px 2px 0; }
+mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+.msg { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.msg .title { font-weight: 700; margin-bottom: 4px; }
+.sent { border-top: 1px dashed var(--line); padding: 8px 0; }
+.sent:first-child { border-top: 0; }
+.stext { font-weight: 500; }
+.stext .idx { color: var(--muted); font-size: 12px; margin-right: 6px; }
+.ev { list-style: none; margin: 4px 0 0; padding: 0; font-size: 13px; }
+.ev li { padding: 2px 0; }
+.ev .f { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.line { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.line b { color: var(--ink); font-weight: 600; }
+details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.field { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.field .lab { font-weight: 600; }
+.field .help { color: var(--muted); font-size: 12.5px; margin: 2px 0 6px; }
+.opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.opt { font: inherit; padding: 6px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); cursor: pointer; min-width: 92px; }
+.opt:hover { border-color: var(--accent); }
+.opt.on.O { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 700; }
+.opt.on.X { background: var(--no-soft); border-color: var(--no); color: var(--no); font-weight: 700; }
+.opt .k { font-size: 11px; opacity: .7; margin-left: 4px; }
+input.txt, textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; }
+textarea { min-height: 60px; resize: vertical; }
+.sugg { margin-top: 4px; }
+.sugg button { font: inherit; font-size: 12px; border: 1px dashed var(--line); background: transparent; color: var(--muted);
+  border-radius: 6px; padding: 1px 8px; margin-right: 4px; cursor: pointer; }
+.big { font-size: 18px; font-weight: 600; background: var(--accent-soft); padding: 12px 14px; border-radius: 8px; }
+.big.muted { background: var(--bg); color: var(--muted); }
+.ctx { padding: 6px 0; border-top: 1px dashed var(--line); font-size: 13.5px; }
+.ctx:first-of-type { border-top: 0; }
+.ctx .d { font-size: 12px; color: var(--muted); display: block; }
+.req { color: var(--no); font-size: 12px; margin-left: 4px; }
+footer { position: fixed; bottom: 0; left: 270px; right: 0; background: var(--panel); border-top: 1px solid var(--line);
+  padding: 8px 20px; display: flex; gap: 10px; align-items: center; }
+footer button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); cursor: pointer; }
+footer button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+footer .need { color: var(--muted); font-size: 13px; margin-left: auto; }
+.keys { color: var(--muted); font-size: 12px; }
+.src { margin: 6px 0 4px; }
+.src a { color: var(--accent); }
+.imgs { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 70vh; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--bg); }
+.imgs img { width: 100%; max-width: 760px; display: block; margin: 0 auto; }
+.docsec { margin-top: 8px; }
+.docsec pre { margin-top: 4px; font-size: 13px; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; } aside { position: static; height: 40vh; } footer { left: 0; }
+  .two { grid-template-columns: 1fr; } main { padding: 12px 16px 90px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <strong>게이트 실험 검수</strong>
+  <div class="tabs">
+    <button class="tab" data-tab="originals">원본</button>
+    <button class="tab" data-tab="phrases">D1 문구</button>
+  </div>
+  <span id="save">불러오는 중…</span>
+</header>
+<div class="layout">
+  <aside>
+    <div class="tools">
+      <select id="filter"></select>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <main id="main"></main>
+</div>
+<footer>
+  <button id="prev">← 이전</button>
+  <button id="next">다음 →</button>
+  <button id="nextTodo" class="primary">다음 미완료</button>
+  <span class="keys">키보드: ↑ ↓ 이동 · N 다음 미완료</span>
+  <span class="need" id="need"></span>
+</footer>
+<script>
+"use strict";
+let D = null, V = null, tab = "originals";
+const cur = { originals: 0, phrases: 0 };
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k.nodeType ? k : String(k));
+  return n;
+};
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function marked(text, words) {
+  const span = el("span");
+  const ws = (words || []).filter(w => w && w.length).sort((a, b) => b.length - a.length);
+  if (!ws.length) { span.append(text); return span; }
+  const re = new RegExp("(" + ws.map(esc).join("|") + ")", "g");
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    span.append(text.slice(last, m.index), el("mark", {}, m[0]));
+    last = m.index + m[0].length;
+  }
+  span.append(text.slice(last));
+  return span;
+}
+const items = () => D[tab];
+const val = (name, id, col) => ((V[name][id] || {})[col] || "").trim();
+
+// 완료 기준: 원본은 적합(필수) → 부적합이면 끝, 적합이면 화장품 여부 · 결함 여부까지. 문구는 검수 칸.
+function needed(name, id) {
+  if (name === "phrases") return ["review_ok(O/X)"];
+  const fit = val(name, id, "persona_product_fit(O/X)");
+  return fit === "X" ? ["persona_product_fit(O/X)"] : ["persona_product_fit(O/X)", "is_cosmetic(O/X)", "review_ok(O/X)"];
+}
+function state(name, id) {
+  const need = needed(name, id), filled = need.filter(c => val(name, id, c));
+  if (filled.length === need.length) return "done";
+  const any = D.schema[name].some(f => f.col !== "review_note" && val(name, id, f.col));
+  return any ? "part" : "none";
+}
+
+async function save(name, id, col, value) {
+  const prev = (V[name][id] || {})[col] || "";
+  V[name][id] = V[name][id] || {};
+  V[name][id][col] = value;
+  const s = document.getElementById("save");
+  try {
+    const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: name, id, col, value }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    s.className = ""; s.textContent = "저장됨 " + j.saved_at;
+  } catch (e) {
+    V[name][id][col] = prev;
+    s.className = "err"; s.textContent = "저장 실패: " + e.message;
+  }
+  renderTabs(); refreshFilterLabels(); renderList(false); updateNeed();
+}
+
+function control(name, id, f, row) {
+  const box = el("div", { class: "field" });
+  // 화장품이 아니면 기능성화장품 표시는 해당 없음(빈칸 = 표시 없음). 이미 값이 있으면 지울 수 있게 버튼을 그대로 둔다
+  if (name === "originals" && f.col === "functional_certified(O/X)" && val(name, id, "is_cosmetic(O/X)") === "X" && !val(name, id, f.col)) {
+    box.append(el("div", { class: "lab" }, f.label),
+      el("div", { class: "help" }, "화장품이 아니라 해당 없음 — 비워 두세요(분석에서 '표시 없음'으로 처리). "
+        + "이너뷰티의 '식약처 인정 기능성'은 건강기능식품 제도라 기능성화장품과 다릅니다."));
+    return box;
+  }
+  const opts = f.options || (row && row.include === "X" ? f.options_exclude : f.options_include);
+  const help = f.help !== undefined ? f.help : (row && row.include === "X" ? f.help_exclude : f.help_include);
+  const isReq = needed(name, id).includes(f.col);
+  box.append(el("div", { class: "lab" }, f.label, isReq ? el("span", { class: "req" }, "필수") : null));
+  if (help) box.append(el("div", { class: "help" }, help));
+  const v = val(name, id, f.col);
+  if (opts) {
+    const wrap = el("div", { class: "opts" });
+    for (const [code, label] of opts) {
+      wrap.append(el("button", { class: "opt " + code + (v === code ? " on" : ""),
+        onclick: async () => { await save(name, id, f.col, v === code ? "" : code); renderMain(); } },
+        label, el("span", { class: "k" }, code)));
+    }
+    box.append(wrap);
+  } else {
+    const input = f.type === "textarea" ? el("textarea", {}) : el("input", { class: "txt", type: "text" });
+    input.value = v;
+    let timer = null;
+    const commit = () => { clearTimeout(timer); if (input.value.trim() !== val(name, id, f.col)) save(name, id, f.col, input.value.trim()); };
+    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(commit, 900); });
+    input.addEventListener("change", commit);
+    box.append(input);
+    if (f.suggest) {
+      const sg = el("div", { class: "sugg" }, el("span", { class: "keys" }, "빠른 입력: "));
+      for (const s of f.suggest) sg.append(el("button", { onclick: () => { input.value = s; input.focus(); if (s === "미검증") commit(); } }, s));
+      box.append(sg);
+    }
+  }
+  return box;
+}
+const fieldsOf = (name, section) => D.schema[name].filter(f => !section || f.section === section);
+
+// ── 상품 원천 레코드 (DB 시드 파일) ──
+const FUNC_WORDS = ["기능성", "식약처", "식품의약품안전처", "심사", "보고", "SPF", "PA", "자외선", "미백", "주름", "탈모", "여드름", "튼살", "염모", "제모"];
+function sourceBlock(s) {
+  if (!s || !s.found) return el("div", { class: "line" }, "원천 레코드를 찾지 못함");
+  const imgs = el("div", { class: "imgs" });
+  const det = el("details", {}, el("summary", {}, `상세페이지 원본 이미지 ${s.images.length}장 (펼치면 쇼핑몰 서버에서 불러옴)`), imgs);
+  det.addEventListener("toggle", () => {
+    if (det.open && !imgs.childElementCount) {
+      s.images.forEach((u, i) => imgs.append(el("a", { href: u, target: "_blank", rel: "noreferrer" },
+        el("img", { src: u, loading: "lazy", alt: `상세 이미지 ${i + 1}`, referrerpolicy: "no-referrer" }))));
+    }
+  });
+  return el("div", { class: "src" },
+    el("div", { class: "line" }, "상품 원천: ", el("b", {}, s.file), ` (${s.match}로 찾음) · `,
+      s.url ? el("a", { href: s.url, target: "_blank", rel: "noreferrer" }, "상품 페이지 열기 ↗") : "링크 없음",
+      s.url ? el("span", {}, " (현재 판매 페이지라 수집 시점과 다를 수 있음)") : null),
+    s.one_liner ? el("div", { class: "line" }, "한줄소개: ", s.one_liner) : null,
+    s.images.length ? det : el("div", { class: "line" }, "상세 이미지 없음"));
+}
+function docBlock(s) {
+  if (!s || !s.found) return null;
+  const box = el("div");
+  box.append(el("h4", {}, "상세페이지 텍스트 중 기능성 관련 줄 (문서: gpt-5.1이 상세 이미지를 옮겨 적은 것 — 원본은 위 이미지)"));
+  if (!s.has_doc) { box.append(el("div", { class: "line" }, "문서 없음(추가 수집분) — 상세 이미지로 확인")); return box; }
+  if (s.func_lines.length) box.append(el("ul", { class: "ev" }, s.func_lines.map(l => el("li", {}, marked(l, FUNC_WORDS)))));
+  else box.append(el("div", { class: "line" }, "문서에 기능성 관련 말 없음"));
+  box.append(el("details", {}, el("summary", {}, "문서 전문"),
+    s.doc_sections.map(sec => el("div", { class: "docsec" }, sec.title ? el("b", {}, sec.title) : null, el("pre", {}, marked(sec.text, FUNC_WORDS))))));
+  return box;
+}
+
+// ── 원본 ──
+function renderOriginal(o) {
+  const name = "originals", id = o.id, m = document.getElementById("main");
+  m.replaceChildren();
+  m.append(el("div", { class: "head" }, el("h2", {}, id),
+    el("div", { class: "meta" }, `${o.category} › ${o.tag} › ${o.sub_tag} · ${o.brand} · 목적: ${o.purpose} · 본문 ${o.message_len}자 · ${o.persona_id}`)));
+
+  const prod = el("dl");
+  for (const p of o.product) prod.append(el("dt", {}, p.field), el("dd", {}, p.text));
+  m.append(el("section", { class: "card" }, el("h3", {}, "① 페르소나-상품 적합"),
+    el("div", { class: "two" },
+      el("div", {}, el("h4", {}, "페르소나 원문"), el("pre", {}, o.persona)),
+      el("div", {}, el("h4", {}, "상품 (DB)"), prod)),
+    ...fieldsOf(name, "fit").map(f => control(name, id, f))));
+
+  if (val(name, id, "persona_product_fit(O/X)") === "X") {
+    m.append(el("section", { class: "card" }, el("div", { class: "help" },
+      "부적합으로 표시해 이 원본은 실험에서 빠집니다. 아래 칸은 채우지 않아도 됩니다(메모만 남겨도 됩니다)."),
+      ...fieldsOf(name, "note").map(f => control(name, id, f))));
+    return;
+  }
+
+  const func = el("div");
+  if (o.hints.hint_functional) func.append(el("span", { class: "chip" }, "자동 힌트: " + o.hints.hint_functional));
+  if (o.functional.length) {
+    const ul = el("ul", { class: "ev" });
+    for (const f of o.functional) ul.append(el("li", {}, el("span", { class: "badge " + (f.visible ? "vis" : "inv") },
+      f.field + (f.visible ? " · 판정기 보임" : " · 판정기 안 보임")), marked(f.text, ["기능성", "식약처", "심사", "보고"])));
+    func.append(ul);
+  } else func.append(el("div", { class: "line" }, "DB에 기능성 관련 말(기능성 · 식약처 · 심사 · SPF · 자외선 · 미백 · 주름 개선 · 탈모 등) 없음"));
+  m.append(el("section", { class: "card" }, el("h3", {}, "② 상품 분류"),
+    el("div", {}, el("b", {}, o.product.find(p => p.field === "product_name")?.text || ""),
+      el("span", { class: "line" }, `  ${o.category} › ${o.tag} › ${o.sub_tag}`)),
+    sourceBlock(o.source),
+    fieldsOf(name, "product").map(f => control(name, id, f)).slice(0, 1),
+    el("h4", {}, "기능성 관련 DB 서술 (판정기 · 생성기가 본 정보)"), func,
+    docBlock(o.source),
+    fieldsOf(name, "product").map(f => control(name, id, f)).slice(1)));
+
+  const hints = [];
+  if (+o.hints.hint_unsupported_sentences) hints.push(`DB 근거 없는 문장 ${o.hints.hint_unsupported_sentences}개`);
+  if (o.hints.hint_invisible_field_citation) hints.push("판정기에 안 보이는 필드만 인용한 문장 있음");
+  if (o.hints.hint_meta_leak) hints.push("내부 정보 노출 후보: " + o.hints.hint_meta_leak);
+  const sents = el("div");
+  for (const s of o.sentences) {
+    const box = el("div", { class: "sent" }, el("div", { class: "stext" }, el("span", { class: "idx" }, "#" + s.idx), s.text));
+    if (s.flags) box.append(el("div", {}, ...s.flags.split(" | ").map(f => el("span", { class: "chip" }, f))));
+    const top = s.matches.slice(0, 3), rest = s.matches.slice(3);
+    const li = mm => el("li", {}, el("span", { class: "badge " + (mm.visible ? "vis" : "inv") }, mm.field + (mm.visible ? "" : " · 판정기 안 보임")), marked(mm.text, mm.hit));
+    if (top.length) box.append(el("ul", { class: "ev" }, top.map(li)));
+    if (rest.length) box.append(el("details", {}, el("summary", {}, `DB 대응 ${s.n_matches - 3}개 더`), el("ul", { class: "ev" }, rest.map(li))));
+    if (!s.matches.length) box.append(el("div", { class: "line" }, "명사가 겹치는 DB 값 없음"));
+    for (const n of s.numbers) {
+      const where = n.fields.length ? n.fields.join(", ") + (n.visible ? "" : " (판정기 안 보임)") : "DB에 없음";
+      box.append(el("div", { class: "line" }, "수치 ", el("b", {}, n.n), " → " + where + (n.brand ? " · 브랜드 프로필에 있음" : "")));
+    }
+    if (s.brand_overlap.length) box.append(el("div", { class: "line" }, "브랜드 프로필과만 겹치는 말: ", el("b", {}, s.brand_overlap.join(", "))));
+    sents.append(box);
+  }
+  m.append(el("section", { class: "card" }, el("h3", {}, "③ 메시지"),
+    el("div", { class: "msg" }, el("div", { class: "title" }, o.title), el("div", {}, o.message)),
+    hints.length ? el("div", { style: "margin-top:8px" }, hints.map(h => el("span", { class: "chip" }, h))) : null,
+    el("h4", {}, "문장별 근거 (명사가 겹치는 DB 값 · 수치 위치)"), sents,
+    el("details", { style: "margin-top:8px" }, el("summary", {}, "브랜드 프로필 전문 (LLM 생성, 정답 근거 아님)"), el("pre", {}, o.brand_profile || "(없음)")),
+    fieldsOf(name, "message").map(f => control(name, id, f))));
+  m.append(el("section", { class: "card" }, fieldsOf(name, "note").map(f => control(name, id, f))));
+}
+
+// ── 문구 ──
+const KIND = { noun_phrase: "효능 명사구", condition: "질환 · 증상 이름", clause: "동작", attribute: "제품 속성", copula: "다른 이름으로 부름", sentence: "원래 문장" };
+const STRATUM = { explicit: "노골(별표 1 예시어 있음)", subtle: "미묘(예시어 없음)", hedge: "헷지" };
+function renderPhrase(p) {
+  const name = "phrases", id = p.id, m = document.getElementById("main");
+  m.replaceChildren();
+  const inc = p.include === "O";
+  m.append(el("div", { class: "head" }, el("h2", {}, id),
+    el("div", { class: "meta" }, el("span", { class: "badge " + (inc ? "in" : "out") }, inc ? "포함" : "제외"),
+      inc ? el("span", { class: "badge" }, STRATUM[p.stratum] || p.stratum) : null,
+      inc ? el("span", { class: "badge" }, KIND[p.kind] || p.kind) : null,
+      inc ? el("span", { class: "badge" }, "category: " + p.category) : null,
+      el("span", { class: "badge" }, "보도자료 분류: " + p.source))));
+
+  const info = el("dl");
+  const add = (k, v) => { if (v) info.append(el("dt", {}, k), el("dd", {}, v)); };
+  add("원문 표기", p.original);
+  if (inc) add("서술어 규칙", p.rule);
+  add("표기 수정", p.text_edit);
+  add("헷지 근거", p.hedge_basis);
+  add("참고", p.note);
+  add("출처 수", p.n_sources + "건");
+  m.append(el("section", { class: "card" },
+    el("h3", {}, inc ? "게이트에 넣을 문장" : "제외된 문구"),
+    el("div", { class: "big" + (inc ? "" : " muted") }, inc ? p.sentence_preview : p.text),
+    inc ? null : el("div", { class: "line", style: "margin-top:6px" }, el("b", {}, "제외 사유: "), p.exclude_reason),
+    el("div", { style: "margin-top:10px" }, info)));
+
+  const ctx = el("div");
+  for (const c of p.contexts) {
+    const row = el("div", { class: "ctx" }, el("span", { class: "d" }, `${c.release} · ${c.type}`));
+    if (c.context) row.append("…" + c.context.pre, el("mark", {}, c.context.hit), c.context.post + "…");
+    else row.append(el("span", { class: "line" }, "원문 텍스트에서 위치를 찾지 못함(표 셀이 줄바꿈으로 갈렸거나 표기가 다름) — PDF 확인"));
+    ctx.append(row);
+  }
+  m.append(el("section", { class: "card" }, el("h3", {}, "보도자료 원문 맥락"), ctx));
+
+  if (p.guideline.length) {
+    const g = el("div");
+    for (const r of p.guideline) {
+      g.append(el("div", { class: "ctx" }, el("span", { class: "d" }, "예시어: " + r.root),
+        r.lines.length ? r.lines.map(l => el("div", {}, marked(l, [r.root]))) : "(줄을 찾지 못함)"));
+    }
+    m.append(el("section", { class: "card" }, el("h3", {}, "지침 별표 1 해당 줄"), g));
+  }
+  m.append(el("section", { class: "card" }, el("h3", {}, "검수"), D.schema[name].map(f => control(name, id, f, p))));
+}
+
+// ── 목록 · 이동 ──
+const FILTERS = {
+  originals: [["all", "전체"], ["todo", "미완료"], ["done", "완료"], ["hint", "자동 힌트 있음"]],
+  phrases: [["all", "전체"], ["todo", "미완료"], ["done", "완료"], ["in", "포함만"], ["out", "제외만"], ["note", "참고 메모 있음"]],
+};
+const filterSel = document.getElementById("filter");
+const inAudit = (name, id) => !!(D.audit && D.audit[name] && D.audit[name].includes(id));
+function filterOptions(t) {
+  const opts = FILTERS[t].slice();
+  if (D.audit && D.audit[t] && D.audit[t].length) {
+    const n = D.audit[t].length, done = D.audit[t].filter(id => state(t, id) === "done").length;
+    opts.unshift(["audit", `확인 대상 ${done}/${n}`], ["audit_todo", "확인 대상 중 미완료"]);
+  }
+  return opts;
+}
+function visible() {
+  const f = filterSel.value, name = tab;
+  return items().map((x, i) => [x, i]).filter(([x]) => {
+    const st = state(name, x.id);
+    if (f === "audit") return inAudit(name, x.id);
+    if (f === "audit_todo") return inAudit(name, x.id) && st !== "done";
+    if (f === "todo") return st !== "done";
+    if (f === "done") return st === "done";
+    if (f === "hint") return x.hints.hint_functional || x.hints.hint_meta_leak || x.hints.hint_invisible_field_citation || +x.hints.hint_unsupported_sentences;
+    if (f === "in") return x.include === "O";
+    if (f === "out") return x.include === "X";
+    if (f === "note") return x.note;
+    return true;
+  });
+}
+function renderTabs() {
+  for (const b of document.querySelectorAll(".tab")) {
+    const name = b.dataset.tab, n = D[name].length, done = D[name].filter(x => state(name, x.id) === "done").length;
+    b.textContent = `${name === "originals" ? "원본" : "D1 문구"} ${done}/${n}`;
+    b.classList.toggle("on", name === tab);
+  }
+}
+function renderList(scroll = true) {
+  const list = document.getElementById("list");
+  list.replaceChildren();
+  for (const [x, i] of visible()) {
+    const st = state(tab, x.id);
+    const sub = tab === "originals" ? `${x.sub_tag} · ${x.brand}` : (x.include === "O" ? x.sentence_preview : "제외 · " + x.text);
+    const row = el("div", { class: "li" + (i === cur[tab] ? " on" : ""), onclick: () => go(i) },
+      el("span", { class: "dot " + st }), el("div", {}, el("div", { class: "t" }, x.id), el("div", { class: "s" }, sub)));
+    list.append(row);
+    if (scroll && i === cur[tab]) setTimeout(() => row.scrollIntoView({ block: "nearest" }), 0);
+  }
+}
+function updateNeed() {
+  const x = items()[cur[tab]]; if (!x) return;
+  const miss = needed(tab, x.id).filter(c => !val(tab, x.id, c));
+  document.getElementById("need").textContent = miss.length ? `필수 남음: ${miss.map(c => c.replace("(O/X)", "")).join(", ")}` : "이 항목 필수 칸 완료";
+}
+function renderMain() {
+  const x = items()[cur[tab]];
+  if (!x) { document.getElementById("main").replaceChildren(el("p", {}, "항목 없음")); return; }
+  (tab === "originals" ? renderOriginal : renderPhrase)(x);
+  updateNeed();
+}
+function go(i) {
+  cur[tab] = Math.max(0, Math.min(items().length - 1, i));
+  renderList(); renderMain(); window.scrollTo(0, 0);
+}
+function step(d) {
+  const vis = visible().map(([, i]) => i);
+  if (!vis.length) return;
+  const pos = vis.indexOf(cur[tab]);
+  go(vis[pos < 0 ? 0 : Math.max(0, Math.min(vis.length - 1, pos + d))]);
+}
+function nextTodo() {
+  // 지금 필터에 보이는 항목 안에서 다음 미완료로 간다
+  const vis = visible().map(([, i]) => i);
+  const order = vis.filter(i => i > cur[tab]).concat(vis.filter(i => i <= cur[tab]));
+  const i = order.find(j => j !== cur[tab] && state(tab, items()[j].id) !== "done");
+  if (i !== undefined) return go(i);
+  document.getElementById("need").textContent = "이 필터의 모든 항목이 채워졌습니다";
+}
+function setTab(t) {
+  tab = t;
+  filterSel.replaceChildren(...filterOptions(t).map(([v, l]) => el("option", { value: v }, l)));
+  if (D.audit && D.audit[t] && D.audit[t].length) {
+    const first = items().findIndex(x => inAudit(t, x.id));
+    if (first >= 0 && !inAudit(t, items()[cur[t]].id)) cur[t] = first;
+  }
+  renderTabs(); renderList(); renderMain();
+}
+function refreshFilterLabels() {
+  const keep = filterSel.value;
+  filterSel.replaceChildren(...filterOptions(tab).map(([v, l]) => el("option", { value: v }, l)));
+  filterSel.value = keep;
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+filterSel.addEventListener("change", () => renderList());
+document.getElementById("prev").onclick = () => step(-1);
+document.getElementById("next").onclick = () => step(1);
+document.getElementById("nextTodo").onclick = nextTodo;
+document.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+  else if (e.key === "n" || e.key === "N") nextTodo();
+});
+(async () => {
+  try {
+    D = await (await fetch("/api/data")).json();
+    V = D.values;
+    document.getElementById("save").textContent = `run: ${D.run} · 누르면 바로 저장됩니다`;
+    setTab("originals");
+  } catch (e) {
+    document.getElementById("save").className = "err";
+    document.getElementById("save").textContent = "데이터를 불러오지 못했습니다: " + e.message;
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "seed": 20260929,
+  "n_requested": 5,
+  "n_generated": 5,
+  "generation_failed": [],
+  "latency_s": [
+    16.38,
+    24.17,
+    19.9,
+    16.1,
+    15.64
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-10-02T03:46:23.612178+00:00",
+  "passed": true,
+  "purpose_prompt": "07c07d2a88a4ea4ac24df836e9ef2d7059a91a7a043dff48e04f28043002f521",
+  "n_prompts": 980,
+  "v2_selfcheck": {
+    "ok": true,
+    "missed": []
+  },
+  "n_fail": 0,
+  "fails": []
+}

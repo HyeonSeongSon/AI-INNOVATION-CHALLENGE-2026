@@ -1,0 +1,225 @@
+{
+  "top_n": 3,
+  "results": {
+    "current_default": {
+      "dev": {
+        "ndcg_mean": 0.6936076891291812,
+        "ndcg_ci": [
+          0.6045542581311214,
+          0.7775579053914473
+        ],
+        "mrr_mean": 0.8035714285714286,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7601068378399602,
+        "ndcg_ci": [
+          0.6955014928123984,
+          0.8264571767861606
+        ],
+        "mrr_mean": 0.9375,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "equal_baseline": {
+      "dev": {
+        "ndcg_mean": 0.6767307437060903,
+        "ndcg_ci": [
+          0.5849000147563201,
+          0.7689250386325541
+        ],
+        "mrr_mean": 0.7976190476190477,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7473944254797603,
+        "ndcg_ci": [
+          0.6799125566075322,
+          0.8178644280141466
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "need_low": {
+      "dev": {
+        "ndcg_mean": 0.6740287253914516,
+        "ndcg_ci": [
+          0.5824976476843176,
+          0.7655838020552694
+        ],
+        "mrr_mean": 0.7976190476190477,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7548473345322245,
+        "ndcg_ci": [
+          0.6896094123236433,
+          0.8223481215404562
+        ],
+        "mrr_mean": 0.9375,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "need_high": {
+      "dev": {
+        "ndcg_mean": 0.6891804985309956,
+        "ndcg_ci": [
+          0.5986036230023253,
+          0.7752831832352634
+        ],
+        "mrr_mean": 0.8214285714285714,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.769928118515199,
+        "ndcg_ci": [
+          0.700359482643513,
+          0.838201817297594
+        ],
+        "mrr_mean": 0.9375,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "preference_low": {
+      "dev": {
+        "ndcg_mean": 0.7082580725977949,
+        "ndcg_ci": [
+          0.6240322974947189,
+          0.7881609124276959
+        ],
+        "mrr_mean": 0.8095238095238095,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7636072812142637,
+        "ndcg_ci": [
+          0.6925026012999056,
+          0.8335230741774612
+        ],
+        "mrr_mean": 0.9375,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "preference_high": {
+      "dev": {
+        "ndcg_mean": 0.6666517285337906,
+        "ndcg_ci": [
+          0.5789486598494322,
+          0.7518812302557623
+        ],
+        "mrr_mean": 0.7976190476190477,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7517903886264821,
+        "ndcg_ci": [
+          0.6866518488179594,
+          0.8171653133514841
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "persona_low": {
+      "dev": {
+        "ndcg_mean": 0.6739169979971423,
+        "ndcg_ci": [
+          0.5757285075889655,
+          0.7699260562171633
+        ],
+        "mrr_mean": 0.8095238095238095,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7662867240681609,
+        "ndcg_ci": [
+          0.7008361713443416,
+          0.8316717005473695
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "persona_high": {
+      "dev": {
+        "ndcg_mean": 0.6822007625849027,
+        "ndcg_ci": [
+          0.5870529225678031,
+          0.7732997119857318
+        ],
+        "mrr_mean": 0.7916666666666666,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7448502193890523,
+        "ndcg_ci": [
+          0.6768197563386592,
+          0.8153065787465267
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "archetype_functional_device": {
+      "dev": {
+        "ndcg_mean": 0.6589921183413205,
+        "ndcg_ci": [
+          0.5599450113933934,
+          0.7540082930516583
+        ],
+        "mrr_mean": 0.8214285714285714,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7733393399425001,
+        "ndcg_ci": [
+          0.7030320694530152,
+          0.8417795240360838
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    },
+    "archetype_preference_taste": {
+      "dev": {
+        "ndcg_mean": 0.67277479584136,
+        "ndcg_ci": [
+          0.5868954895423685,
+          0.7586446513625612
+        ],
+        "mrr_mean": 0.7976190476190477,
+        "n_personas": 28,
+        "unjudged": 0
+      },
+      "heldout": {
+        "ndcg_mean": 0.7490402080142554,
+        "ndcg_ci": [
+          0.6819944030712058,
+          0.8184130221923116
+        ],
+        "mrr_mean": 0.921875,
+        "n_personas": 32,
+        "unjudged": 0
+      }
+    }
+  }
+}

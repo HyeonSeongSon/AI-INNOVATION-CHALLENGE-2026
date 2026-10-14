@@ -1,0 +1,15 @@
+{
+  "measured_at": "2026-10-01T14:13:16.035444+00:00",
+  "n": 70,
+  "verifier_model": "gpt-5.5-2026-04-23",
+  "verifier_effort": "medium",
+  "verifier_system_sha": "e5ebed364e86399c",
+  "judge_runs": 0,
+  "usage": {
+    "prompt": 321421,
+    "completion": 187075,
+    "reasoning": 165568
+  },
+  "prereg_v2": "잠금 전",
+  "verifier_missing": []
+}

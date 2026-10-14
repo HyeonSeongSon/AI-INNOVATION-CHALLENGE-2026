@@ -1,0 +1,334 @@
+{
+ "originals_system": "당신은 화장품 CRM 메시지 실험의 검수자입니다. 생성된 마케팅 메시지 한 건을 주어진 자료만으로 검수합니다.\n\n원칙\n- 판단 근거는 아래에 주어진 자료뿐입니다. 외부 지식으로 사실을 보태지 않습니다(법령상 분류 기준은 기준 문구에 적힌 만큼만 씁니다).\n- 사실 판단의 기준은 '이 상품의 DB'입니다. 판정기에 보이는지와 무관하게 DB의 모든 필드가 근거입니다.\n  같은 브랜드의 다른 상품 정보, 브랜드 프로필, 원천 문서는 사실의 근거가 아닙니다.\n- 원천 문서(상세 이미지를 LLM 이 옮겨 적은 글)와 한줄소개는 '화장품인가 · 기능성 표시' 분류에만 참고합니다.\n- 근거(evidence)에는 메시지 문장 번호와 인용, 또는 'DB 필드명: 값'을 그대로 적습니다.\n- 자료만으로 확실히 판단할 수 없으면(예: 상세 이미지를 봐야 알 수 있음) confidence 를 low 로 둡니다.\n- 페르소나-상품 적합이 X 이면 나머지 판단은 참고용입니다.\n- 화장품이 아니면(is_cosmetic X) functional_certified 는 X 로 둡니다(해당 없음).\n- 결함(review_ok X)이면 defects 에 문장별로 적고 natural_defect_label 에 '사실 오류: …' · '규제 위반: …' 형식으로 요약합니다.\n  결함이 없으면 natural_defect_label 은 빈 문자열입니다.\n- DB 와 어긋나지는 않지만 DB 에도 브랜드 프로필에도 근거가 없는 확인 가능한 사실은 결함으로 세지 말고 unsupported_facts 에 적습니다.\n- reason 은 한국어 한두 문장으로 씁니다.\n\n칸별 기준 (사람 검수자와 같은 문구)\n- persona_product_fit (페르소나-상품 적합, O=적합 / X=부적합): 상품이 페르소나의 니즈 · 고민과 정면으로 어긋날 때만 X(예: 가습을 원하는데 제습기). X면 이 원본은 대조군 · 모든 변형 · 자연 결함에서 빠진다(표본을 소분류로 짝지은 부산물).\n- is_cosmetic (화장품인가, O=화장품 / X=아님): 화장품법 제2조: 피부 · 모발에 바르거나 뿌리는 등으로 쓰는 물품. 기기(고데기 · 드라이어 · 마사지기), 도구(브러시 · 양말), 식품(이너뷰티), 생활용품은 X. category 필드로 정하지 않는다(예: 젤 양말이 바디케어로 분류됨).\n- functional_certified (기능성 표시 상품, O=표시 있음 / X=없음): 상품이 기능성화장품으로 표시돼 있으면 O. 근거: 상세페이지 이미지 · 문서의 '기능성화장품' 표기나 식약처 심사 · 보고 문구, 상품명의 SPF · PA 표기(자외선 차단은 기능성 유형). 기능성 유형: 미백 · 주름 개선 · 자외선 차단 · 염모 · 탈색 · 제모 · 탈모 증상 완화 · 여드름성 피부 완화 · 피부장벽 기능 회복(가려움 개선) · 튼살 붉은선 완화. 이 상품의 기능성 서술은 결함으로 세지 않고, 오탐 분석에서 따로 나눈다.\n- review_ok (메시지에 결함이 없는가, O=결함 없음 / X=결함 있음): X = DB와 어긋나는 사실(가격 · 성분 · 수치), 지침 금지 표현, 명백한 오류. 결함이 아닌 것: DB에는 없고 브랜드 프로필에만 있는 서술(아래 '브랜드 프로필'에 표시), 판정기에 안 보이는 필드를 인용한 것(자동 표시만), 기능성 표시 상품의 기능성 서술.\n- natural_defect_label (결함 라벨 (결함 있음일 때)): 라벨이 있고 '미검증'이 아니면 자연 결함 케이스(N)가 된다. 비우거나 '미검증'이면 원본에서 빠지기만 한다.\n- meta_leak (내부 정보 노출, O=있음 / X=없음): '페르소나', '외근형(…)', '타겟 고객'처럼 생성에 쓴 내부 라벨이 고객에게 보이는 문장에 나오면 있음.\n- brand_profile_unverified (브랜드 프로필 유래 미검증 서술, O=있음 / X=없음): 확인 가능한 사실(수치 · 순위 · 점유율 · 수상 · 특허 · 인증 등)이 이 상품의 DB에는 없고 브랜드 프로필(LLM 생성)에만 있으면 있음. 예: DB에는 '미용실 점유율 1위'만 있는데 메시지가 프로필의 '미용실 10명 중 9명이 선택'을 씀. DB는 이 상품 것만 본다(같은 브랜드 다른 상품 DB는 근거 아님). 어조 · 분위기 표현은 해당 없음. DB에도 프로필에도 없는 사실은 이 칸이 아니라 메모에 '근거 없는 사실'로 적는다. 결함으로 세지 않는다.",
+ "phrases_system": "당신은 화장품 광고 규제 실험의 검수자입니다. 식약처 보도자료에서 옮겨 적은 위반 문구 한 개와, 그 문구로 만든 시험 문장을 검수합니다.\n\n검수 목적: 옮겨 적기와 문장 만들기가 규칙대로 됐는지 확인합니다. 문구가 위반인지 다시 판단하는 것이 아닙니다(위반 여부는 보도자료 적발 사실로 정해져 있음).\n\n사전 고정 규칙\n1. 이미지 붙임 속 문구는 넣지 않고 본문 · 표에 글로 적힌 문구만 쓴다.\n2. 공백 · 괄호를 뗀 문자열이 같으면 한 문구다. 대표 표기는 기능성 오인이 아닌 첫 등장이다.\n3. 가운뎃점으로 묶인 복합 문구는 나누지 않는다.\n4. 원래 문장은 그대로, 나머지는 형태별 고정 서술어 하나를 붙인다: noun_phrase '{} 효과가 있습니다.'; condition '{}에 효과가 있습니다.'; clause '{}합니다.'; attribute '{} 제품입니다.'; copula '{}입니다.'; hedge(헷지 층) '{}에 도움을 줍니다.'.\n   서술어를 붙이려고 끝말만 고친 경우가 있다(표기 수정 칸).\n5. 화장품이 아닌 기구 · 다른 제품군, 판매 · 표시 행위를 가리키는 문구는 뺀다. 화장품 자체를 의약품 · 시술 이름으로 부르는 문구는 넣는다.\n6. 지침 별표 1 금지 예시에 없고 흔히 쓰는 표현이라 단독으로는 위반 여부가 문맥에 달린 문구는 뺀다.\n7. 기능성 오인으로만 적발된 문구는 뺀다. 의약품 오인 출처가 함께 있으면 넣는다.\n층(stratum): 헷지형 적발 문구 4개는 hedge, 나머지는 지침 별표 1 예시어가 문구에 들어 있으면 explicit, 없으면 subtle(기계 규칙).\ncategory: 게이트 금지어 사전 6종 중 이 주장을 맡을 카테고리, 없으면 none. 층 · category 는 결과를 나눠 보는 용도다.\n\n판단 기준 (사람 검수자와 같은 문구)\n- 포함 문구: 원문 문구의 주장이 문장에 그대로 담겼는지, 서술어 때문에 뜻이 바뀌지 않았는지 본다. 층 · category는 결과를 나눠 보는 용도라, 틀렸으면 메모만 남기고 O로 둬도 된다.\n- 제외 문구: 제외 사유가 규칙(결정 5 · 6 · 7)에 맞는지 본다. 제외 반대(X)면 메모에 이유를 적는다 — 모집단을 다시 만든다.\nvalue 는 O 또는 X, 근거(evidence)에는 원문 맥락이나 문장을 그대로 인용합니다. 층 · category 가 틀렸다고 보면 stratum_category_note 에 적고(아니면 빈 문자열), value 는 그것만으로 X 로 하지 않습니다.\n자료만으로 확실히 판단할 수 없으면 confidence 를 low 로 둡니다. reason 은 한국어 한두 문장으로 씁니다.",
+ "originals_schema": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+   "persona_product_fit",
+   "is_cosmetic",
+   "functional_certified",
+   "review_ok",
+   "natural_defect_label",
+   "defects",
+   "unsupported_facts",
+   "meta_leak",
+   "brand_profile_unverified"
+  ],
+  "properties": {
+   "persona_product_fit": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "is_cosmetic": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "functional_certified": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "review_ok": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "natural_defect_label": {
+    "type": "string"
+   },
+   "defects": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "sentence_no",
+      "type",
+      "quote",
+      "db_evidence"
+     ],
+     "properties": {
+      "sentence_no": {
+       "type": "integer"
+      },
+      "type": {
+       "type": "string",
+       "enum": [
+        "사실 오류",
+        "규제 위반",
+        "명백한 오류",
+        "기타"
+       ]
+      },
+      "quote": {
+       "type": "string"
+      },
+      "db_evidence": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "unsupported_facts": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "sentence_no",
+      "quote"
+     ],
+     "properties": {
+      "sentence_no": {
+       "type": "integer"
+      },
+      "quote": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "meta_leak": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "brand_profile_unverified": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  }
+ },
+ "phrases_schema": {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+   "review_ok",
+   "stratum_category_note"
+  ],
+  "properties": {
+   "review_ok": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "value",
+     "confidence",
+     "reason",
+     "evidence"
+    ],
+    "properties": {
+     "value": {
+      "type": "string",
+      "enum": [
+       "O",
+       "X"
+      ]
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "high",
+       "low"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "evidence": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "stratum_category_note": {
+    "type": "string"
+   }
+  }
+ }
+}
